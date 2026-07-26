@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+
+# Test runner for sharpurs
+# Compiles and runs PureScript passing tests via .NET / F#
+
+ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
+TEST_DIR="$ROOT_DIR/tests"
+PASSING_DIR="$TEST_DIR/passing"
+RUNNER_DIR="$TEST_DIR/runner"
+
+if [ -d "$HOME/.dotnet" ]; then
+  export PATH="$HOME/.dotnet:$PATH"
+fi
+
+mkdir -p "$RUNNER_DIR/src"
+
+passed=0
+failed=0
+
+TEST_FILES=()
+
+if [ $# -gt 0 ]; then
+  for arg in "$@"; do
+    if [ -f "$ROOT_DIR/$arg" ]; then
+      TEST_FILES+=("$ROOT_DIR/$arg")
+    elif [ -f "$arg" ]; then
+      TEST_FILES+=("$arg")
+    elif [ -f "$PASSING_DIR/$arg" ]; then
+      TEST_FILES+=("$PASSING_DIR/$arg")
+    elif [ -f "$PASSING_DIR/$arg.purs" ]; then
+      TEST_FILES+=("$PASSING_DIR/$arg.purs")
+    else
+      echo "Test file $arg not found."
+    fi
+  done
+fi
+
+cd "$RUNNER_DIR"
+
+if [ ! -f spago.yaml ]; then
+  echo "package:" > spago.yaml
+  echo "  name: runner" >> spago.yaml
+  echo "  dependencies:" >> spago.yaml
+  echo "    - prelude" >> spago.yaml
+  echo "    - effect" >> spago.yaml
+  echo "    - console" >> spago.yaml
+  echo "workspace:" >> spago.yaml
+  echo "  packageSet:" >> spago.yaml
+  echo "    registry: 77.10.1" >> spago.yaml
+fi
+
+if [ ${#TEST_FILES[@]} -eq 0 ]; then
+  # Default to first passing test
+  TEST_FILES=("$PASSING_DIR/1110.purs")
+fi
+
+for test_file in "${TEST_FILES[@]}"; do
+  test_name=$(basename "$test_file")
+  echo "=> Testing $test_name"
+  
+  rm -rf output/Main src/* output/Test* output/bin output/obj
+  
+  cp "$test_file" "src/Main.purs"
+  
+  # 1. Compile PureScript to CoreFn
+  if spago build -q 2>&1; then
+    # 2. Generate F# / C# code via sharpurs (to be implemented)
+    if [ -f "../../bin/sharpurs.js" ]; then
+      node ../../bin/sharpurs.js --main Main
+    else
+      echo "   [TODO] bin/sharpurs.js is not yet implemented"
+      continue
+    fi
+    
+    # 3. Compile and run via dotnet
+    if [ -d "output/Main" ]; then
+      cd output/Main
+      if command -v dotnet >/dev/null 2>&1; then
+        output_run=$(dotnet run -c Release 2>&1)
+        exit_code=$?
+      else
+        echo "   [FAILED] dotnet SDK not found. Please install it."
+        output_run=""
+        exit_code=1
+      fi
+      cd ../..
+      
+      if [ -n "$output_run" ]; then
+        echo "$output_run"
+      fi
+      
+      if [ $exit_code -eq 0 ] && ! echo "$output_run" | grep -q "Fail"; then
+        echo -e "   \033[0;32m[OK]\033[0m"
+        passed=$((passed+1))
+      else
+        echo -e "   \033[0;31m[FAILED]\033[0m Execution error"
+        failed=$((failed+1))
+      fi
+    else
+      echo -e "   \033[0;31m[FAILED]\033[0m sharpurs did not generate Main project"
+      failed=$((failed+1))
+    fi
+  else
+    echo -e "   \033[0;31m[FAILED]\033[0m PureScript Compilation error"
+    failed=$((failed+1))
+  fi
+done
+
+echo ""
+echo "Summary: $passed passed, $failed failed."

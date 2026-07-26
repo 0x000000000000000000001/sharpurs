@@ -1,0 +1,16 @@
+node_modules/
+output/
+output-es/
+.spago/
+.psc-ide-port
+.purs-repl
+purs_files.txt
+.DS_Store
+.sharpurs-cache.json
+tests/runner/src/
+tests/runner/spago.yaml
+tests/runner/spago.lock
+tests/runner/output/
+tests/runner/obj/
+tests/runner/bin/
+bin/sharpurs.js
