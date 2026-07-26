@@ -1,0 +1,7 @@
+let ``and`` = box (fun (n1: obj) -> box (fun (n2: obj) -> box ((unbox<int> n1) &&& (unbox<int> n2))))
+let ``or`` = box (fun (n1: obj) -> box (fun (n2: obj) -> box ((unbox<int> n1) ||| (unbox<int> n2))))
+let xor = box (fun (n1: obj) -> box (fun (n2: obj) -> box ((unbox<int> n1) ^^^ (unbox<int> n2))))
+let shl = box (fun (n1: obj) -> box (fun (n2: obj) -> box ((unbox<int> n1) <<< (unbox<int> n2))))
+let shr = box (fun (n1: obj) -> box (fun (n2: obj) -> box ((unbox<int> n1) >>> (unbox<int> n2))))
+let zshr = box (fun (n1: obj) -> box (fun (n2: obj) -> box (int ((uint32 (unbox<int> n1)) >>> (unbox<int> n2)))))
+let complement = box (fun (n: obj) -> box (~~~ (unbox<int> n)))

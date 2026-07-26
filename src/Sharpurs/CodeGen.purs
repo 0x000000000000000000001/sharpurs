@@ -27,7 +27,7 @@ translateModule adtCtors (Module m) =
     translateDataDecl decl = FsDeclData (modPrefix <> "_" <> sanitizeName decl.typeName) (map translateDataCtor decl.constructors)
     nameStr = sanitizeName (String.replaceAll (Pattern ".") (Replacement "_") modNameStr)
     dataDecls = map translateDataDecl m.dataDecls
-    decls = Array.concatMap (translateBind adtCtors (Just modNameStr)) m.decls
+    decls = Array.concatMap (translateBind adtCtors (Just modPrefix)) m.decls
   in
     FsModule nameStr (dataDecls <> decls)
 
@@ -239,4 +239,10 @@ translateLitBinder adtCtors currentMod = case _ of
     LitArray items -> 
       FsPatRaw ("[| " <> String.joinWith "; " (map (printPatternInline <<< translateBinder adtCtors currentMod) items) <> " |]")
     LitRecord props ->
-      FsPatWildcard -- F# doesn't support pattern matching Map directly
+      if Array.length props == 0 then
+        FsPatWildcard
+      else
+        let
+          propToPat (Prop key val) = 
+            "HasProp \"" <> key <> "\" (" <> printPatternInline (translateBinder adtCtors currentMod val) <> ")"
+        in FsPatRaw ("(" <> String.joinWith " & " (map propToPat props) <> ")")

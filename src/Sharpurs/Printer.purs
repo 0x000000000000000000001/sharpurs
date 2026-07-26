@@ -27,7 +27,7 @@ let sharpurs_apply (func: obj) (arg: obj) : obj =
 """
 
 fsHeader :: String
-fsHeader = "let (|LitBool|_|) (expected: bool) (value: obj) = if value :? bool && unbox value = expected then Some() else None\nlet (|LitInt|_|) (expected: int) (value: obj) = if value :? int && unbox value = expected then Some() else None\nlet (|LitNumber|_|) (expected: float) (value: obj) = if value :? float && unbox value = expected then Some() else None\nlet (|LitString|_|) (expected: string) (value: obj) = if value :? string && unbox value = expected then Some() else None\nlet (|LitChar|_|) (expected: char) (value: obj) = if value :? char && unbox value = expected then Some() else None\n\n"
+fsHeader = "let (|LitBool|_|) (expected: bool) (value: obj) = if value :? bool && unbox value = expected then Some() else None\nlet (|LitInt|_|) (expected: int) (value: obj) = if value :? int && unbox value = expected then Some() else None\nlet (|LitNumber|_|) (expected: float) (value: obj) = if value :? float && unbox value = expected then Some() else None\nlet (|LitString|_|) (expected: string) (value: obj) = if value :? string && unbox value = expected then Some() else None\nlet (|LitChar|_|) (expected: char) (value: obj) = if value :? char && unbox value = expected then Some() else None\nlet (|HasProp|_|) (key: string) (value: obj) = if value :? Map<string, obj> then Map.tryFind key (unbox<Map<string, obj>> value) else None\n\n"
 
 printModule :: FsModule -> String
 printModule (FsModule name decls) =
