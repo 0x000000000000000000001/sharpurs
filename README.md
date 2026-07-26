@@ -1,6 +1,6 @@
 # sharpurs
 
-<img height="160" alt="logo white" src="https://github.com/user-attachments/assets/5aa9a0f5-0138-48cf-9a49-a8eb8f6dc5f8" />
+<img height="160" alt="Screenshot 2026-07-26 at 21 28 35" src="https://github.com/user-attachments/assets/cfbf17c1-ada5-40ff-b804-e8f9cc75e328" />
 <br />
 <br />
 
