@@ -1,6 +1,6 @@
 # sharpurs
 
-<!-- <img height="160" alt="sharpurs logo" src="... logo url ..." /> -->
+<img height="160" alt="logo white" src="https://github.com/user-attachments/assets/5aa9a0f5-0138-48cf-9a49-a8eb8f6dc5f8" />
 <br />
 <br />
 
@@ -8,7 +8,7 @@ A super-optimized **PureScript-to-F# compiler**, entirely written in PureScript,
 
 `sharpurs` leverages the intermediate `CoreFn` representation to compile your pure business logic into robust, modern F# code. It seamlessly integrates into your existing PureScript workflow as a custom backend.
 
-## Why F# and .NET?
+## Why F# and C# (.NET)?
 While the broader JS ecosystem has heavily leaned towards TypeScript, the .NET world has a robust and incredibly fast runtime that powers a massive portion of enterprise and modern web applications. F# itself is a fantastic functional language on the .NET platform. `sharpurs` aims to bridge the gap for those who want the elegance and strictness of a purely functional language like PureScript, completely bypassing the JS/TS ecosystem while leveraging the raw performance, threading, and massive standard library of the .NET ecosystem.
 
 ## Production readiness & optimizations
