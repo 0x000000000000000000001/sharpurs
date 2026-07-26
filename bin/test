@@ -8,31 +8,67 @@ TEST_DIR="$ROOT_DIR/tests"
 PASSING_DIR="$TEST_DIR/passing"
 RUNNER_DIR="$TEST_DIR/runner"
 
+# Tests to skip (e.g. tests using experimental compiler features not supported by our purs version)
+BLACKLIST=(
+  # For versions > 0.15
+  "DerivingClause.purs"
+  "DerivingContravariant.purs"
+  "DerivingFunctorFromBi.purs"
+  "DerivingFunctorFromPro.purs"
+  "DerivingProfunctor.purs"
+)
+
 if [ -d "$HOME/.dotnet" ]; then
   export PATH="$HOME/.dotnet:$PATH"
 fi
+
+source "$(dirname "$0")/pkg"
+
+for pkg in "${CORE_PACKAGES[@]}"; do
+  if [ ! -d "$ROOT_DIR/../sharpurs-$pkg" ]; then
+    echo -e "\033[0;31m[ERROR]\033[0m Missing sibling checkout: sharpurs-$pkg"
+    echo "Please run ./bin/setup to clone all required repositories automatically."
+    exit 1
+  fi
+done
 
 mkdir -p "$RUNNER_DIR/src"
 
 passed=0
 failed=0
 
+SKIP_BEFORE="" # E.g. "TCO" to run tests after TCO.purs
 TEST_FILES=()
+CLEAN_CACHE=0
 
 if [ $# -gt 0 ]; then
   for arg in "$@"; do
-    if [ -f "$ROOT_DIR/$arg" ]; then
-      TEST_FILES+=("$ROOT_DIR/$arg")
-    elif [ -f "$arg" ]; then
-      TEST_FILES+=("$arg")
-    elif [ -f "$PASSING_DIR/$arg" ]; then
-      TEST_FILES+=("$PASSING_DIR/$arg")
-    elif [ -f "$PASSING_DIR/$arg.purs" ]; then
-      TEST_FILES+=("$PASSING_DIR/$arg.purs")
+    if [[ "$arg" == skip_before=* ]]; then
+      SKIP_BEFORE="${arg#skip_before=}"
+    elif [[ "$arg" == --skip-before=* ]]; then
+      SKIP_BEFORE="${arg#--skip-before=}"
+    elif [[ "$arg" == "-c" || "$arg" == "--clean" ]]; then
+      CLEAN_CACHE=1
     else
-      echo "Test file $arg not found."
+      if [ -f "$ROOT_DIR/$arg" ]; then
+        TEST_FILES+=("$ROOT_DIR/$arg")
+      elif [ -f "$arg" ]; then
+        TEST_FILES+=("$arg")
+      elif [ -f "$PASSING_DIR/$arg" ]; then
+        TEST_FILES+=("$PASSING_DIR/$arg")
+      elif [ -f "$PASSING_DIR/$arg.purs" ]; then
+        TEST_FILES+=("$PASSING_DIR/$arg.purs")
+      else
+        echo "Test file $arg not found."
+      fi
     fi
   done
+fi
+
+if [ $CLEAN_CACHE -eq 1 ]; then
+  echo "Building sharpurs compiler..."
+  cd "$ROOT_DIR"
+  npm run build --silent || { echo -e "\n\033[0;31m[FAILED]\033[0m sharpurs build failed!"; exit 1; }
 fi
 
 cd "$RUNNER_DIR"
@@ -41,49 +77,92 @@ if [ ! -f spago.yaml ]; then
   echo "package:" > spago.yaml
   echo "  name: runner" >> spago.yaml
   echo "  dependencies:" >> spago.yaml
-  echo "    - prelude" >> spago.yaml
-  echo "    - effect" >> spago.yaml
-  echo "    - console" >> spago.yaml
+  for pkg in "${CORE_PACKAGES[@]}"; do
+    echo "    - $pkg" >> spago.yaml
+  done
   echo "workspace:" >> spago.yaml
   echo "  packageSet:" >> spago.yaml
   echo "    registry: 77.10.1" >> spago.yaml
+  echo "  extraPackages:" >> spago.yaml
+  for pkg in "${CORE_PACKAGES[@]}"; do
+    echo "    $pkg:" >> spago.yaml
+    echo "      path: \"../../../sharpurs-$pkg\"" >> spago.yaml
+  done
+fi
+
+echo "Running tests from $PASSING_DIR..."
+
+if [ $CLEAN_CACHE -eq 1 ]; then
+  echo "=> Cleaning Spago and output cache..."
+  rm -rf .spago/* output-es/* output/*
 fi
 
 if [ ${#TEST_FILES[@]} -eq 0 ]; then
-  # Default to first passing test
-  TEST_FILES=("$PASSING_DIR/1110.purs")
+  # Use an array to store files safely
+  TEST_FILES=("$PASSING_DIR"/*.purs)
+fi
+
+skipping_until=0
+if [ -n "$SKIP_BEFORE" ]; then
+  skipping_until=1
 fi
 
 for test_file in "${TEST_FILES[@]}"; do
   test_name=$(basename "$test_file")
+  
+  if [ $skipping_until -eq 1 ]; then
+    if [[ "$test_name" == "$SKIP_BEFORE" || "$test_name" == "$SKIP_BEFORE.purs" ]]; then
+      skipping_until=0
+    else
+      continue
+    fi
+  fi
+  
+  # Check blacklist
+  skip_test=0
+  for b in "${BLACKLIST[@]}"; do
+    if [ "$test_name" = "$b" ]; then
+      skip_test=1
+      break
+    fi
+  done
+  
+  if [ $skip_test -eq 1 ]; then
+    echo "=> Skipping $test_name (blacklisted)"
+    continue
+  fi
+
   echo "=> Testing $test_name"
   
   rm -rf output/Main src/* output/Test* output/bin output/obj
   
   cp "$test_file" "src/Main.purs"
   
+  test_dir="${test_file%.purs}"
+  if [ -d "$test_dir" ]; then
+    cp -r "$test_dir"/* "src/"
+  fi
+  
   # 1. Compile PureScript to CoreFn
-  if spago build -q 2>&1; then
-    # 2. Generate F# / C# code via sharpurs (to be implemented)
+  if out=$(spago build -q 2>&1); then
+    # 2. Generate F# / C# code via sharpurs
     if [ -f "../../bin/sharpurs.js" ]; then
-      node ../../bin/sharpurs.js --main Main
+      node ../../bin/sharpurs.js --main Main > /dev/null 2>&1
     else
       echo "   [TODO] bin/sharpurs.js is not yet implemented"
       continue
     fi
     
     # 3. Compile and run via dotnet
-    if [ -d "output/Main" ]; then
-      cd output/Main
+    if [ -f "output/Main/Program.fsx" ]; then
       if command -v dotnet >/dev/null 2>&1; then
-        output_run=$(dotnet run -c Release 2>&1)
+        output_run=$(dotnet fsi output/Main/Program.fsx 2>&1)
         exit_code=$?
       else
         echo "   [FAILED] dotnet SDK not found. Please install it."
         output_run=""
         exit_code=1
       fi
-      cd ../..
       
       if [ -n "$output_run" ]; then
         echo "$output_run"
@@ -95,16 +174,25 @@ for test_file in "${TEST_FILES[@]}"; do
       else
         echo -e "   \033[0;31m[FAILED]\033[0m Execution error"
         failed=$((failed+1))
+        break
       fi
     else
       echo -e "   \033[0;31m[FAILED]\033[0m sharpurs did not generate Main project"
       failed=$((failed+1))
+      break
     fi
   else
     echo -e "   \033[0;31m[FAILED]\033[0m PureScript Compilation error"
+    echo "$out"
     failed=$((failed+1))
+    break
   fi
 done
 
 echo ""
-echo "Summary: $passed passed, $failed failed."
+if [ $failed -eq 0 ]; then
+  echo -e "Summary: \033[0;32m$passed passed\033[0m, 0 failed."
+else
+  echo -e "Summary: \033[0;32m$passed passed\033[0m, \033[0;31m$failed failed\033[0m."
+  exit 1
+fi

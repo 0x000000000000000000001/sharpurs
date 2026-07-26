@@ -31,6 +31,16 @@ sanitizeName s =
     sanitized = s17
   in if Array.elem sanitized reserved then sanitized <> "_" else sanitized
 
+escapeString :: String -> String
+escapeString s =
+  let
+    s1 = String.replaceAll (Pattern "\\") (Replacement "\\\\") s
+    s2 = String.replaceAll (Pattern "\"") (Replacement "\\\"") s1
+    s3 = String.replaceAll (Pattern "\n") (Replacement "\\n") s2
+    s4 = String.replaceAll (Pattern "\r") (Replacement "\\r") s3
+    s5 = String.replaceAll (Pattern "\t") (Replacement "\\t") s4
+  in s5
+
 data FsModule = FsModule String (Array FsDecl)
 
 data FsDataCtor = FsDataCtor String Int
