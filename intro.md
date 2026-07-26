@@ -4,9 +4,9 @@ Dear all,
 
 I’ve really enjoyed building custom backends for PureScript recently, and I’m using my experience to keep pushing the boundaries. Now that [`phpurs`](https://github.com/...) is running in production at my company, and [`gopurs`](https://github.com/...) has broken through the sound barrier thanks to our TAST-based compiler fork, I’d like to introduce another backend currently in development: **`sharpurs`**.
 
-I'm trying to ride the natural **momentum**, while all these issues are still fresh in my mind, to give as much fruits as possible to the community.
+My apologies for the multiple messages recently. Even though no one has complained about it, I realize that it might be a bit much. My intentions are genuine, and I sincerely want to demonstrate the natural universality of PureScript. I'm riding the current **momentum**, while all these ideas around compilation are still fresh in my mind, to give as many fruits as possible back to the community. I'll probably publish fewer "devlog" messages, to concentrate them around official releases. In fact, `gopurs` is now heading towards its official release (even though a few subjects remain to be tackled), which naturally leaves room for `sharpurs` as a new early-stage WIP project.
 
-The core idea behind `sharpurs` is simple but incredibly powerful: create aa FFI^2 architecture to leverage the massive C#/.NET ecosystem, while using F# to drastically simplify the compilation process.
+The core idea behind `sharpurs` is simple but incredibly powerful: create an FFI^2 architecture to leverage the massive C#/.NET ecosystem, while using F# to drastically simplify the compilation process.
 
 ### Why target F# instead of C# directly?
 While the ultimate goal is to run on the .NET CLR and consume C# libraries (NuGet, BCL), compiling a pure functional language directly to an Object-Oriented one like C# requires generating a lot of boilerplate to simulate functional concepts. 
