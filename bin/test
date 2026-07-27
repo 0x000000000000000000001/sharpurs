@@ -134,7 +134,7 @@ for test_file in "${TEST_FILES[@]}"; do
 
   echo "=> Testing $test_name"
   
-  rm -rf output/Main src/* output/Test* output/bin output/obj
+  rm -rf src/* output/Test* output/Main/bin output/Main/obj
   
   cp "$test_file" "src/Main.purs"
   
@@ -154,9 +154,9 @@ for test_file in "${TEST_FILES[@]}"; do
     fi
     
     # 3. Compile and run via dotnet
-    if [ -f "output/Main/Program.fsx" ]; then
+    if [ -f "output/Main/Program.fsproj" ]; then
       if command -v dotnet >/dev/null 2>&1; then
-        output_run=$(dotnet fsi output/Main/Program.fsx 2>&1)
+        output_run=$(dotnet run -v q --nologo --project output/Main/Program.fsproj 2>&1)
         exit_code=$?
       else
         echo "   [FAILED] dotnet SDK not found. Please install it."

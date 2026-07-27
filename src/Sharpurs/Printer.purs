@@ -4,37 +4,12 @@ import Prelude
 
 import Data.Array as Array
 import Data.String as String
+import Data.Maybe (Maybe(..))
 import Sharpurs.FsAst (FsDecl(..), FsExpr(..), FsModule(..), FsType(..), FsDUCase(..), FsMatchCase(..), FsPattern(..), FsDataCtor(..), sanitizeName, escapeString)
-
-fsPrelude :: String
-fsPrelude = """
-open System
-open System.Collections.Generic
-
-let objMap = Map.empty<string, obj>
-let unbox<'a> (x: obj) : 'a = unbox x
-let (|Unbox|) (x: obj) = unbox x
-
-let undefined = Unchecked.defaultof<obj>
-let Prim_undefined = undefined
-let intMod a b = unbox<int> a % unbox<int> b
-let semiringInt = 0
-
-let sharpurs_apply (func: obj) (arg: obj) : obj =
-    if isNull func then failwith "sharpurs_apply: func is null!"
-    let method = func.GetType().GetMethods() |> Array.find (fun m -> m.Name = "Invoke" && m.GetParameters().Length = 1)
-    method.Invoke(func, [| arg |])
-"""
-
-fsHeader :: String
-fsHeader = "let (|LitBool|_|) (expected: bool) (value: obj) = if value :? bool && unbox value = expected then Some() else None\nlet (|LitInt|_|) (expected: int) (value: obj) = if value :? int && unbox value = expected then Some() else None\nlet (|LitNumber|_|) (expected: float) (value: obj) = if value :? float && unbox value = expected then Some() else None\nlet (|LitString|_|) (expected: string) (value: obj) = if value :? string && unbox value = expected then Some() else None\nlet (|LitChar|_|) (expected: char) (value: obj) = if value :? char && unbox value = expected then Some() else None\nlet (|HasProp|_|) (key: string) (value: obj) = if value :? Map<string, obj> then Map.tryFind key (unbox<Map<string, obj>> value) else None\n\n"
 
 printModule :: FsModule -> String
 printModule (FsModule name decls) =
-  let
-    body = String.joinWith "\n\n" (map printDecl decls)
-  in
-    body <> "\n\nlet _ = (unbox<obj -> obj> Main_main) undefined\n"
+  String.joinWith "\n\n" (map printDecl decls)
 
 printDecl :: FsDecl -> String
 printDecl = case _ of
@@ -83,8 +58,10 @@ printExpr = case _ of
     "(match (" <> printExpr expr <> ") with " <> String.joinWith " " (map printMatchCase cases) <> ")"
 
 printMatchCase :: FsMatchCase -> String
-printMatchCase (FsMatchCase pat expr) =
-  "| " <> printPattern pat <> " -> " <> printExpr expr
+printMatchCase (FsMatchCase pat g expr) =
+  "| " <> printPattern pat <> (case g of
+      Just guardExpr -> " when (unbox " <> printExpr guardExpr <> ")"
+      Nothing -> "") <> " -> " <> printExpr expr
 
 printNestedPattern :: FsPattern -> String
 printNestedPattern = case _ of

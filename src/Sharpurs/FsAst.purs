@@ -11,7 +11,8 @@ sanitizeName :: String -> String
 sanitizeName s = 
   let
     reserved = ["module", "type", "let", "in", "match", "with", "fun", "if", "then", "else", "true", "false", "pure", "bind", "return", "global", "as", "val", "const", "void", "when", "class", "struct", "interface", "object", "default", "to", "do", "done", "end", "open", "new", "null", "base", "base_", "finally", "try", "catch", "throw", "upcast", "downcast", "mod", "or", "and", "not", "member", "override", "static", "mutable", "rec", "exception"]
-    s1 = String.replaceAll (Pattern "$") (Replacement "usd_") s
+    s0 = if s == "$__unused" then "_" else s
+    s1 = String.replaceAll (Pattern "$") (Replacement "usd_") s0
     s2 = String.replaceAll (Pattern "'") (Replacement "_prime") s1
     s3 = String.replaceAll (Pattern "+") (Replacement "_plus_") s2
     s4 = String.replaceAll (Pattern "-") (Replacement "_minus_") s3
@@ -28,7 +29,8 @@ sanitizeName s =
     s15 = String.replaceAll (Pattern "~") (Replacement "_tilde_") s14
     s16 = String.replaceAll (Pattern "?") (Replacement "_qmark_") s15
     s17 = String.replaceAll (Pattern "@") (Replacement "_at_") s16
-    sanitized = s17
+    s18 = String.replaceAll (Pattern "\\") (Replacement "_bslash_") s17
+    sanitized = s18
   in if Array.elem sanitized reserved then sanitized <> "_" else sanitized
 
 escapeString :: String -> String
@@ -68,7 +70,7 @@ data FsExpr
   | FsCtorApp String (Array FsExpr)
   | FsMatch FsExpr (Array FsMatchCase)
 
-data FsMatchCase = FsMatchCase FsPattern FsExpr
+data FsMatchCase = FsMatchCase FsPattern (Maybe FsExpr) FsExpr
 
 data FsPattern
   = FsPatCtor String (Array FsPattern)

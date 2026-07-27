@@ -1,10 +1,9 @@
-let _localeCompare = box (fun (l: obj) -> box (fun (r: obj) ->
+let _localeCompare = box (fun (lt: obj) -> box (fun (eq: obj) -> box (fun (gt: obj) -> box (fun (l: obj) -> box (fun (r: obj) ->
     let lStr = unbox<string> l
     let rStr = unbox<string> r
     let comp = System.String.Compare(lStr, rStr, System.StringComparison.CurrentCulture)
-    let res = if comp < 0 then -1 elif comp > 0 then 1 else 0
-    box res
-))
+    if comp < 0 then lt elif comp > 0 then gt else eq
+)))))
 
 let replace = box (fun (s1: obj) -> box (fun (s2: obj) -> box (fun (s3: obj) ->
     let search = unbox<string> s1
