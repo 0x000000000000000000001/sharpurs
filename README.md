@@ -4,6 +4,8 @@
 <br />
 <br />
 
+_Experimental WIP. Still a lot of things to do._
+
 A super-optimized **PureScript-to-F# compiler**, entirely written in PureScript, leveraging .NET's **performance**, **multi-platform capabilities**, and **huge ecosystem**. It successfully passes the official PureScript test suite and is ready for production.
 
 `sharpurs` leverages the intermediate `CoreFn` representation to compile your pure business logic into robust, modern F# code. It seamlessly integrates into your existing PureScript workflow as a custom backend.
