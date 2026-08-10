@@ -1,10 +1,12 @@
 module Main where
 
 import Prelude
+import Data.Either (Either(..))
 
 import Effect (Effect)
-import Effect.Aff (launchAff_, attempt)
+import Effect.Aff (launchAff_, attempt, Aff)
 import Effect.Class (liftEffect)
+import Effect.Class.Console as Console
 import Node.FS.Aff as FS
 import Node.Encoding (Encoding(..))
 import Node.Process as Process
@@ -13,6 +15,7 @@ import Data.Set as Set
 import Data.Tuple (Tuple(..))
 import Data.Map as Map
 import Data.String as String
+import Data.String.Pattern (Pattern(..))
 import PureScript.Backend.Optimizer.CoreFn (Module(..), Ident(..), Qualified(..), ModuleName(..))
 import Data.List (List(..))
 import PureScript.Backend.Optimizer.App (coreFnModulesFromOutput, parseCLIArgs, checkCache, writeCache, loadDirectives)
@@ -22,9 +25,9 @@ import Sharpurs.FsAst (FsModule(..), sanitizeName)
 import Sharpurs.CodeGen (translateModule)
 import Sharpurs.Printer (printModule)
 import PureScript.Backend.Optimizer.FfiSupport (findFfiFile)
-import Sharpurs.FfiSupport (appendFfiWrappers)
+import Sharpurs.FfiSupport (appendFfiWrappers, appendCsFfiWrappers)
 import Data.Newtype (unwrap)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe, isJust)
 import Data.String (joinWith)
 
 fsPrelude :: String
@@ -73,7 +76,7 @@ main = launchAff_ do
   
   -- Write Sharpurs_Prelude.fs
   let preludeContent = "[<AutoOpen>]\nmodule Sharpurs_Prelude\n\n#nowarn \"25\"\n#nowarn \"46\"\n#nowarn \"66\"\n#nowarn \"67\"\n#nowarn \"3370\"\n\nopen System\nopen System.Collections.Generic\n\n" <> fsHeader <> fsPrelude
-  FS.writeTextFile UTF8 ("output/Main/Sharpurs_Prelude.fs") preludeContent
+  writeIfChanged ("output/Main/Sharpurs_Prelude.fs") preludeContent
 
   directives <- loadDirectives
   let cacheVersion = "1.0.0"
@@ -103,26 +106,61 @@ main = launchAff_ do
           Nothing -> pure ""
           Just ffiPath -> do
             content <- FS.readTextFile UTF8 ffiPath
-            let requiredForeigns = map (\(Ident f) -> f) coreFnMod.foreign
+            let requiredForeigns = map (\(Ident f) -> f) (Array.fromFoldable (Map.keys coreFnMod.foreign))
             let wrappers = appendFfiWrappers modNameStr requiredForeigns content
             pure (wrappers <> "\n\n")
             
         let safeModName = String.replaceAll (String.Pattern ".") (String.Replacement "_") modNameStr
-        let moduleContent = "[<AutoOpen>]\nmodule PureScript_" <> safeModName <> "\n\nopen System\nopen System.Collections.Generic\n\n" <> ffiContent <> fsCode <> "\n"
+
+        csPathMb <- liftEffect $ findFfiFile ".cs" ["../../bak/spago.d/fs/p", "bak/spago.d/fs/p"] args.mbFfiDir modNameStr (Just coreFnMod.path)
+        csWrappers <- case csPathMb of
+          Nothing -> pure ""
+          Just csPath -> do
+            csContent <- FS.readTextFile UTF8 csPath
+            writeIfChanged ("output/Main/" <> modNameStr <> ".cs") csContent
+            if isJust ffiPathMb then
+              pure ""
+            else do
+              let requiredForeigns = map (\(Ident f) -> f) (Array.fromFoldable (Map.keys coreFnMod.foreign))
+              pure (appendCsFfiWrappers modNameStr requiredForeigns csContent <> "\n\n")
+
+        let moduleContent = "[<AutoOpen>]\nmodule PureScript_" <> safeModName <> "\n\nopen System\nopen System.Collections.Generic\n\n" <> ffiContent <> csWrappers <> fsCode <> "\n"
         
-        FS.writeTextFile UTF8 ("output/Main/" <> modNameStr <> ".fs") moduleContent
+        writeIfChanged ("output/Main/" <> modNameStr <> ".fs") moduleContent
+
     }
     finalModules
     
   -- Write EntryPoint.fs
-  let entryPointContent = "module Sharpurs_EntryPoint\n\nlet _ = (unbox<obj -> obj> Main_main) undefined\n"
-  FS.writeTextFile UTF8 ("output/Main/EntryPoint.fs") entryPointContent
+  let entryPointContent = "module Sharpurs_EntryPoint\n\nlet _ = (unbox<obj -> obj> " <> (String.replaceAll (String.Pattern ".") (String.Replacement "_") (fromMaybe "Main" args.mbMainModule)) <> "_main) undefined\n"
+  writeIfChanged ("output/Main/EntryPoint.fs") entryPointContent
   
-  -- Write Program.fsproj
-  let projHeader = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <OutputType>Exe</OutputType>\n    <TargetFramework>net8.0</TargetFramework>\n    <WarningsAsErrors>false</WarningsAsErrors>\n    <NoWarn>40,25,46,66,67,3370</NoWarn>\n  </PropertyGroup>\n  <ItemGroup>\n"
+  filesInOutput <- FS.readdir "output/Main"
+  let csFiles = Array.sort (Array.filter (\f -> isJust (String.stripSuffix (Pattern ".cs") f)) filesInOutput)
+  
+  csProjRef <- if Array.length csFiles > 0 then do
+    let csProjHeader = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net8.0</TargetFramework>\n    <WarningsAsErrors>false</WarningsAsErrors>\n    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>\n    <OutputPath>bin/csharp/</OutputPath>\n  </PropertyGroup>\n  <ItemGroup>\n"
+    let csProjIncludes = String.joinWith "\n" (map (\f -> "    <Compile Include=\"" <> f <> "\" />") csFiles)
+    let csProjFooter = "  </ItemGroup>\n</Project>\n"
+    writeIfChanged ("output/Main/FFI.CSharp.csproj") (csProjHeader <> csProjIncludes <> "\n" <> csProjFooter)
+    pure "    <ProjectReference Include=\"FFI.CSharp.csproj\" />\n"
+  else pure ""
+
+  let projHeader = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <OutputType>Exe</OutputType>\n    <TargetFramework>net8.0</TargetFramework>\n    <WarningsAsErrors>false</WarningsAsErrors>\n    <NoWarn>40,25,46,66,67,3370</NoWarn>\n  </PropertyGroup>\n  <ItemGroup>\n" <> csProjRef
   let projFooter = "  </ItemGroup>\n</Project>\n"
   let projFiles = Array.concat [ ["Sharpurs_Prelude.fs"], map (\(Module m) -> unwrap m.name <> ".fs") modulesArr, ["EntryPoint.fs"] ]
   let projIncludes = String.joinWith "\n" (map (\f -> "    <Compile Include=\"" <> f <> "\" />") projFiles)
-  FS.writeTextFile UTF8 ("output/Main/Program.fsproj") (projHeader <> projIncludes <> "\n" <> projFooter)
+  
+  writeIfChanged ("output/Main/Program.fsproj") (projHeader <> projIncludes <> "\n" <> projFooter)
+
+  let directoryBuildPropsContent = "<Project>\n  <PropertyGroup>\n    <BaseIntermediateOutputPath>obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>\n    <MSBuildProjectExtensionsPath>obj/$(MSBuildProjectName)/</MSBuildProjectExtensionsPath>\n  </PropertyGroup>\n</Project>\n"
+  writeIfChanged ("output/Main/Directory.Build.props") directoryBuildPropsContent
 
   pure unit
+
+writeIfChanged :: String -> String -> Aff Unit
+writeIfChanged path content = do
+  oldContent <- attempt (FS.readTextFile UTF8 path)
+  case oldContent of
+    Right old | old == content -> pure unit
+    _ -> FS.writeTextFile UTF8 path content
