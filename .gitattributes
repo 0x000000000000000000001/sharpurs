@@ -1,0 +1,4 @@
+*.js linguist-generated
+*.js linguist-vendored
+bin/sharpurs.js linguist-generated
+bin/sharpurs.js linguist-vendored
