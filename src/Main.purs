@@ -131,7 +131,7 @@ main = launchAff_ do
     finalModules
     
   -- Write EntryPoint.fs
-  let entryPointContent = "module Sharpurs_EntryPoint\n\nlet _ = \n    (unbox<obj -> obj> " <> (String.replaceAll (String.Pattern ".") (String.Replacement "_") (fromMaybe "Main" args.mbMainModule)) <> "_main) undefined\n    SharpursRuntime.EventLoopWait()\n"
+  let entryPointContent = "module Sharpurs_EntryPoint\n\nlet _ = \n    (unbox<obj -> obj> " <> (String.replaceAll (String.Pattern ".") (String.Replacement "_") (fromMaybe "Main" args.mbMainModule)) <> "_main) undefined |> ignore\n    SharpursRuntime.EventLoopWait()\n"
   writeIfChanged ("output/Main/EntryPoint.fs") entryPointContent
   
   filesInOutput <- FS.readdir "output/Main"
