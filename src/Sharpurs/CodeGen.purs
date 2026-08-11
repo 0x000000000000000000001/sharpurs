@@ -236,7 +236,7 @@ translateLitBinder adtCtors currentMod = case _ of
     LitBoolean b -> FsPatRaw (if b then "LitBool true ()" else "LitBool false ()")
     LitInt i -> FsPatRaw ("LitInt " <> show i <> " ()")
     LitNumber n -> FsPatRaw ("LitNumber " <> show n <> " ()")
-    LitString s -> FsPatRaw ("LitString \"" <> s <> "\" ()")
+    LitString s -> FsPatRaw ("LitString " <> escapeString s <> " ()")
     LitChar c -> FsPatRaw ("LitChar '" <> escapeChar c <> "' ()")
     LitArray items -> 
       FsPatRaw ("[| " <> String.joinWith "; " (map (printPatternInline <<< translateBinder adtCtors currentMod) items) <> " |]")

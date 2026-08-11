@@ -11,7 +11,7 @@ import Data.String.CodeUnits as CU
 sanitizeName :: String -> String
 sanitizeName s = 
   let
-    reserved = ["module", "type", "let", "in", "match", "with", "fun", "if", "then", "else", "true", "false", "pure", "bind", "return", "global", "as", "val", "const", "void", "when", "class", "struct", "interface", "object", "default", "to", "do", "done", "end", "open", "new", "null", "base", "base_", "finally", "try", "catch", "throw", "upcast", "downcast", "mod", "or", "and", "not", "member", "override", "static", "mutable", "rec", "exception"]
+    reserved = ["abstract", "and", "as", "assert", "base", "base_", "begin", "class", "default", "delegate", "do", "done", "downcast", "downto", "elif", "else", "end", "exception", "extern", "false", "finally", "for", "fun", "function", "global", "if", "in", "inherit", "inline", "interface", "internal", "lazy", "let", "match", "member", "module", "mutable", "namespace", "new", "not", "null", "of", "open", "or", "override", "private", "public", "rec", "return", "sig", "static", "struct", "then", "to", "true", "try", "type", "upcast", "use", "val", "void", "when", "while", "with", "yield", "pure", "bind", "const", "object", "mod"]
     s0 = if s == "$__unused" then "_" else s
     s1 = String.replaceAll (Pattern "$") (Replacement "usd_") s0
     s2 = String.replaceAll (Pattern "'") (Replacement "_prime") s1
@@ -32,7 +32,7 @@ sanitizeName s =
     s17 = String.replaceAll (Pattern "@") (Replacement "_at_") s16
     s18 = String.replaceAll (Pattern "\\") (Replacement "_bslash_") s17
     sanitized = s18
-  in if Array.elem sanitized reserved then sanitized <> "_" else sanitized
+  in if Array.elem sanitized reserved then sanitized <> "_var" else sanitized
 
 foreign import escapeString :: String -> String
 
