@@ -9,7 +9,7 @@ import Data.String as String
 import Data.String.CodeUnits as CU
 import Data.String.Pattern (Pattern(..), Replacement(..))
 import PureScript.Backend.Optimizer.CoreFn (Module(..), Bind(..), Binding(..), Expr(..), Ident(..), Literal(..), CaseAlternative(..), CaseGuard(..), Guard(..), Binder(..), Ann, DataDecl, DataConstructor, unQualified, ExprType(..), Prop(..), Qualified(..))
-import Sharpurs.FsAst (FsDecl(..), FsExpr(..), FsModule(..), FsType(..), FsDUCase(..), FsMatchCase(..), FsPattern(..), FsDataCtor(..), sanitizeName, escapeString)
+import Sharpurs.FsAst (FsDecl(..), FsExpr(..), FsModule(..), FsType(..), FsDUCase(..), FsMatchCase(..), FsPattern(..), FsDataCtor(..), sanitizeName, escapeString, escapeChar)
 import Data.Set as Set
 import Data.Set (Set)
 import Data.Map (Map)
@@ -75,7 +75,7 @@ translateLit adtCtors currentMod lit = case lit of
     LitInt i -> FsIdent ("(box " <> show i <> ")")
     LitNumber n -> FsIdent ("(box " <> show n <> ")")
     LitString s -> FsLitString s
-    LitChar c -> FsIdent ("(box '" <> CU.singleton c <> "')")
+    LitChar c -> FsIdent ("(box '" <> escapeChar c <> "')")
     LitBoolean b -> FsLitBool b
     LitArray arr -> FsIdent ("(box [|" <> String.joinWith "; " (map (printExprInline <<< translateExpr adtCtors currentMod) arr) <> "|])")
     LitRecord props ->
@@ -172,7 +172,7 @@ translateExpr adtCtors currentMod expr = case expr of
 
 printExprInline :: FsExpr -> String
 printExprInline = case _ of
-  FsLitString s -> "(box \"" <> escapeString s <> "\")"
+  FsLitString s -> "(box " <> escapeString s <> ")"
   FsLitBool b -> if b then "(box true)" else "(box false)"
   FsIdent id -> id
   FsApp fn args -> Array.foldl (\acc arg -> "(sharpurs_apply (box (" <> acc <> ")) (box (" <> printExprInline arg <> ")))") (printExprInline fn) args
@@ -237,7 +237,7 @@ translateLitBinder adtCtors currentMod = case _ of
     LitInt i -> FsPatRaw ("LitInt " <> show i <> " ()")
     LitNumber n -> FsPatRaw ("LitNumber " <> show n <> " ()")
     LitString s -> FsPatRaw ("LitString \"" <> s <> "\" ()")
-    LitChar c -> FsPatRaw ("LitChar '" <> CU.singleton c <> "' ()")
+    LitChar c -> FsPatRaw ("LitChar '" <> escapeChar c <> "' ()")
     LitArray items -> 
       FsPatRaw ("[| " <> String.joinWith "; " (map (printPatternInline <<< translateBinder adtCtors currentMod) items) <> " |]")
     LitRecord props ->

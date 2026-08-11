@@ -6,6 +6,7 @@ import Data.Maybe (Maybe)
 import Data.String.Pattern (Pattern(..), Replacement(..))
 import Data.String.Common as String
 import Data.Array as Array
+import Data.String.CodeUnits as CU
 
 sanitizeName :: String -> String
 sanitizeName s = 
@@ -33,15 +34,15 @@ sanitizeName s =
     sanitized = s18
   in if Array.elem sanitized reserved then sanitized <> "_" else sanitized
 
-escapeString :: String -> String
-escapeString s =
-  let
-    s1 = String.replaceAll (Pattern "\\") (Replacement "\\\\") s
-    s2 = String.replaceAll (Pattern "\"") (Replacement "\\\"") s1
-    s3 = String.replaceAll (Pattern "\n") (Replacement "\\n") s2
-    s4 = String.replaceAll (Pattern "\r") (Replacement "\\r") s3
-    s5 = String.replaceAll (Pattern "\t") (Replacement "\\t") s4
-  in s5
+foreign import escapeString :: String -> String
+
+escapeChar :: Char -> String
+escapeChar '\n' = "\\n"
+escapeChar '\r' = "\\r"
+escapeChar '\t' = "\\t"
+escapeChar '\\' = "\\\\"
+escapeChar '\'' = "\\'"
+escapeChar c = CU.singleton c
 
 data FsModule = FsModule String (Array FsDecl)
 

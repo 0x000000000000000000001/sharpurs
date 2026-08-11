@@ -45,7 +45,7 @@ printType = case _ of
 
 printExpr :: FsExpr -> String
 printExpr = case _ of
-  FsLitString s -> "(box \"" <> escapeString s <> "\")"
+  FsLitString s -> "(box " <> escapeString s <> ")"
   FsLitBool b -> if b then "(box true)" else "(box false)"
   FsIdent id -> id
   FsApp fn args ->

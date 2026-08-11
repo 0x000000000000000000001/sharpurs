@@ -13,13 +13,14 @@ export const appendFfiWrappersImpl = function(moduleName) {
                 let exportName = moduleName.replace(/\./g, "_") + "_" + funcName;
                 
                 let arity = 0;
-                let regexStr = "^\\s*let\\s+(?:rec\\s+)?(?:``)?" + funcName + "(?:``)?\\s+(.*?)(?:=|:)";
+                let regexStr = "^\\s*let\\s+(?:rec\\s+)?(?:``)?" + funcName + "(?:``)?(?=$|[\\s(=])([^=]*)=";
                 let regex = new RegExp(regexStr, "m");
                 let match = indentedContent.match(regex);
                 if (match) {
                     let argsStr = match[1].trim();
                     if (argsStr !== "") {
                         let cleanedArgs = argsStr.replace(/\([^)]+\)/g, "arg").trim();
+                        cleanedArgs = cleanedArgs.replace(/:.*/, "").trim();
                         if (cleanedArgs !== "") {
                            arity = cleanedArgs.split(/\s+/).length;
                         }
