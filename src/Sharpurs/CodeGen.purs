@@ -23,8 +23,8 @@ translateModule adtCtors (Module m) =
   let
     modNameStr = unwrap m.name
     modPrefix = String.replaceAll (Pattern ".") (Replacement "_") modNameStr
-    translateDataCtor c = FsDataCtor (modPrefix <> "_" <> sanitizeName c.constructorName <> "usd_Ctor") (Array.length c.fieldTypes)
-    translateDataDecl decl = FsDeclData (modPrefix <> "_" <> sanitizeName decl.typeName) (map translateDataCtor decl.constructors)
+    translateDataCtor c = FsDataCtor (modPrefix <> "_" <> sanitizeName c.name <> "usd_Ctor") (Array.length c.fields)
+    translateDataDecl decl = FsDeclData (modPrefix <> "_" <> sanitizeName decl.name) (map translateDataCtor decl.constructors)
     nameStr = sanitizeName (String.replaceAll (Pattern ".") (Replacement "_") modNameStr)
     dataDecls = map translateDataDecl m.dataDecls
     decls = Array.concatMap (translateBind adtCtors (Just modPrefix)) m.decls
@@ -49,7 +49,7 @@ translateBind adtCtors currentMod = case _ of
 
 translateDataDecl :: DataDecl -> FsDecl
 translateDataDecl decl =
-  FsDU (sanitizeName decl.typeName) (map translateConstructor decl.constructors)
+  FsDU (sanitizeName decl.name) (map translateConstructor decl.constructors)
 
 translateType :: ExprType -> FsType
 translateType = case _ of
@@ -60,7 +60,7 @@ translateType = case _ of
 
 translateConstructor :: DataConstructor -> FsDUCase
 translateConstructor ctor =
-  FsDUCase (sanitizeName ctor.constructorName <> "usd_Ctor") (map translateType ctor.fieldTypes)
+  FsDUCase (sanitizeName ctor.name <> "usd_Ctor") (map translateType ctor.fields)
 
 
 

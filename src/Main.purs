@@ -64,7 +64,7 @@ main = launchAff_ do
             (Module mod) = coreFnMod
             modNameStr = unwrap mod.name
             modPrefix = String.replaceAll (String.Pattern ".") (String.Replacement "_") modNameStr
-            ctors = Array.concatMap (\d -> map (\c -> Tuple (sanitizeName (modPrefix <> "_" <> c.constructorName)) (Array.length c.fieldTypes)) d.constructors) mod.dataDecls
+            ctors = Array.concatMap (\d -> map (\c -> Tuple (sanitizeName (modPrefix <> "_" <> c.name)) (Array.length c.fields)) d.constructors) mod.dataDecls
           in
             Map.union acc (Map.fromFoldable ctors)
       )
