@@ -681,7 +681,7 @@
         "path": "../sharpurs-assert"
       },
       "backend-optimizer": {
-        "path": "../purescript-backend-optimizer"
+        "path": "../../purescript-backend-optimizer"
       },
       "st": {
         "path": "../sharpurs-st"
@@ -827,7 +827,7 @@
     },
     "backend-optimizer": {
       "type": "local",
-      "path": "../purescript-backend-optimizer",
+      "path": "../../purescript-backend-optimizer",
       "dependencies": [
         "argonaut",
         "arrays",
