@@ -130,8 +130,7 @@ main = launchAff_ do
     }
     finalModules
     
-  -- Write EntryPoint.fs
-  let entryPointContent = "module Sharpurs_EntryPoint\n\nlet _ = \n    (unbox<obj -> obj> " <> (String.replaceAll (String.Pattern ".") (String.Replacement "_") (fromMaybe "Main" args.mbMainModule)) <> "_main) undefined |> ignore\n    SharpursRuntime.EventLoopWait()\n"
+  let entryPointContent = "module Sharpurs_EntryPoint\n\nopen System.Threading\n\n[<EntryPoint>]\nlet main argv =\n    let thread = Thread(ThreadStart(fun () ->\n        (unbox<obj -> obj> " <> (String.replaceAll (String.Pattern ".") (String.Replacement "_") (fromMaybe "Main" args.mbMainModule)) <> "_main) null |> ignore\n    ), 1024 * 1024 * 1024)\n    thread.Start()\n    thread.Join()\n    0\n"
   writeIfChanged ("output/Main/EntryPoint.fs") entryPointContent
   
   filesInOutput <- FS.readdir "output/Main"
@@ -145,7 +144,7 @@ main = launchAff_ do
     pure "    <ProjectReference Include=\"FFI.CSharp.csproj\" />\n"
   else pure ""
 
-  let projHeader = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <OutputType>Exe</OutputType>\n    <TargetFramework>net8.0</TargetFramework>\n    <WarningsAsErrors>false</WarningsAsErrors>\n    <NoWarn>40,25,46,66,67,3370</NoWarn>\n  </PropertyGroup>\n  <ItemGroup>\n" <> csProjRef
+  let projHeader = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <OutputType>Exe</OutputType>\n    <TargetFramework>net8.0</TargetFramework>\n    <LangVersion>7.0</LangVersion>\n    <WarningsAsErrors>false</WarningsAsErrors>\n    <NoWarn>40,25,46,66,67,3370</NoWarn>\n  </PropertyGroup>\n  <ItemGroup>\n" <> csProjRef
   let projFooter = "  </ItemGroup>\n</Project>\n"
   let projFiles = Array.concat [ ["Sharpurs_Prelude.fs"], map (\(Module m) -> unwrap m.name <> ".fs") modulesArr, ["EntryPoint.fs"] ]
   let projIncludes = String.joinWith "\n" (map (\f -> "    <Compile Include=\"" <> f <> "\" />") projFiles)

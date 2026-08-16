@@ -50,6 +50,7 @@ printExpr = case _ of
   FsIdent id -> id
   FsApp fn args ->
     Array.foldl (\acc arg -> "(sharpurs_apply (box (" <> acc <> ")) (box (" <> printExpr arg <> ")))") (printExpr fn) args
+  FsDirectApp name args -> if Array.length args > 0 then "(box (" <> name <> " " <> String.joinWith " " (map (\a -> "(unbox (" <> printExpr a <> "))") args) <> "))" else "(box " <> name <> ")"
   FsCtorApp name args ->
     if Array.length args > 0 then
       "(box (" <> name <> "(" <> String.joinWith ", " (map printExpr args) <> ")))"

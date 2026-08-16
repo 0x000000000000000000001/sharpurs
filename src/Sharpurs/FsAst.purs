@@ -12,7 +12,7 @@ sanitizeName :: String -> String
 sanitizeName s = 
   let
     reserved = ["abstract", "and", "as", "assert", "base", "base_", "begin", "class", "default", "delegate", "do", "done", "downcast", "downto", "elif", "else", "end", "exception", "extern", "false", "finally", "for", "fun", "function", "global", "if", "in", "inherit", "inline", "interface", "internal", "lazy", "let", "match", "member", "module", "mutable", "namespace", "new", "not", "null", "of", "open", "or", "override", "private", "public", "rec", "return", "sig", "static", "struct", "then", "to", "true", "try", "type", "upcast", "use", "val", "void", "when", "while", "with", "yield", "pure", "bind", "const", "object", "mod"]
-    s0 = if s == "$__unused" then "_" else s
+    s0 = if s == "$__unused" then "usd__unused" else s
     s1 = String.replaceAll (Pattern "$") (Replacement "usd_") s0
     s2 = String.replaceAll (Pattern "'") (Replacement "_prime") s1
     s3 = String.replaceAll (Pattern "+") (Replacement "_plus_") s2
@@ -69,6 +69,7 @@ data FsExpr
   | FsIdent String
   | FsApp FsExpr (Array FsExpr)
   | FsCtorApp String (Array FsExpr)
+  | FsDirectApp String (Array FsExpr)
   | FsMatch FsExpr (Array FsMatchCase)
 
 data FsMatchCase = FsMatchCase FsPattern (Maybe FsExpr) FsExpr
