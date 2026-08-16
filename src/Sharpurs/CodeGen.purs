@@ -57,7 +57,7 @@ translateBind adtCtors currentMod = case _ of
                closes = String.joinWith "" (map (\_ -> ")") ext.args)
                wrapper = sName <> " = box " <> curriedArgs <> sName <> "_tco " <> String.joinWith " " ext.args <> closes
              in keyword <> sName <> "_tco " <> argStrs <> " : obj = (" <> bodyStr <> ")\n" <> "and " <> wrapper <> "\n"
-           else
+           else 
              let keyword = if isFirst then "let rec " else " and "
              in keyword <> sName <> " : obj = (" <> printExprInline (translateExpr adtCtors recArities currentMod e) <> ")\n"
       
