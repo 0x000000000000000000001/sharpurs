@@ -56,10 +56,10 @@ translateBind adtCtors currentMod = case _ of
                curriedArgs = String.joinWith " " (map (\a -> "(fun (" <> a <> ": obj) -> ") ext.args)
                closes = String.joinWith "" (map (\_ -> ")") ext.args)
                wrapper = sName <> " = box " <> curriedArgs <> sName <> "_tco " <> String.joinWith " " ext.args <> closes
-             in keyword <> sName <> "_tco " <> argStrs <> " : obj = box (" <> bodyStr <> ")\n" <> "and " <> wrapper <> "\n"
+             in keyword <> sName <> "_tco " <> argStrs <> " : obj = (" <> bodyStr <> ")\n" <> "and " <> wrapper <> "\n"
            else
              let keyword = if isFirst then "let rec " else " and "
-             in keyword <> sName <> " : obj = box (" <> printExprInline (translateExpr adtCtors recArities currentMod e) <> ")\n"
+             in keyword <> sName <> " : obj = (" <> printExprInline (translateExpr adtCtors recArities currentMod e) <> ")\n"
       
       recStr = Array.mapWithIndex (\i bd -> makeRec bd (i == 0)) bindings
     in [FsRaw (String.joinWith "" recStr)]
@@ -105,7 +105,7 @@ translateLit adtCtors localEnv currentMod lit = case lit of
     LitRecord props ->
       let
         mapAdd (Prop key val) acc = "(Map.add \"" <> key <> "\" (box (" <> printExprInline (translateExpr adtCtors localEnv currentMod val) <> ")) " <> acc <> ")"
-      in FsIdent (Array.foldr mapAdd "Map.empty" props)
+      in FsIdent ("(box (" <> Array.foldr mapAdd "Map.empty" props <> "))")
 
 generateConstructorLambda :: String -> Int -> Array FsExpr -> FsExpr
 generateConstructorLambda name arity args =
@@ -120,7 +120,7 @@ generateConstructorLambda name arity args =
       allArgs = args <> argExprs
       body = FsCtorApp (name <> "usd_Ctor") allArgs
     in
-      FsIdent (Array.foldr (\arg acc -> "(fun (" <> arg <> ": obj) -> " <> acc <> ")") (printExprInline body) argNames)
+      FsIdent ("(box (" <> Array.foldr (\arg acc -> "(fun (" <> arg <> ": obj) -> " <> acc <> ")") (printExprInline body) argNames <> "))")
 
 extractArgs :: Expr Ann -> { args :: Array String, body :: Expr Ann }
 extractArgs (ExprAbs _ (Ident arg) body) = 
@@ -137,7 +137,7 @@ translateExpr adtCtors localEnv currentMod expr = case expr of
                    Nothing -> name
     in case Map.lookup (sanitizeName fqName) adtCtors of
       Just arity -> generateConstructorLambda (sanitizeName fqName) arity []
-      Nothing -> FsIdent (sanitizeName name)
+      Nothing -> FsIdent ("(box " <> sanitizeName name <> ")")
   ExprVar _ qi -> 
     let nameStr = unwrap (unQualified qi) in
     let fqName = case qi of
@@ -151,8 +151,8 @@ translateExpr adtCtors localEnv currentMod expr = case expr of
         case qi of
           Qualified (Just modName) (Ident name) -> 
             let mname = String.replaceAll (Pattern ".") (Replacement "_") (unwrap modName)
-            in FsIdent (sanitizeName (mname <> "_" <> name))
-          Qualified Nothing (Ident name) -> FsIdent (sanitizeName name)
+            in FsIdent ("(box " <> sanitizeName (mname <> "_" <> name) <> ")")
+          Qualified Nothing (Ident name) -> FsIdent ("(box " <> sanitizeName name <> ")")
   ExprApp _ _ _ -> 
     let flat = flattenApp expr
     in case flat.fn of
@@ -170,14 +170,19 @@ translateExpr adtCtors localEnv currentMod expr = case expr of
               Qualified Nothing _ -> case currentMod of
                                        Just cmod -> String.replaceAll (Pattern ".") (Replacement "_") cmod <> "_" <> nameStr
                                        Nothing -> nameStr
-        in case Map.lookup (sanitizeName nameStr) localEnv of
-          Just arity ->
+        in let mArity = case Map.lookup (sanitizeName nameStr) localEnv of
+                  Just a -> Just { arity: a, targetName: sanitizeName nameStr }
+                  Nothing -> case Map.lookup (sanitizeName fqName) localEnv of
+                    Just a -> Just { arity: a, targetName: sanitizeName fqName }
+                    Nothing -> Nothing
+        in case mArity of
+          Just { arity: arity, targetName: targetName } ->
              if Array.length flat.args == arity then
-                FsDirectApp (sanitizeName nameStr <> "_tco") (map (translateExpr adtCtors localEnv currentMod) flat.args)
+                FsDirectApp (targetName <> "_tco") (map (translateExpr adtCtors localEnv currentMod) flat.args)
              else if Array.length flat.args > arity then
                 let tcoArgs = Array.take arity flat.args
                     restArgs = Array.drop arity flat.args
-                    baseCall = FsDirectApp (sanitizeName nameStr <> "_tco") (map (translateExpr adtCtors localEnv currentMod) tcoArgs)
+                    baseCall = FsDirectApp (targetName <> "_tco") (map (translateExpr adtCtors localEnv currentMod) tcoArgs)
                 in Array.foldl (\acc arg -> FsApp acc [translateExpr adtCtors localEnv currentMod arg]) baseCall restArgs
              else
                 FsApp (translateExpr adtCtors localEnv currentMod flat.fn) (map (translateExpr adtCtors localEnv currentMod) flat.args)
@@ -194,7 +199,7 @@ translateExpr adtCtors localEnv currentMod expr = case expr of
         1 -> FsIdent ("(unbox (" <> printExprInline (fromMaybe (FsLitString "MissingExpr") (Array.head fsExprs)) <> "))")
         _ -> FsIdent ("(" <> String.joinWith ", " (map (\e -> "(unbox (" <> printExprInline e <> "))") fsExprs) <> ")")
     in FsMatch matchExpr (Array.concatMap (translateCaseAlternative adtCtors localEnv currentMod) alts)
-  ExprAbs _ (Ident arg) body -> FsIdent ("(fun (" <> sanitizeName arg <> ": obj) -> " <> printExprInline (translateExpr adtCtors localEnv currentMod body) <> ")")
+  ExprAbs _ (Ident arg) body -> FsIdent ("(box (fun (" <> sanitizeName arg <> ": obj) -> " <> printExprInline (translateExpr adtCtors localEnv currentMod body) <> "))")
   ExprAccessor _ obj prop -> FsIdent ("(Map.find \"" <> prop <> "\" (unbox<Map<string, obj>> (" <> printExprInline (translateExpr adtCtors localEnv currentMod obj) <> ")))")
   ExprLet _ binds body -> 
     let
@@ -223,11 +228,11 @@ translateExpr adtCtors localEnv currentMod expr = case expr of
                   closes = String.joinWith "" (map (const ")") ext.args)
                   keyword = if idx == 0 then "\n" <> indent <> "let rec " else "\n" <> indent <> "and "
                   wrapper = sName <> " = box (" <> curriedArgs <> sName <> "_tco " <> String.joinWith " " ext.args <> closes <> ")"
-                in [ keyword <> sName <> "_tco " <> argStrs <> " : obj = box (" <> bodyStr <> ") ", "\n" <> indent <> "and " <> wrapper <> " " ]
+                in [ keyword <> sName <> "_tco " <> argStrs <> " : obj = (" <> bodyStr <> ") ", "\n" <> indent <> "and " <> wrapper <> " " ]
               else
                 let
                   keyword = if idx == 0 then "\n" <> indent <> "let rec " else "\n" <> indent <> "and "
-                in [ keyword <> sName <> " : obj = box (" <> printExprInline (translateExpr adtCtors newEnv currentMod e) <> ") " ]
+                in [ keyword <> sName <> " : obj = (" <> printExprInline (translateExpr adtCtors newEnv currentMod e) <> ") " ]
             recStrs = Array.concat (Array.mapWithIndex (\i b -> makeLocalRec b i) bindings)
           in ["\n" <> indent <> String.joinWith "" recStrs <> "\n" <> indent <> "in\n" <> indent]
       ) binds
@@ -239,7 +244,7 @@ translateExpr adtCtors localEnv currentMod expr = case expr of
   ExprUpdate _ obj props ->
     let
       mapAdd (Prop k v) prev = "(Map.add \"" <> k <> "\" (box (" <> printExprInline (translateExpr adtCtors localEnv currentMod v) <> ")) " <> prev <> ")"
-    in FsIdent (Array.foldr mapAdd ("(unbox<Map<string, obj>> " <> printExprInline (translateExpr adtCtors localEnv currentMod obj) <> ")") props)
+    in FsIdent ("(box (" <> Array.foldr mapAdd ("(unbox<Map<string, obj>> " <> printExprInline (translateExpr adtCtors localEnv currentMod obj) <> ")") props <> "))")
 
 printExprInline :: FsExpr -> String
 printExprInline = case _ of
@@ -276,9 +281,9 @@ translateCaseAlternative adtCtors localEnv currentMod (CaseAlternative binders g
       _ -> FsPatRaw ("(" <> String.joinWith ", " (map printPatternInline fsPatterns) <> ")")
   in
     case guards of
-      Unconditional expr -> [FsMatchCase combinedPat Nothing (FsIdent ("(box (" <> printExprInline (translateExpr adtCtors localEnv currentMod expr) <> "))"))]
+      Unconditional expr -> [FsMatchCase combinedPat Nothing (FsIdent ("(" <> printExprInline (translateExpr adtCtors localEnv currentMod expr) <> ")"))]
       Guarded array ->
-        map (\(Guard guard expr) -> FsMatchCase combinedPat (Just (translateExpr adtCtors localEnv currentMod guard)) (FsIdent ("(box (" <> printExprInline (translateExpr adtCtors localEnv currentMod expr) <> "))"))) array
+        map (\(Guard guard expr) -> FsMatchCase combinedPat (Just (translateExpr adtCtors localEnv currentMod guard)) (FsIdent ("(" <> printExprInline (translateExpr adtCtors localEnv currentMod expr) <> ")"))) array
 
 translateBinder :: Map String Int -> Map String Int -> Maybe String -> Binder Ann -> FsPattern
 translateBinder adtCtors localEnv currentMod = case _ of
