@@ -156,7 +156,7 @@ for test_file in "${TEST_FILES[@]}"; do
     # 3. Compile and run via dotnet
     if [ -f "output/Main/Program.fsproj" ]; then
       if command -v dotnet >/dev/null 2>&1; then
-        output_run=$(dotnet run -v q --nologo --project output/Main/Program.fsproj 2>&1)
+        output_run=$(dotnet run -c Release -v q --nologo --project output/Main/Program.fsproj 2>&1)
         exit_code=$?
       else
         echo "   [FAILED] dotnet SDK not found. Please install it."
