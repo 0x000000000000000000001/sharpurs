@@ -15,3 +15,7 @@ bin/sharpurs.js linguist-generated
 *.fsi linguist-vendored=false
 *.cs linguist-detectable=true
 *.cs linguist-vendored=false
+
+# Suppress Dhall entirely from stats
+*.dhall linguist-detectable=false
+*.dhall linguist-vendored
