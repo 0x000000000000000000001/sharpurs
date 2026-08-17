@@ -1,4 +1,11 @@
+# Ignore all files for language stats
+* linguist-vendored
+# Keep JS generated diffs hidden
 *.js linguist-generated
-*.js linguist-vendored
 bin/sharpurs.js linguist-generated
-bin/sharpurs.js linguist-vendored
+
+# Only include target language
+*.fs linguist-vendored=false
+*.fsx linguist-vendored=false
+*.fsi linguist-vendored=false
+*.cs linguist-vendored=false
