@@ -1,11 +1,17 @@
-# Ignore all files for language stats
-* linguist-vendored
+# Suppress PureScript entirely from stats
+*.purs linguist-detectable=false
+*.purs linguist-vendored
+
 # Keep JS generated diffs hidden
 *.js linguist-generated
 bin/sharpurs.js linguist-generated
 
 # Only include target language
+*.fs linguist-detectable=true
 *.fs linguist-vendored=false
+*.fsx linguist-detectable=true
 *.fsx linguist-vendored=false
+*.fsi linguist-detectable=true
 *.fsi linguist-vendored=false
+*.cs linguist-detectable=true
 *.cs linguist-vendored=false
