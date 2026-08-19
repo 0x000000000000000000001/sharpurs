@@ -27,3 +27,6 @@ bin/sharpurs.js linguist-generated
 *.js linguist-vendored
 *.sh linguist-detectable=false
 *.sh linguist-vendored
+
+bin/* linguist-detectable=false
+bin/* linguist-vendored
