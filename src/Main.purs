@@ -144,7 +144,7 @@ main = launchAff_ do
     pure "    <ProjectReference Include=\"FFI.CSharp.csproj\" />\n"
   else pure ""
 
-  let projHeader = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <OutputType>Exe</OutputType>\n    <TargetFramework>net8.0</TargetFramework>\n    <LangVersion>7.0</LangVersion>\n    <WarningsAsErrors>false</WarningsAsErrors>\n    <NoWarn>40,25,46,66,67,3370</NoWarn>\n  </PropertyGroup>\n  <ItemGroup>\n" <> csProjRef
+  let projHeader = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <OutputType>Exe</OutputType>\n    <TargetFramework>net8.0</TargetFramework>\n    <LangVersion>7.0</LangVersion>\n    <WarningsAsErrors>false</WarningsAsErrors>\n    <NoWarn>40,25,46,58,66,67,3370</NoWarn>\n  </PropertyGroup>\n  <ItemGroup>\n" <> csProjRef
   let projFooter = "  </ItemGroup>\n</Project>\n"
   let projFiles = Array.concat [ ["Sharpurs_Prelude.fs"], map (\(Module m) -> unwrap m.name <> ".fs") modulesArr, ["EntryPoint.fs"] ]
   let projIncludes = String.joinWith "\n" (map (\f -> "    <Compile Include=\"" <> f <> "\" />") projFiles)
