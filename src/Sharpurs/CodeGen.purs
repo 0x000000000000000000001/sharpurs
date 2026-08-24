@@ -201,6 +201,7 @@ translateExpr adtCtors localEnv currentMod expr = case expr of
     in FsMatch matchExpr (Array.concatMap (translateCaseAlternative adtCtors localEnv currentMod) alts)
   ExprAbs _ (Ident arg) body -> FsIdent ("(box (fun (" <> sanitizeName arg <> ": obj) -> " <> printExprInline (translateExpr adtCtors localEnv currentMod body) <> "))")
   ExprAccessor _ obj prop -> FsIdent ("(Map.find \"" <> prop <> "\" (unbox<Map<string, obj>> (" <> printExprInline (translateExpr adtCtors localEnv currentMod obj) <> ")))")
+  ExprTypeApp _ expr _ -> translateExpr adtCtors localEnv currentMod expr
   ExprLet _ binds body -> 
     let
       newEnv = Array.foldl (\acc b -> case b of
