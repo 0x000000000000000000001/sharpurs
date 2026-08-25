@@ -93,10 +93,9 @@ main = launchAff_ do
     , onPrepareModule: \_ m -> pure m
     , onSkipModule: \_ (Module coreFnMod) -> do
         let modNameStr = unwrap coreFnMod.name
-        checkCache cacheVersion coreFnMod.path ("output/Main/" <> modNameStr <> ".sharpurs-cache.json")
+        pure Nothing
     , onCodegenModule: \_ (Module coreFnMod) backendMod _ -> do
         let modNameStr = unwrap backendMod.name
-        writeCache cacheVersion ("output/Main/" <> modNameStr <> ".sharpurs-cache.json") backendMod
         
         let (FsModule _ decls) = translateModule globalAdtCtors (Module coreFnMod)
         let fsCode = printModule (FsModule modNameStr decls)
