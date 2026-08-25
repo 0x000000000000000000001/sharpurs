@@ -83,6 +83,7 @@ main = launchAff_ do
   -- Generate and write each module
   buildModules
     { directives
+    , rewriteLimit: 10000
     , analyzeCustom: \_ _ -> Nothing
     , foreignSemantics: Map.filterKeys (\(Qualified mbMod _) -> case mbMod of
         Just (ModuleName m) -> not (String.contains (String.Pattern "Effect") m) && not (String.contains (String.Pattern "Control.Monad.ST") m)

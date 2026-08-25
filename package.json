@@ -7,7 +7,7 @@
     "sharpurs": "bin/sharpurs.js"
   },
   "scripts": {
-    "build": "spago build && NODE_OPTIONS=\"--no-deprecation\" purs-backend-es bundle-app -p node -m Main --to bin/sharpurs.js",
+    "build": "spago build && spago bundle --module Main --platform node --outfile bin/sharpurs.js --bundle-type app",
     "prepare": "npm run build"
   },
   "dependencies": {
