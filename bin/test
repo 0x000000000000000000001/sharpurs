@@ -147,7 +147,7 @@ for test_file in "${TEST_FILES[@]}"; do
   if out=$(spago build -q 2>&1); then
     # 2. Generate F# / C# code via sharpurs
     if [ -f "../../bin/sharpurs.js" ]; then
-      node ../../bin/sharpurs.js --main Main > /dev/null 2>&1
+      ../../bin/sharpurs --main Main > /dev/null 2>&1
     else
       echo "   [TODO] bin/sharpurs.js is not yet implemented"
       continue
