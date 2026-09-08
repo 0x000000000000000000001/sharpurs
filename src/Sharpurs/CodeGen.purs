@@ -17,9 +17,22 @@ import Data.Map as Map
 import Data.Tuple (Tuple(..))
 import Data.Maybe (Maybe(..), fromMaybe)
 
+import PureScript.Backend.Optimizer.Convert (BackendModule)
+import Sharpurs.IntKernel (IntKernel, fromBinding)
+import Sharpurs.IntKernel.CodeGen (printKernel)
 
 translateModule :: Map String Int -> Module Ann -> FsModule
-translateModule adtCtors (Module m) =
+translateModule adtCtors = translateModuleWithKernels adtCtors Map.empty
+
+translateOptimizedModule :: Map String Int -> BackendModule -> Module Ann -> FsModule
+translateOptimizedModule adtCtors backendMod = translateModuleWithKernels adtCtors kernels
+  where
+  kernels = Map.fromFoldable $ Array.mapMaybe
+    (\(Tuple name expr) -> Tuple name <$> fromBinding (Qualified (Just backendMod.name) name) expr)
+    (Array.concatMap _.bindings backendMod.bindings)
+
+translateModuleWithKernels :: Map String Int -> Map Ident IntKernel -> Module Ann -> FsModule
+translateModuleWithKernels adtCtors kernels (Module m) =
   let
     modNameStr = unwrap m.name
     modPrefix = String.replaceAll (Pattern ".") (Replacement "_") modNameStr
@@ -27,9 +40,22 @@ translateModule adtCtors (Module m) =
     translateDataDecl decl = FsDeclData (modPrefix <> "_" <> sanitizeName decl.name) (map translateDataCtor decl.constructors)
     nameStr = sanitizeName (String.replaceAll (Pattern ".") (Replacement "_") modNameStr)
     dataDecls = map translateDataDecl m.dataDecls
-    decls = Array.concatMap (translateBind adtCtors (Just modPrefix)) m.decls
+    decls = Array.concatMap (translateBindWithKernels adtCtors kernels modPrefix) m.decls
   in
     FsModule nameStr (dataDecls <> decls)
+
+translateBindWithKernels :: Map String Int -> Map Ident IntKernel -> String -> Bind Ann -> Array FsDecl
+translateBindWithKernels adtCtors kernels modPrefix binding =
+  case candidate >>= (\name -> Tuple name <$> Map.lookup name kernels) of
+    Just (Tuple (Ident name) kernel) -> [ printKernel (sanitizeName (modPrefix <> "_" <> name)) kernel ]
+    Nothing -> translateBind adtCtors (Just modPrefix) binding
+  where
+  -- Keep mutual groups intact: their fallback bodies may call each other's
+  -- generated _tco entry points. A singleton has no such external dependency.
+  candidate = case binding of
+    NonRec (Binding _ name _) -> Just name
+    Rec [ Binding _ name _ ] -> Just name
+    _ -> Nothing
 
 translateBind :: Map String Int -> Maybe String -> Bind Ann -> Array FsDecl
 translateBind adtCtors currentMod = case _ of

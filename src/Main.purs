@@ -22,7 +22,7 @@ import PureScript.Backend.Optimizer.App (coreFnModulesFromOutput, parseCLIArgs, 
 import PureScript.Backend.Optimizer.Builder (buildModules)
 import PureScript.Backend.Optimizer.Semantics.Foreign (coreForeignSemantics)
 import Sharpurs.FsAst (FsModule(..), sanitizeName)
-import Sharpurs.CodeGen (translateModule)
+import Sharpurs.CodeGen (translateOptimizedModule)
 import Sharpurs.Printer (printModule)
 import PureScript.Backend.Optimizer.FfiSupport (findFfiFile)
 import Sharpurs.FfiSupport (appendFfiWrappers, appendCsFfiWrappers)
@@ -40,6 +40,15 @@ let undefined = Unchecked.defaultof<obj>
 let Prim_undefined = undefined
 let intMod a b = unbox<int> a % unbox<int> b
 let semiringInt = 0
+
+// PureScript's Euclidean Int modulo, including zero and Int32.MinValue / -1.
+let sharpurs_int_mod (left: int) (right: int) : int =
+    if right = 0 || right = -1 then 0
+    else
+        let remainder = left % right
+        if remainder < 0 then
+            if right > 0 then remainder + right else remainder - right
+        else remainder
 
 let sharpurs_apply (func: obj) (arg: obj) : obj =
     if isNull func then failwith "sharpurs_apply: func is null!"
@@ -103,7 +112,7 @@ main = launchAff_ do
     , onCodegenModule: \_ (Module coreFnMod) backendMod _ -> do
         let modNameStr = unwrap backendMod.name
         
-        let (FsModule _ decls) = translateModule globalAdtCtors (Module coreFnMod)
+        let (FsModule _ decls) = translateOptimizedModule globalAdtCtors backendMod (Module coreFnMod)
         let fsCode = printModule (FsModule modNameStr decls)
         
         ffiPathMb <- liftEffect $ findFfiFile ".fs" ["../../bak/spago.d/fs/p", "bak/spago.d/fs/p"] args.mbFfiDir modNameStr (Just coreFnMod.path)
