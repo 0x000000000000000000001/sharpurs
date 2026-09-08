@@ -11,6 +11,9 @@
     "test:runtime": "node tests/runtime-apply.mjs",
     "test:kernel": "node tests/int-kernel.mjs",
     "test:local-kernel": "node tests/local-int-kernel.mjs",
+    "test:adt-kernel": "node tests/adt-kernel.mjs",
+    "test:adt-interop": "node tests/adt-interop.mjs",
+    "test:adt-unary": "node tests/adt-unary.mjs",
     "prepare": "npm run build"
   },
   "dependencies": {

@@ -7,6 +7,7 @@ import Effect (Effect)
 import Effect.Aff (launchAff_, attempt, Aff)
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
+import Effect.Ref as Ref
 import Node.FS.Aff as FS
 import Node.Encoding (Encoding(..))
 import Node.Process as Process
@@ -22,7 +23,8 @@ import PureScript.Backend.Optimizer.App (coreFnModulesFromOutput, parseCLIArgs, 
 import PureScript.Backend.Optimizer.Builder (buildModules)
 import PureScript.Backend.Optimizer.Semantics.Foreign (coreForeignSemantics)
 import Sharpurs.FsAst (FsModule(..), sanitizeName)
-import Sharpurs.CodeGen (translateOptimizedModule)
+import Sharpurs.CodeGen (translateOptimizedModuleWithAdts)
+import Sharpurs.AdtKernel as AdtKernel
 import Sharpurs.Printer (printModule)
 import PureScript.Backend.Optimizer.FfiSupport (findFfiFile)
 import Sharpurs.FfiSupport (appendFfiWrappers, appendCsFfiWrappers)
@@ -94,6 +96,7 @@ main = launchAff_ do
 
   directives <- loadDirectives
   let cacheVersion = "1.0.0"
+  nativeConstructors <- liftEffect (Ref.new Set.empty)
 
   -- Generate and write each module
   buildModules
@@ -111,8 +114,19 @@ main = launchAff_ do
         pure Nothing
     , onCodegenModule: \_ (Module coreFnMod) backendMod _ -> do
         let modNameStr = unwrap backendMod.name
-        
-        let (FsModule _ decls) = translateOptimizedModule globalAdtCtors backendMod (Module coreFnMod)
+        -- Builder visits dependencies before their consumers. Register a
+        -- producer only after its complete layout and constructor wrappers
+        -- have passed validation, before emitting its own mixed bindings.
+        let native = AdtKernel.prepareUnary (Module coreFnMod) backendMod
+        let constructors = case native of
+              Nothing -> Set.empty
+              Just selected -> Set.fromFoldable (Array.concatMap
+                (\decl -> map (\ctor -> case ctor.sourceName of
+                  Qualified (Just (ModuleName owner)) (Ident name) -> sanitizeName (String.replaceAll (String.Pattern ".") (String.Replacement "_") owner <> "_" <> name)
+                  _ -> ctor.name)
+                decl.constructors) selected.layout.declarations)
+        wrappers <- liftEffect (Ref.modify (Set.union constructors) nativeConstructors)
+        let (FsModule _ decls) = translateOptimizedModuleWithAdts wrappers native globalAdtCtors backendMod (Module coreFnMod)
         let fsCode = printModule (FsModule modNameStr decls)
         
         ffiPathMb <- liftEffect $ findFfiFile ".fs" ["../../bak/spago.d/fs/p", "bak/spago.d/fs/p"] args.mbFfiDir modNameStr (Just coreFnMod.path)

@@ -21,12 +21,29 @@ import PureScript.Backend.Optimizer.Convert (BackendModule)
 import Sharpurs.IntKernel (IntKernel, fromBinding)
 import Sharpurs.IntKernel.CodeGen (printKernel)
 import Sharpurs.Optimized as Optimized
+import Sharpurs.AdtKernel (UnaryModule)
+import Sharpurs.AdtLayout as AdtLayout
+
+-- Keep constructor identity/layout knowledge for patterns even when expression
+-- calls must cross the public object ABI of a native producer.
+type ConstructorEnv = { arities :: Map String Int, wrappers :: Set String, native :: Maybe UnaryModule }
+
+boxedConstructors :: Map String Int -> ConstructorEnv
+boxedConstructors arities = { arities, wrappers: Set.empty, native: Nothing }
+
+translateModuleWithConstructorWrappers :: Set String -> Map String Int -> Module Ann -> FsModule
+translateModuleWithConstructorWrappers wrappers arities =
+  translateModuleUsing { arities, wrappers, native: Nothing } Map.empty Map.empty
 
 translateModule :: Map String Int -> Module Ann -> FsModule
 translateModule adtCtors = translateModuleWithKernels adtCtors Map.empty
 
 translateOptimizedModule :: Map String Int -> BackendModule -> Module Ann -> FsModule
-translateOptimizedModule adtCtors backendMod = translateModuleWithOptimizations adtCtors kernels expressions
+translateOptimizedModule = translateOptimizedModuleWithAdts Set.empty Nothing
+
+translateOptimizedModuleWithAdts :: Set String -> Maybe UnaryModule -> Map String Int -> BackendModule -> Module Ann -> FsModule
+translateOptimizedModuleWithAdts wrappers native arities backendMod =
+  translateModuleUsing { arities, wrappers, native } kernels expressions
   where
   kernels = Map.fromFoldable $ Array.mapMaybe
     (\(Tuple name expr) -> Tuple name <$> fromBinding (Qualified (Just backendMod.name) name) expr)
@@ -39,15 +56,21 @@ translateModuleWithKernels :: Map String Int -> Map Ident IntKernel -> Module An
 translateModuleWithKernels adtCtors kernels = translateModuleWithOptimizations adtCtors kernels Map.empty
 
 translateModuleWithOptimizations :: Map String Int -> Map Ident IntKernel -> Map Ident FsExpr -> Module Ann -> FsModule
-translateModuleWithOptimizations adtCtors kernels expressions (Module m) =
+translateModuleWithOptimizations arities kernels expressions =
+  translateModuleUsing (boxedConstructors arities) kernels expressions
+
+translateModuleUsing :: ConstructorEnv -> Map Ident IntKernel -> Map Ident FsExpr -> Module Ann -> FsModule
+translateModuleUsing adtCtors kernels expressions (Module m) =
   let
     modNameStr = unwrap m.name
     modPrefix = String.replaceAll (Pattern ".") (Replacement "_") modNameStr
     translateDataCtor c = FsDataCtor (modPrefix <> "_" <> sanitizeName c.name <> "usd_Ctor") (Array.length c.fields)
     translateDataDecl decl = FsDeclData (modPrefix <> "_" <> sanitizeName decl.name) (map translateDataCtor decl.constructors)
     nameStr = sanitizeName (String.replaceAll (Pattern ".") (Replacement "_") modNameStr)
-    dataDecls = map translateDataDecl m.dataDecls
-    decls = Array.concatMap (translateBindWithOptimizations adtCtors kernels expressions modPrefix) m.decls
+    dataDecls = case adtCtors.native of
+      Just selected -> [ FsRaw (AdtLayout.printDeclarations selected.layout) ]
+      Nothing -> map translateDataDecl m.dataDecls
+    decls = Array.concatMap (translateBindUsingOptimizations adtCtors kernels expressions modPrefix) m.decls
   in
     FsModule nameStr (dataDecls <> decls)
 
@@ -55,13 +78,20 @@ translateBindWithKernels :: Map String Int -> Map Ident IntKernel -> String -> B
 translateBindWithKernels adtCtors kernels = translateBindWithOptimizations adtCtors kernels Map.empty
 
 translateBindWithOptimizations :: Map String Int -> Map Ident IntKernel -> Map Ident FsExpr -> String -> Bind Ann -> Array FsDecl
-translateBindWithOptimizations adtCtors kernels expressions modPrefix binding =
-  case candidate >>= (\name -> Tuple name <$> Map.lookup name kernels) of
-    Just (Tuple (Ident name) kernel) -> [ printKernel (sanitizeName (modPrefix <> "_" <> name)) kernel ]
-    Nothing -> case binding of
-      NonRec (Binding _ ident@(Ident name) _) | Just expr <- Map.lookup ident expressions ->
-        [ FsLet (sanitizeName (modPrefix <> "_" <> name)) [] expr ]
-      _ -> translateBind adtCtors (Just modPrefix) binding
+translateBindWithOptimizations arities kernels expressions =
+  translateBindUsingOptimizations (boxedConstructors arities) kernels expressions
+
+translateBindUsingOptimizations :: ConstructorEnv -> Map Ident IntKernel -> Map Ident FsExpr -> String -> Bind Ann -> Array FsDecl
+translateBindUsingOptimizations adtCtors kernels expressions modPrefix binding =
+  case candidate >>= (\name -> adtCtors.native >>= \selected -> Map.lookup name selected.bindings) of
+    Just declaration -> [ declaration ]
+    Nothing ->
+      case candidate >>= (\name -> Tuple name <$> Map.lookup name kernels) of
+        Just (Tuple (Ident name) kernel) -> [ printKernel (sanitizeName (modPrefix <> "_" <> name)) kernel ]
+        Nothing -> case binding of
+          NonRec (Binding _ ident@(Ident name) _) | Just expr <- Map.lookup ident expressions ->
+            [ FsLet (sanitizeName (modPrefix <> "_" <> name)) [] expr ]
+          _ -> translateBindUsing adtCtors (Just modPrefix) binding
   where
   -- Keep mutual groups intact: their fallback bodies may call each other's
   -- generated _tco entry points. A singleton has no such external dependency.
@@ -71,7 +101,10 @@ translateBindWithOptimizations adtCtors kernels expressions modPrefix binding =
     _ -> Nothing
 
 translateBind :: Map String Int -> Maybe String -> Bind Ann -> Array FsDecl
-translateBind adtCtors currentMod = case _ of
+translateBind arities = translateBindUsing (boxedConstructors arities)
+
+translateBindUsing :: ConstructorEnv -> Maybe String -> Bind Ann -> Array FsDecl
+translateBindUsing adtCtors currentMod = case _ of
   NonRec b -> expandBind adtCtors currentMod b
   Rec bindings -> 
     let
@@ -103,7 +136,7 @@ translateBind adtCtors currentMod = case _ of
       recStr = Array.mapWithIndex (\i bd -> makeRec bd (i == 0)) bindings
     in [FsRaw (String.joinWith "" recStr)]
   where
-    expandBind :: Map String Int -> Maybe String -> Binding Ann -> Array FsDecl
+    expandBind :: ConstructorEnv -> Maybe String -> Binding Ann -> Array FsDecl
     expandBind adtCtors currentMod (Binding _ (Ident name) val) =
       let prefix = case currentMod of
             Just m -> m <> "_"
@@ -133,7 +166,7 @@ flattenApp (ExprApp _ f x) =
   in { fn: flat.fn, args: Array.snoc flat.args x }
 flattenApp expr = { fn: expr, args: [] }
 
-translateLit :: Map String Int -> Map String Int -> Maybe String -> Literal (Expr Ann) -> FsExpr
+translateLit :: ConstructorEnv -> Map String Int -> Maybe String -> Literal (Expr Ann) -> FsExpr
 translateLit adtCtors localEnv currentMod lit = case lit of
     LitInt i -> FsIdent ("(box " <> show i <> ")")
     LitNumber n -> FsIdent ("(box " <> show n <> ")")
@@ -145,6 +178,18 @@ translateLit adtCtors localEnv currentMod lit = case lit of
       let
         mapAdd (Prop key val) acc = "(Map.add \"" <> key <> "\" (box (" <> printExprInline (translateExpr adtCtors localEnv currentMod val) <> ")) " <> acc <> ")"
       in FsIdent ("(box (" <> Array.foldr mapAdd "Map.empty" props <> "))")
+
+generateConstructorCall :: ConstructorEnv -> String -> Int -> Array FsExpr -> FsExpr
+generateConstructorCall env name arity args =
+  if Set.member name env.wrappers then
+    if Array.length args == arity then
+      -- The registered producer provides a typed native factory. Its F#
+      -- signature fixes each unbox type; saturation avoids curried closures
+      -- while retaining the object ABI and left-to-right argument evaluation.
+      FsIdent ("(box (" <> name <> "_adt_native"
+        <> String.joinWith "" (map (\arg -> " (unbox (" <> printExprInline arg <> "))") args) <> "))")
+    else FsApp (FsIdent ("(box " <> name <> ")")) args
+  else generateConstructorLambda name arity args
 
 generateConstructorLambda :: String -> Int -> Array FsExpr -> FsExpr
 generateConstructorLambda name arity args =
@@ -167,15 +212,15 @@ extractArgs (ExprAbs _ (Ident arg) body) =
   in { args: Array.cons (sanitizeName arg) next.args, body: next.body }
 extractArgs e = { args: [], body: e }
 
-translateExpr :: Map String Int -> Map String Int -> Maybe String -> Expr Ann -> FsExpr
+translateExpr :: ConstructorEnv -> Map String Int -> Maybe String -> Expr Ann -> FsExpr
 translateExpr adtCtors localEnv currentMod expr = case expr of
   ExprLit _ lit -> translateLit adtCtors localEnv currentMod lit
   ExprConstructor _ _ (Ident name) _ ->
     let fqName = case currentMod of
                    Just cmod -> String.replaceAll (Pattern ".") (Replacement "_") cmod <> "_" <> name
                    Nothing -> name
-    in case Map.lookup (sanitizeName fqName) adtCtors of
-      Just arity -> generateConstructorLambda (sanitizeName fqName) arity []
+    in case Map.lookup (sanitizeName fqName) adtCtors.arities of
+      Just arity -> generateConstructorCall adtCtors (sanitizeName fqName) arity []
       Nothing -> FsIdent ("(box " <> sanitizeName name <> ")")
   ExprVar _ qi -> 
     let nameStr = unwrap (unQualified qi) in
@@ -184,8 +229,8 @@ translateExpr adtCtors localEnv currentMod expr = case expr of
           Qualified Nothing _ -> case currentMod of
                                    Just cmod -> String.replaceAll (Pattern ".") (Replacement "_") cmod <> "_" <> nameStr
                                    Nothing -> nameStr
-    in case Map.lookup (sanitizeName fqName) adtCtors of
-      Just arity -> generateConstructorLambda (sanitizeName fqName) arity []
+    in case Map.lookup (sanitizeName fqName) adtCtors.arities of
+      Just arity -> generateConstructorCall adtCtors (sanitizeName fqName) arity []
       Nothing ->
         case qi of
           Qualified (Just modName) (Ident name) -> 
@@ -199,8 +244,8 @@ translateExpr adtCtors localEnv currentMod expr = case expr of
         let fqName = case currentMod of
                        Just cmod -> String.replaceAll (Pattern ".") (Replacement "_") cmod <> "_" <> name
                        Nothing -> name
-        in case Map.lookup (sanitizeName fqName) adtCtors of
-           Just arity -> generateConstructorLambda (sanitizeName fqName) arity (map (translateExpr adtCtors localEnv currentMod) flat.args)
+        in case Map.lookup (sanitizeName fqName) adtCtors.arities of
+           Just arity -> generateConstructorCall adtCtors (sanitizeName fqName) arity (map (translateExpr adtCtors localEnv currentMod) flat.args)
            Nothing -> FsCtorApp (sanitizeName fqName <> "usd_Ctor") (map (translateExpr adtCtors localEnv currentMod) flat.args)
       ExprVar _ qi ->
         let nameStr = unwrap (unQualified qi) in
@@ -226,8 +271,8 @@ translateExpr adtCtors localEnv currentMod expr = case expr of
              else
                 FsApp (translateExpr adtCtors localEnv currentMod flat.fn) (map (translateExpr adtCtors localEnv currentMod) flat.args)
           Nothing ->
-            case Map.lookup (sanitizeName fqName) adtCtors of
-              Just arity -> generateConstructorLambda (sanitizeName fqName) arity (map (translateExpr adtCtors localEnv currentMod) flat.args)
+            case Map.lookup (sanitizeName fqName) adtCtors.arities of
+              Just arity -> generateConstructorCall adtCtors (sanitizeName fqName) arity (map (translateExpr adtCtors localEnv currentMod) flat.args)
               Nothing -> FsApp (translateExpr adtCtors localEnv currentMod flat.fn) (map (translateExpr adtCtors localEnv currentMod) flat.args)
       _ -> FsApp (translateExpr adtCtors localEnv currentMod flat.fn) (map (translateExpr adtCtors localEnv currentMod) flat.args)
   ExprCase _ exprs alts -> 
@@ -311,7 +356,7 @@ printPatternInline = case _ of
   FsPatIdent name -> name
   FsPatRaw s -> s
 
-translateCaseAlternative :: Map String Int -> Map String Int -> Maybe String -> CaseAlternative Ann -> Array FsMatchCase
+translateCaseAlternative :: ConstructorEnv -> Map String Int -> Maybe String -> CaseAlternative Ann -> Array FsMatchCase
 translateCaseAlternative adtCtors localEnv currentMod (CaseAlternative binders guards) =
   let
     fsPatterns = map (translateBinder adtCtors localEnv currentMod) binders
@@ -325,7 +370,7 @@ translateCaseAlternative adtCtors localEnv currentMod (CaseAlternative binders g
       Guarded array ->
         map (\(Guard guard expr) -> FsMatchCase combinedPat (Just (translateExpr adtCtors localEnv currentMod guard)) (FsIdent ("(" <> printExprInline (translateExpr adtCtors localEnv currentMod expr) <> ")"))) array
 
-translateBinder :: Map String Int -> Map String Int -> Maybe String -> Binder Ann -> FsPattern
+translateBinder :: ConstructorEnv -> Map String Int -> Maybe String -> Binder Ann -> FsPattern
 translateBinder adtCtors localEnv currentMod = case _ of
   BinderNull _ -> FsPatWildcard
   BinderVar _ (Ident name) -> FsPatIdent (sanitizeName name)
@@ -339,7 +384,7 @@ translateBinder adtCtors localEnv currentMod = case _ of
     let fqName = case qi of
           Qualified (Just modName) _ -> String.replaceAll (Pattern ".") (Replacement "_") (unwrap modName) <> "_" <> name
           Qualified Nothing _ -> modPrefix <> name
-    in if Map.member fqName adtCtors then
+    in if Map.member fqName adtCtors.arities then
       FsPatCtor (sanitizeName fqName <> "usd_Ctor") (map (translateBinder adtCtors localEnv currentMod) binders)
     else
       case Array.index binders 0 of
@@ -348,7 +393,7 @@ translateBinder adtCtors localEnv currentMod = case _ of
   BinderNamed _ (Ident name) inner ->
     FsPatRaw ("(" <> printPatternInline (translateBinder adtCtors localEnv currentMod inner) <> " as " <> sanitizeName name <> ")")
 
-translateLitBinder :: Map String Int -> Map String Int -> Maybe String -> Literal (Binder Ann) -> FsPattern
+translateLitBinder :: ConstructorEnv -> Map String Int -> Maybe String -> Literal (Binder Ann) -> FsPattern
 translateLitBinder adtCtors localEnv currentMod = case _ of
     LitBoolean b -> FsPatRaw (if b then "LitBool true ()" else "LitBool false ()")
     LitInt i -> FsPatRaw ("LitInt " <> show i <> " ()")
