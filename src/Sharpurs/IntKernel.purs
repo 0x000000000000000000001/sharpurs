@@ -1,10 +1,12 @@
 module Sharpurs.IntKernel
   ( IntKernel
+  , LocalIntKernel
   , Parameter
   , IntExpr(..)
   , IntCondition(..)
   , IntOperator(..)
   , fromBinding
+  , fromLocal
   ) where
 
 import Prelude
@@ -31,6 +33,12 @@ type IntKernel =
   , body :: IntExpr
   }
 
+type LocalIntKernel =
+  { args :: NonEmptyArray Parameter
+  , body :: IntExpr
+  , entry :: NonEmptyArray IntExpr
+  }
+
 type Parameter = { name :: Maybe Ident, level :: Level }
 
 data IntExpr
@@ -50,30 +58,81 @@ derive instance Eq IntCondition
 derive instance Eq IntOperator
 
 type Context =
-  { self :: Qualified Ident
+  { self :: Self
   , signature :: ExprType
+  , arity :: Int
   , levels :: Array Level
   }
+
+data Self
+  = GlobalSelf (Qualified Ident)
+  | LocalSelf Ident Level
 
 -- Accept only an entirely supported binding. Nothing lets the caller retain
 -- the existing generator; unresolved TypeApp, effects and other forms fail shut.
 fromBinding :: Qualified Ident -> NeutralExpr -> Maybe IntKernel
-fromBinding name expr@(NeutralExpr syntax) = do
-  types <- case syntax of
-    Syn.Typed (CoreFn.Func args CoreFn.Int) _ -> do
-      guard (not (Array.null args) && all (_ == CoreFn.Int) args)
-      pure args
-    _ -> Nothing
+fromBinding name expr = do
+  types <- intArguments expr
   collected <- collectArguments types [] expr
   args <- NonEmptyArray.fromArray collected.args
   let
     context =
-      { self: name
+      { self: GlobalSelf name
       , signature: CoreFn.Func types CoreFn.Int
+      , arity: Array.length types
       , levels: map _.level collected.args
       }
   body <- fromInt true context collected.body
   pure { name, args, body }
+
+-- Only the invocation may use the surrounding Int locals. The recursive body
+-- is closed over its own arguments, so no object value enters the native loop.
+fromLocal :: Array Level -> NeutralExpr -> Maybe LocalIntKernel
+fromLocal outerLevels (NeutralExpr syntax) = case syntax of
+  Syn.Typed CoreFn.Int inner -> do
+    guard (all (\(Level level) -> level >= 0) outerLevels)
+    guard (Array.length (Array.nub outerLevels) == Array.length outerLevels)
+    lower inner
+  _ -> Nothing
+  where
+  lower (NeutralExpr innerSyntax) = case innerSyntax of
+    Syn.Typed CoreFn.Int inner -> lower inner
+    Syn.LetRec recursiveLevel@(Level level) bindings entryExpr -> do
+      guard (level >= 0 && all (_ < recursiveLevel) outerLevels)
+      Tuple name fn <- case NonEmptyArray.toArray bindings of
+        [ binding ] -> Just binding
+        _ -> Nothing
+      types <- intArguments fn
+      collected <- collectArguments types [] fn
+      args <- NonEmptyArray.fromArray collected.args
+      let
+        levels = map _.level collected.args
+        context =
+          { self: LocalSelf name recursiveLevel
+          , signature: CoreFn.Func types CoreFn.Int
+          , arity: Array.length types
+          , levels
+          }
+      guard (all (_ > recursiveLevel) levels)
+      body <- fromInt true context collected.body
+      entry <- fromEntry (context { levels = outerLevels }) entryExpr
+      pure { args, body, entry }
+    _ -> Nothing
+
+  fromEntry context (NeutralExpr entrySyntax) = case entrySyntax of
+    Syn.Typed CoreFn.Int inner -> fromEntry context inner
+    Syn.App fn args -> do
+      guard (NonEmptyArray.length args == context.arity)
+      checkSelf context fn
+      traverse (fromInt false context) args
+    _ -> Nothing
+
+intArguments :: NeutralExpr -> Maybe (Array ExprType)
+intArguments (NeutralExpr syntax) = case syntax of
+  Syn.Typed (CoreFn.Func args CoreFn.Int) _ -> do
+    guard (not (Array.null args) && all (_ == CoreFn.Int) args)
+    pure args
+  _ -> Nothing
 
 -- Follow the actual Abs spine, including intervening/repeated Typed nodes.
 -- The type alone must not turn a returned function into another source binder.
@@ -120,7 +179,7 @@ fromInt tailPosition context (NeutralExpr syntax) = case syntax of
       Tuple <$> fromCondition context condition <*> fromInt tailPosition context body
   Syn.App fn args -> do
     guard tailPosition
-    guard (NonEmptyArray.length args == Array.length context.levels)
+    guard (NonEmptyArray.length args == context.arity)
     checkSelf context fn
     IntTailCall <$> traverse (fromInt false context) args
   _ -> Nothing
@@ -139,7 +198,12 @@ checkSelf context (NeutralExpr syntax) = case syntax of
   Syn.Typed ty inner -> do
     guard (ty == context.signature)
     checkSelf context inner
-  Syn.Var name -> guard (name == context.self)
+  Syn.Var name -> case context.self of
+    GlobalSelf self -> guard (name == self)
+    _ -> Nothing
+  Syn.Local name level -> case context.self of
+    LocalSelf self selfLevel -> guard (name == Just self && level == selfLevel)
+    _ -> Nothing
   _ -> Nothing
 
 fromOperator :: Syn.BackendOperatorNum -> Maybe IntOperator

@@ -10,6 +10,7 @@
     "build": "spago build && spago bundle --module Main --platform node --outfile bin/sharpurs.js --bundle-type app",
     "test:runtime": "node tests/runtime-apply.mjs",
     "test:kernel": "node tests/int-kernel.mjs",
+    "test:local-kernel": "node tests/local-int-kernel.mjs",
     "prepare": "npm run build"
   },
   "dependencies": {
