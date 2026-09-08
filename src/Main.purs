@@ -43,8 +43,14 @@ let semiringInt = 0
 
 let sharpurs_apply (func: obj) (arg: obj) : obj =
     if isNull func then failwith "sharpurs_apply: func is null!"
-    let method = func.GetType().GetMethods() |> Array.find (fun m -> m.Name = "Invoke" && m.GetParameters().Length = 1)
-    method.Invoke(func, [| arg |])
+    match func with
+    | :? (obj -> obj) as invoke ->
+        try invoke arg
+        // Keep the exception boundary of MethodInfo.Invoke for callers and FFI.
+        with ex -> raise (System.Reflection.TargetInvocationException(ex))
+    | _ ->
+        let method = func.GetType().GetMethods() |> Array.find (fun m -> m.Name = "Invoke" && m.GetParameters().Length = 1)
+        method.Invoke(func, [| arg |])
 """
 
 fsHeader :: String
