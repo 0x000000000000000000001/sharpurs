@@ -91,7 +91,11 @@ try {
   assert.ok(fromExpr(new C.ExprApp(original.value0, original, parts(original).right)) instanceof Nothing,
     "over-application rejected"); checks++;
   const generated = printModule(translateModule(Map.empty)(core));
-  const byName = name => generated.split("\n\n").find(line => line.startsWith(`let IntCompare_${name} `));
+  // The direct-call pass may move a monomorphic function's body behind its
+  // public curried wrapper. Inspect that body when checking dictionary use.
+  const declarations = generated.split("\n\n");
+  const byName = name => declarations.find(line => line.startsWith(`let IntCompare_${name}_direct `))
+    ?? declarations.find(line => line.startsWith(`let IntCompare_${name} `));
   for (const name of ["less", "greater"]) {
     assert.doesNotMatch(byName(name), /sharpurs_apply/); checks++;
   }

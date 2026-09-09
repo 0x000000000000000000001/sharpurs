@@ -24,18 +24,24 @@ import Sharpurs.Optimized as Optimized
 import Sharpurs.AdtKernel (UnaryModule)
 import Sharpurs.AdtLayout as AdtLayout
 import Sharpurs.IntComparison as IntComparison
+import Sharpurs.DirectCall as DirectCall
 import PureScript.Backend.Optimizer.Syntax (BackendOperatorOrd(..))
 
 -- Keep constructor identity/layout knowledge for patterns even when expression
 -- calls must cross the public object ABI of a native producer.
-type ConstructorEnv = { arities :: Map String Int, wrappers :: Set String, native :: Maybe UnaryModule }
+type ConstructorEnv =
+  { arities :: Map String Int
+  , wrappers :: Set String
+  , native :: Maybe UnaryModule
+  , direct :: Map (Qualified Ident) DirectCall.Candidate
+  }
 
 boxedConstructors :: Map String Int -> ConstructorEnv
-boxedConstructors arities = { arities, wrappers: Set.empty, native: Nothing }
+boxedConstructors arities = { arities, wrappers: Set.empty, native: Nothing, direct: Map.empty }
 
 translateModuleWithConstructorWrappers :: Set String -> Map String Int -> Module Ann -> FsModule
 translateModuleWithConstructorWrappers wrappers arities =
-  translateModuleUsing { arities, wrappers, native: Nothing } Map.empty Map.empty
+  translateModuleUsing { arities, wrappers, native: Nothing, direct: Map.empty } Map.empty Map.empty
 
 translateModule :: Map String Int -> Module Ann -> FsModule
 translateModule adtCtors = translateModuleWithKernels adtCtors Map.empty
@@ -45,7 +51,7 @@ translateOptimizedModule = translateOptimizedModuleWithAdts Set.empty Nothing
 
 translateOptimizedModuleWithAdts :: Set String -> Maybe UnaryModule -> Map String Int -> BackendModule -> Module Ann -> FsModule
 translateOptimizedModuleWithAdts wrappers native arities backendMod =
-  translateModuleUsing { arities, wrappers, native } kernels expressions
+  translateModuleUsing { arities, wrappers, native, direct: Map.empty } kernels expressions
   where
   kernels = Map.fromFoldable $ Array.mapMaybe
     (\(Tuple name expr) -> Tuple name <$> fromBinding (Qualified (Just backendMod.name) name) expr)
@@ -72,7 +78,29 @@ translateModuleUsing adtCtors kernels expressions (Module m) =
     dataDecls = case adtCtors.native of
       Just selected -> [ FsRaw (AdtLayout.printDeclarations selected.layout) ]
       Nothing -> map translateDataDecl m.dataDecls
-    decls = Array.concatMap (translateBindUsingOptimizations adtCtors kernels expressions modPrefix) m.decls
+    -- Register only entries that will actually be emitted by the generic path.
+    -- Qualified keys keep local binders and imported functions out of this table.
+    bindingNames = Array.concatMap (case _ of
+      NonRec (Binding _ name _) -> [ name ]
+      Rec bindings -> map (\(Binding _ name _) -> name) bindings) m.decls
+    emittedName name = sanitizeName (modPrefix <> "_" <> unwrap name)
+    sourceNames = Set.fromFoldable (map emittedName
+      (bindingNames <> Array.fromFoldable (Map.keys m.foreign)))
+    select binding = do
+      entry <- DirectCall.fromBinding (map _.layout adtCtors.native) binding
+      let
+        name = emittedName entry.name
+        replaced = Map.member entry.name kernels || Map.member entry.name expressions
+          || fromMaybe false (map (Map.member entry.name <<< _.bindings) adtCtors.native)
+        collision = Set.member (name <> "_direct") sourceNames
+          || Set.member (name <> "_direct_apply") sourceNames
+          || Array.elem (name <> "_direct") entry.args
+          || Array.elem (name <> "_direct_apply") entry.args
+      if replaced || collision then Nothing
+      else Just (Tuple (Qualified (Just m.name) entry.name) entry)
+    direct = Map.fromFoldable (Array.mapMaybe select m.decls)
+    env = adtCtors { direct = direct }
+    decls = Array.concatMap (translateBindUsingOptimizations env kernels expressions modPrefix) m.decls
   in
     FsModule nameStr (dataDecls <> decls)
 
@@ -93,6 +121,10 @@ translateBindUsingOptimizations adtCtors kernels expressions modPrefix binding =
         Nothing -> case binding of
           NonRec (Binding _ ident@(Ident name) _) | Just expr <- Map.lookup ident expressions ->
             [ FsLet (sanitizeName (modPrefix <> "_" <> name)) [] expr ]
+          NonRec (Binding _ name _) ->
+            case Array.find (\entry -> entry.name == name) (Array.fromFoldable (Map.values adtCtors.direct)) of
+              Just entry -> printDirectBinding adtCtors modPrefix entry
+              Nothing -> translateBindUsing adtCtors (Just modPrefix) binding
           _ -> translateBindUsing adtCtors (Just modPrefix) binding
   where
   -- Keep mutual groups intact: their fallback bodies may call each other's
@@ -101,6 +133,26 @@ translateBindUsingOptimizations adtCtors kernels expressions modPrefix binding =
     NonRec (Binding _ name _) -> Just name
     Rec [ Binding _ name _ ] -> Just name
     _ -> Nothing
+
+printDirectBinding :: ConstructorEnv -> String -> DirectCall.Candidate -> Array FsDecl
+printDirectBinding env modPrefix entry =
+  let
+    name = sanitizeName (modPrefix <> "_" <> unwrap entry.name)
+    args = entry.args
+    parameters = String.joinWith " " (map (\arg -> "(" <> arg <> ": obj)") args)
+    invocation = name <> "_direct " <> String.joinWith " " args
+    body = printExprInline (translateExpr env Map.empty (Just modPrefix) entry.body)
+    prefix = String.joinWith "" (map (\arg -> "(box (fun (" <> arg <> ": obj) -> ") args)
+    suffix = String.joinWith "" (map (const "))") args)
+  in [ FsRaw ("let " <> name <> "_direct " <> parameters <> " : obj = " <> body
+    -- Arguments are evaluated before entering this method. Only failures of
+    -- the saturated body receive the wrapper that sharpurs_apply would add.
+    <> "\n\nlet " <> name <> "_direct_apply " <> parameters <> " : obj =\n"
+    <> "    try " <> invocation <> "\n"
+    <> "    with ex -> raise (System.Reflection.TargetInvocationException(ex))\n"
+    -- The public curried entry already has that boundary in sharpurs_apply.
+    <> "\nlet " <> name <> " = " <> prefix <> "(" <> invocation <> ")" <> suffix
+    ) ]
 
 translateBind :: Map String Int -> Maybe String -> Bind Ann -> Array FsDecl
 translateBind arities = translateBindUsing (boxedConstructors arities)
@@ -216,6 +268,16 @@ extractArgs e = { args: [], body: e }
 
 translateExpr :: ConstructorEnv -> Map String Int -> Maybe String -> Expr Ann -> FsExpr
 translateExpr adtCtors localEnv currentMod expr =
+  case DirectCall.fromCall adtCtors.direct expr of
+    Just call ->
+      let
+        name = sanitizeName (fromMaybe "" currentMod <> "_" <> unwrap call.candidate.name)
+        argument value = FsIdent ("(box (" <> printExprInline (translateExpr adtCtors localEnv currentMod value) <> "))")
+      in FsDirectApp (name <> "_direct_apply") (map argument call.args)
+    Nothing -> translateIntComparison adtCtors localEnv currentMod expr
+
+translateIntComparison :: ConstructorEnv -> Map String Int -> Maybe String -> Expr Ann -> FsExpr
+translateIntComparison adtCtors localEnv currentMod expr =
   case IntComparison.fromExpr expr of
     Just comparison ->
       let

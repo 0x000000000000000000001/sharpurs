@@ -15,6 +15,7 @@
     "test:adt-interop": "node tests/adt-interop.mjs",
     "test:adt-unary": "node tests/adt-unary.mjs",
     "test:int-comparison": "node tests/int-comparison.mjs",
+    "test:direct-call": "node tests/direct-call.mjs",
     "prepare": "npm run build"
   },
   "dependencies": {
