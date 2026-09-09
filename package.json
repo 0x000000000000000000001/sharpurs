@@ -14,6 +14,7 @@
     "test:adt-kernel": "node tests/adt-kernel.mjs",
     "test:adt-interop": "node tests/adt-interop.mjs",
     "test:adt-unary": "node tests/adt-unary.mjs",
+    "test:int-comparison": "node tests/int-comparison.mjs",
     "prepare": "npm run build"
   },
   "dependencies": {

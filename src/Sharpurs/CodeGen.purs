@@ -23,6 +23,8 @@ import Sharpurs.IntKernel.CodeGen (printKernel)
 import Sharpurs.Optimized as Optimized
 import Sharpurs.AdtKernel (UnaryModule)
 import Sharpurs.AdtLayout as AdtLayout
+import Sharpurs.IntComparison as IntComparison
+import PureScript.Backend.Optimizer.Syntax (BackendOperatorOrd(..))
 
 -- Keep constructor identity/layout knowledge for patterns even when expression
 -- calls must cross the public object ABI of a native producer.
@@ -213,7 +215,20 @@ extractArgs (ExprAbs _ (Ident arg) body) =
 extractArgs e = { args: [], body: e }
 
 translateExpr :: ConstructorEnv -> Map String Int -> Maybe String -> Expr Ann -> FsExpr
-translateExpr adtCtors localEnv currentMod expr = case expr of
+translateExpr adtCtors localEnv currentMod expr =
+  case IntComparison.fromExpr expr of
+    Just comparison ->
+      let
+        operand value = "(unbox<int> (box (" <> printExprInline (translateExpr adtCtors localEnv currentMod value) <> ")))"
+        emit operator = FsIdent ("(box (" <> operand comparison.left <> operator <> operand comparison.right <> "))")
+      in case comparison.operator of
+        OpLt -> emit " < "
+        OpGt -> emit " > "
+        _ -> translateExprFallback adtCtors localEnv currentMod expr
+    Nothing -> translateExprFallback adtCtors localEnv currentMod expr
+
+translateExprFallback :: ConstructorEnv -> Map String Int -> Maybe String -> Expr Ann -> FsExpr
+translateExprFallback adtCtors localEnv currentMod expr = case expr of
   ExprLit _ lit -> translateLit adtCtors localEnv currentMod lit
   ExprConstructor _ _ (Ident name) _ ->
     let fqName = case currentMod of
