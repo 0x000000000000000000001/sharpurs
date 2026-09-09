@@ -26,6 +26,7 @@ import Sharpurs.AdtLayout as AdtLayout
 import Sharpurs.IntComparison as IntComparison
 import Sharpurs.IntArithmetic as IntArithmetic
 import Sharpurs.DirectCall as DirectCall
+import Sharpurs.ThunkKernel as ThunkKernel
 import PureScript.Backend.Optimizer.Syntax (BackendOperatorOrd(..), BackendOperatorNum(..))
 
 -- Keep constructor identity/layout knowledge for patterns even when expression
@@ -35,14 +36,15 @@ type ConstructorEnv =
   , wrappers :: Set String
   , native :: Maybe UnaryModule
   , direct :: Map (Qualified Ident) DirectCall.Candidate
+  , thunks :: Maybe ThunkKernel.ThunkModule
   }
 
 boxedConstructors :: Map String Int -> ConstructorEnv
-boxedConstructors arities = { arities, wrappers: Set.empty, native: Nothing, direct: Map.empty }
+boxedConstructors arities = { arities, wrappers: Set.empty, native: Nothing, direct: Map.empty, thunks: Nothing }
 
 translateModuleWithConstructorWrappers :: Set String -> Map String Int -> Module Ann -> FsModule
 translateModuleWithConstructorWrappers wrappers arities =
-  translateModuleUsing { arities, wrappers, native: Nothing, direct: Map.empty } Map.empty Map.empty
+  translateModuleUsing { arities, wrappers, native: Nothing, direct: Map.empty, thunks: Nothing } Map.empty Map.empty
 
 translateModule :: Map String Int -> Module Ann -> FsModule
 translateModule adtCtors = translateModuleWithKernels adtCtors Map.empty
@@ -51,8 +53,11 @@ translateOptimizedModule :: Map String Int -> BackendModule -> Module Ann -> FsM
 translateOptimizedModule = translateOptimizedModuleWithAdts Set.empty Nothing
 
 translateOptimizedModuleWithAdts :: Set String -> Maybe UnaryModule -> Map String Int -> BackendModule -> Module Ann -> FsModule
-translateOptimizedModuleWithAdts wrappers native arities backendMod =
-  translateModuleUsing { arities, wrappers, native, direct: Map.empty } kernels expressions
+translateOptimizedModuleWithAdts wrappers native = translateOptimizedModuleWithThunks wrappers native Nothing
+
+translateOptimizedModuleWithThunks :: Set String -> Maybe UnaryModule -> Maybe ThunkKernel.ThunkModule -> Map String Int -> BackendModule -> Module Ann -> FsModule
+translateOptimizedModuleWithThunks wrappers native thunks arities backendMod =
+  translateModuleUsing { arities, wrappers, native, direct: Map.empty, thunks } kernels expressions
   where
   kernels = Map.fromFoldable $ Array.mapMaybe
     (\(Tuple name expr) -> Tuple name <$> fromBinding (Qualified (Just backendMod.name) name) expr)
@@ -103,7 +108,7 @@ translateModuleUsing adtCtors kernels expressions (Module m) =
     env = adtCtors { direct = direct }
     decls = Array.concatMap (translateBindUsingOptimizations env kernels expressions modPrefix) m.decls
   in
-    FsModule nameStr (dataDecls <> decls)
+    FsModule nameStr (dataDecls <> fromMaybe [] (map _.declarations adtCtors.thunks) <> decls)
 
 translateBindWithKernels :: Map String Int -> Map Ident IntKernel -> String -> Bind Ann -> Array FsDecl
 translateBindWithKernels adtCtors kernels = translateBindWithOptimizations adtCtors kernels Map.empty
@@ -269,6 +274,12 @@ extractArgs e = { args: [], body: e }
 
 translateExpr :: ConstructorEnv -> Map String Int -> Maybe String -> Expr Ann -> FsExpr
 translateExpr adtCtors localEnv currentMod expr =
+  case adtCtors.thunks >>= \selected -> ThunkKernel.fromExpr selected expr of
+    Just native -> native
+    Nothing -> translateDirectCall adtCtors localEnv currentMod expr
+
+translateDirectCall :: ConstructorEnv -> Map String Int -> Maybe String -> Expr Ann -> FsExpr
+translateDirectCall adtCtors localEnv currentMod expr =
   case DirectCall.fromCall adtCtors.direct expr of
     Just call ->
       let

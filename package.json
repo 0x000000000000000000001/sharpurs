@@ -18,6 +18,7 @@
     "test:int-comparison": "node tests/int-comparison.mjs",
     "test:int-arithmetic": "node tests/int-arithmetic.mjs",
     "test:direct-call": "node tests/direct-call.mjs",
+    "test:thunk-kernel": "node tests/thunk-kernel.mjs",
     "prepare": "npm run build"
   },
   "dependencies": {
