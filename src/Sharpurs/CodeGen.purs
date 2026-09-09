@@ -26,6 +26,7 @@ import Sharpurs.AdtLayout as AdtLayout
 import Sharpurs.IntComparison as IntComparison
 import Sharpurs.IntArithmetic as IntArithmetic
 import Sharpurs.DirectCall as DirectCall
+import Sharpurs.ConstructorCall as ConstructorCall
 import Sharpurs.ThunkKernel as ThunkKernel
 import PureScript.Backend.Optimizer.Syntax (BackendOperatorOrd(..), BackendOperatorNum(..))
 
@@ -315,7 +316,14 @@ translateIntArithmetic adtCtors localEnv currentMod expr =
     Nothing -> translateExprFallback adtCtors localEnv currentMod expr
 
 translateExprFallback :: ConstructorEnv -> Map String Int -> Maybe String -> Expr Ann -> FsExpr
-translateExprFallback adtCtors localEnv currentMod expr = case expr of
+translateExprFallback adtCtors localEnv currentMod expr =
+  case ConstructorCall.fromExpr adtCtors.arities currentMod expr of
+    Just call -> generateConstructorCall adtCtors call.name call.arity
+      (map (translateExpr adtCtors localEnv currentMod) call.args)
+    Nothing -> translateExprGeneric adtCtors localEnv currentMod expr
+
+translateExprGeneric :: ConstructorEnv -> Map String Int -> Maybe String -> Expr Ann -> FsExpr
+translateExprGeneric adtCtors localEnv currentMod expr = case expr of
   ExprLit _ lit -> translateLit adtCtors localEnv currentMod lit
   ExprConstructor _ _ (Ident name) _ ->
     let fqName = case currentMod of
