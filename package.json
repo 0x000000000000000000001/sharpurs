@@ -14,7 +14,9 @@
     "test:adt-kernel": "node tests/adt-kernel.mjs",
     "test:adt-interop": "node tests/adt-interop.mjs",
     "test:adt-unary": "node tests/adt-unary.mjs",
+    "test:adt-multi": "node tests/adt-multi.mjs",
     "test:int-comparison": "node tests/int-comparison.mjs",
+    "test:int-arithmetic": "node tests/int-arithmetic.mjs",
     "test:direct-call": "node tests/direct-call.mjs",
     "prepare": "npm run build"
   },

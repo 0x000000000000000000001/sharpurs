@@ -24,8 +24,9 @@ import Sharpurs.Optimized as Optimized
 import Sharpurs.AdtKernel (UnaryModule)
 import Sharpurs.AdtLayout as AdtLayout
 import Sharpurs.IntComparison as IntComparison
+import Sharpurs.IntArithmetic as IntArithmetic
 import Sharpurs.DirectCall as DirectCall
-import PureScript.Backend.Optimizer.Syntax (BackendOperatorOrd(..))
+import PureScript.Backend.Optimizer.Syntax (BackendOperatorOrd(..), BackendOperatorNum(..))
 
 -- Keep constructor identity/layout knowledge for patterns even when expression
 -- calls must cross the public object ABI of a native producer.
@@ -286,6 +287,19 @@ translateIntComparison adtCtors localEnv currentMod expr =
       in case comparison.operator of
         OpLt -> emit " < "
         OpGt -> emit " > "
+        _ -> translateExprFallback adtCtors localEnv currentMod expr
+    Nothing -> translateIntArithmetic adtCtors localEnv currentMod expr
+
+translateIntArithmetic :: ConstructorEnv -> Map String Int -> Maybe String -> Expr Ann -> FsExpr
+translateIntArithmetic adtCtors localEnv currentMod expr =
+  case IntArithmetic.fromExpr expr of
+    Just arithmetic ->
+      let
+        operand value = "(unbox<int> (box (" <> printExprInline (translateExpr adtCtors localEnv currentMod value) <> ")))"
+        emit operator = FsIdent ("(box (" <> operand arithmetic.left <> operator <> operand arithmetic.right <> "))")
+      in case arithmetic.operator of
+        OpAdd -> emit " + "
+        OpSubtract -> emit " - "
         _ -> translateExprFallback adtCtors localEnv currentMod expr
     Nothing -> translateExprFallback adtCtors localEnv currentMod expr
 

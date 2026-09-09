@@ -5,7 +5,7 @@ import Prelude
 import Control.Alternative (guard, (<|>))
 import Data.Array as Array
 import Data.Array.NonEmpty as NEA
-import Data.Foldable (all, foldr)
+import Data.Foldable (all, foldMap, foldr)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
@@ -24,7 +24,13 @@ import Sharpurs.AdtLayout (Layout, Ctor, fromModule, nativeType, lookupCtor, pri
 import Sharpurs.FsAst (FsDecl(..), FsModule(..), escapeString, sanitizeName)
 
 type Signature = { args :: Array ExprType, result :: ExprType, nativeName :: String, publicName :: String }
-type Context = { layout :: Layout.Layout, globals :: Map (Qualified Ident) Signature, locals :: Map Level ExprType }
+type Context =
+  { layout :: Layout.Layout
+  , globals :: Map (Qualified Ident) Signature
+  , locals :: Map Level ExprType
+  , guardedCalls :: Boolean
+  , self :: Maybe (Qualified Ident)
+  }
 type Parameter = { level :: Level, type :: ExprType }
 
 type UnaryModule =
@@ -36,8 +42,9 @@ type UnaryModule =
 type SourceBinding = { name :: Ident, expr :: C.Expr Ann, recursive :: Boolean, singleton :: Boolean }
 
 -- Admit a closed layout only together with every constructor's public object
--- wrapper. Ordinary functions remain boxed unless one recursive-ADT argument,
--- its result and the complete optimized body can use native representations.
+-- wrapper. A function needs at least one recursive-ADT argument, closed native
+-- parameters/result, and a completely supported optimized body. Dependencies
+-- are admitted only after their native definitions have been selected.
 prepareUnary :: Module Ann -> BackendModule -> Maybe UnaryModule
 prepareUnary core@(Module source) backend = do
   layout <- Layout.fromModule core
@@ -50,7 +57,15 @@ prepareUnary core@(Module source) backend = do
     publicNames = map (publicName layout <<< _.name) sourceBindings
     constructors = Array.concatMap _.constructors layout.declarations
     qualified name = Qualified (Just source.name) name
-    context = { layout, globals: Map.empty, locals: Map.empty }
+    context = { layout, globals: Map.empty, locals: Map.empty, guardedCalls: true, self: Nothing }
+    references = map (\binding -> { name: qualified binding.name, references: sourceReferences binding.expr }) sourceBindings
+    directlyUnsupported = map _.name (Array.filter (Array.any (unsupportedReference source.name) <<< _.references) references)
+    -- PBO can inline an imported helper (including unsafePartial), erasing
+    -- observable source invocation boundaries. Only known native primitives
+    -- may cross that boundary; other imports and their local dependants keep
+    -- the ordinary path even when optimization removes the original call.
+    unsupportedBindings = Array.foldl (\blocked _ -> Array.nub (blocked <> map _.name
+      (Array.filter (Array.any (flip Array.elem blocked) <<< _.references) references))) directlyUnsupported sourceBindings
   guard (unique (map _.name sourceBindings) && unique publicNames)
   guard (unique (map (\(Tuple name _) -> name) backendBindings))
   ctorBindings <- traverse (\ctor -> do
@@ -74,27 +89,37 @@ prepareUnary core@(Module source) backend = do
     ) constructors
   let
     ctorSignatures = Map.fromFoldable (map (\item -> Tuple (qualified item.name) item.sig) ctorBindings)
-    candidates = Array.mapMaybe (\binding -> do
+    select selected binding = case do
       guard binding.singleton
       guard (not (Map.member (qualified binding.name) ctorSignatures))
+      guard (not (Array.elem (qualified binding.name) unsupportedBindings))
       group <- Array.find (\item -> Array.any (\(Tuple name _) -> name == binding.name) item.bindings) backend.bindings
       guard (not group.recursive || Array.length group.bindings == 1)
       guard (group.recursive == binding.recursive)
       expression <- lookupExpression binding.name group.bindings
       sig <- signature layout binding.name expression
       guard (sourceAnnotation binding.expr == Just (signatureType sig))
-      case sig.args of
-        [ argument ] -> guard (recursiveArgument layout argument)
-        _ -> Nothing
-      let globals = if binding.recursive then Map.insert (qualified binding.name) sig ctorSignatures else ctorSignatures
-      definition <- emitBinding (context { globals = globals }) (qualified binding.name) sig expression
+      validateSourceParameters sig.args sig.result binding.expr
+      guard (Array.any (recursiveArgument layout) sig.args)
+      let globals = if binding.recursive then Map.insert (qualified binding.name) sig selected.globals else selected.globals
+      definition <- emitBinding (context { globals = globals, self = if binding.recursive then Just (qualified binding.name) else Nothing }) (qualified binding.name) sig expression
       wrapper <- printWrapper layout sig
-      bridge <- if binding.recursive then printUnaryBridge layout sig else Just ""
+      guarded <- printGuarded layout sig
+      bridge <- if binding.recursive then printBridge layout sig else Just ""
       pure { name: binding.name, sig, recursive: binding.recursive
-           , declaration: FsRaw ((if binding.recursive then "let rec " else "let ") <> definition <> "\n" <> wrapper <> bridge) }
-      ) sourceBindings
+           , declaration: FsRaw ((if binding.recursive then "let rec " else "let ") <> definition <> "\n" <> guarded <> "\n" <> wrapper <> bridge) }
+      of
+        Nothing -> case Map.lookup (qualified binding.name) ctorSignatures of
+          Nothing -> selected
+          Just sig -> selected { globals = Map.insert (qualified binding.name) sig selected.globals }
+        Just candidate ->
+          { globals: Map.insert (qualified candidate.name) candidate.sig selected.globals
+          , candidates: Array.snoc selected.candidates candidate
+          }
+    candidates = (Array.foldl select { globals: Map.empty, candidates: [] } sourceBindings).candidates
     emitted = ctorBindings <> candidates
     generatedNames = Array.concatMap (\item -> [ item.sig.nativeName ] <> if item.recursive then [ item.sig.publicName <> "_tco" ] else []) emitted
+      <> map (\item -> item.sig.nativeName <> "_apply") candidates
     ctorNames = map _.name constructors
   guard (not (Array.null candidates))
   guard (unique generatedNames && all Layout.validIdentifier (publicNames <> generatedNames))
@@ -115,6 +140,47 @@ sourceGroup = case _ of
 sourceAnnotation :: C.Expr Ann -> Maybe ExprType
 sourceAnnotation expr = case C.exprAnn expr of
   C.Ann ann -> ann.type
+
+unsupportedReference :: C.ModuleName -> Qualified Ident -> Boolean
+unsupportedReference current = case _ of
+  Qualified Nothing _ -> false
+  Qualified (Just owner) _ | owner == current -> false
+  Qualified (Just (C.ModuleName owner)) (C.Ident name) -> not (case owner of
+    "Data.Semiring" -> Array.elem name [ "add", "semiringInt" ]
+    "Data.Ring" -> Array.elem name [ "sub", "ringInt" ]
+    "Data.Eq" -> Array.elem name [ "eq", "notEq", "eqInt" ]
+    "Data.Ord" -> Array.elem name [ "lessThan", "lessThanOrEq", "greaterThan", "greaterThanOrEq", "ordInt" ]
+    "Data.HeytingAlgebra" -> Array.elem name [ "conj", "disj", "heytingAlgebraBoolean" ]
+    "Data.Boolean" -> name == "otherwise"
+    _ -> false)
+
+sourceReferences :: C.Expr Ann -> Array (Qualified Ident)
+sourceReferences = case _ of
+  C.ExprVar _ name -> [ name ]
+  C.ExprLit _ literal -> foldMap sourceReferences literal
+  C.ExprConstructor _ _ _ _ -> []
+  C.ExprAccessor _ target _ -> sourceReferences target
+  C.ExprUpdate _ target props -> sourceReferences target <> foldMap (sourceReferences <<< C.propValue) props
+  C.ExprAbs _ _ body -> sourceReferences body
+  C.ExprApp _ fn arg -> sourceReferences fn <> sourceReferences arg
+  C.ExprCase _ targets branches -> foldMap sourceReferences targets <> foldMap branchReferences branches
+  C.ExprLet _ bindings body -> foldMap (foldMap (sourceReferences <<< _.expr) <<< sourceGroup) bindings <> sourceReferences body
+  C.ExprTypeApp _ expr _ -> sourceReferences expr
+  where
+  branchReferences (C.CaseAlternative _ result) = case result of
+    C.Unconditional body -> sourceReferences body
+    C.Guarded guards -> foldMap (\(C.Guard condition body) -> sourceReferences condition <> sourceReferences body) guards
+
+-- A function-valued result does not grant permission to add parameters to the
+-- public ABI. Only actual source abstractions establish the binding's arity.
+validateSourceParameters :: Array ExprType -> ExprType -> C.Expr Ann -> Maybe Unit
+validateSourceParameters remaining result expr = do
+  guard (sourceAnnotation expr == Just (if Array.null remaining then result else C.Func remaining result))
+  case expr of
+    C.ExprAbs _ _ body -> do
+      { tail } <- Array.uncons remaining
+      validateSourceParameters tail result body
+    _ -> guard (Array.null remaining)
 
 lookupExpression :: Ident -> Array (Tuple Ident NeutralExpr) -> Maybe NeutralExpr
 lookupExpression name bindings = Array.findMap (\(Tuple ident expr) -> if ident == name then Just expr else Nothing) bindings
@@ -140,13 +206,25 @@ recursiveArgument layout argument = Array.any
   (\ctor -> ctor.sourceType == argument && Array.elem argument ctor.fields)
   (Array.concatMap _.constructors layout.declarations)
 
-printUnaryBridge :: Layout.Layout -> Signature -> Maybe String
-printUnaryBridge layout sig = case sig.args of
-  [ argument ] -> do
-    ty <- Layout.nativeType layout argument
-    pure ("\nlet " <> sig.publicName <> "_tco (sharpurs_adt_arg: obj) : obj = box ("
-      <> sig.nativeName <> " (unbox<" <> ty <> "> sharpurs_adt_arg))")
-  _ -> Nothing
+printBridge :: Layout.Layout -> Signature -> Maybe String
+printBridge layout sig = do
+  types <- traverse (Layout.nativeType layout) sig.args
+  let args = Array.mapWithIndex (\i ty -> { name: "sharpurs_adt_arg_" <> show i, type: ty }) types
+  let parameters = String.joinWith " " (map (\arg -> "(" <> arg.name <> ": obj)") args)
+  let call = sig.nativeName <> String.joinWith "" (map (\arg -> " (unbox<" <> arg.type <> "> " <> arg.name <> ")") args)
+  pure ("\nlet " <> sig.publicName <> "_tco " <> parameters <> " : obj = box (" <> call <> ")")
+
+-- Keep the saturated generic invocation's exception boundary. Function
+-- arguments evaluate before entry, so their failures receive no extra layer.
+-- Public curried wrappers and self-recursion call the unguarded definition.
+printGuarded :: Layout.Layout -> Signature -> Maybe String
+printGuarded layout sig = do
+  let args = Array.mapWithIndex (\i ty -> { level: Level i, type: ty }) sig.args
+  parameters <- traverse (printParameter layout) args
+  result <- Layout.nativeType layout sig.result
+  pure ("let " <> sig.nativeName <> "_apply " <> String.joinWith " " parameters <> " : " <> result <> " =\n"
+    <> "    try " <> sig.nativeName <> String.joinWith "" (map (\arg -> " " <> localName arg.level) args) <> "\n"
+    <> "    with ex -> raise (System.Reflection.TargetInvocationException(ex))")
 
 unique :: forall a. Ord a => Array a -> Boolean
 unique values = Array.length (Array.nub values) == Array.length values
@@ -175,7 +253,7 @@ fromModule core@(Module source) backend = do
   guard (Array.length (Array.nub (map (\(Tuple name _) -> name) signatures)) == Array.length signatures)
   let globals = Map.fromFoldable signatures
   let groups = Array.concatMap (\group -> if group.recursive then [ group ] else map (\binding -> { recursive: false, bindings: [ binding ] }) group.bindings) backend.bindings
-  emitted <- emitGroups { layout, globals: Map.empty, locals: Map.empty } globals groups
+  emitted <- emitGroups { layout, globals: Map.empty, locals: Map.empty, guardedCalls: false, self: Nothing } globals groups
   pure (FsModule layout.moduleName [ FsRaw (Layout.printDeclarations layout <> "\n\n" <> emitted) ])
 
 annotation :: NeutralExpr -> Maybe ExprType
@@ -295,7 +373,10 @@ lower ctx expected (NeutralExpr syntax) = case syntax of
     validateReference sig fn
     guard (expected == sig.result && NEA.length args == Array.length sig.args)
     values <- traverse (\(Tuple ty arg) -> lower ctx ty arg) (Array.zip sig.args (NEA.toArray args))
-    pure ("(" <> sig.nativeName <> String.joinWith "" (map (\value -> " (" <> value <> ")") values) <> ")")
+    let target = if ctx.guardedCalls && ctx.self /= Just name && Layout.lookupCtor ctx.layout name == Nothing
+          then sig.nativeName <> "_apply"
+          else sig.nativeName
+    pure ("(" <> target <> String.joinWith "" (map (\value -> " (" <> value <> ")") values) <> ")")
   S.CtorSaturated name _ typeName ctorName fields -> do
     ctor <- Layout.lookupCtor ctx.layout name
     checkCtorIdentity ctor name typeName ctorName
@@ -319,8 +400,8 @@ lower ctx expected (NeutralExpr syntax) = case syntax of
   S.PrimOp (S.Op2 op left right) -> do
     operation <- primitive op
     guard (expected == operation.result)
-    a <- lower ctx C.Int left
-    b <- lower ctx C.Int right
+    a <- lower ctx operation.operand left
+    b <- lower ctx operation.operand right
     pure ("(" <> a <> " " <> operation.symbol <> " " <> b <> ")")
   S.Let _ level@(Level n) value body -> do
     guard (n >= 0 && not (Map.member level ctx.locals) && all (_ < level) (Map.keys ctx.locals))
@@ -355,17 +436,19 @@ validateReference sig (NeutralExpr (S.Typed ty inner)) = do
 validateReference _ (NeutralExpr (S.Var _)) = Just unit
 validateReference _ _ = Nothing
 
-primitive :: S.BackendOperator2 -> Maybe { symbol :: String, result :: ExprType }
+primitive :: S.BackendOperator2 -> Maybe { symbol :: String, operand :: ExprType, result :: ExprType }
 primitive = case _ of
-  S.OpIntNum S.OpAdd -> Just { symbol: "+", result: C.Int }
-  S.OpIntNum S.OpSubtract -> Just { symbol: "-", result: C.Int }
+  S.OpBooleanAnd -> Just { symbol: "&&", operand: C.Boolean, result: C.Boolean }
+  S.OpBooleanOr -> Just { symbol: "||", operand: C.Boolean, result: C.Boolean }
+  S.OpIntNum S.OpAdd -> Just { symbol: "+", operand: C.Int, result: C.Int }
+  S.OpIntNum S.OpSubtract -> Just { symbol: "-", operand: C.Int, result: C.Int }
   S.OpIntOrd op -> Just { symbol: case op of
     S.OpEq -> "="
     S.OpNotEq -> "<>"
     S.OpGt -> ">"
     S.OpGte -> ">="
     S.OpLt -> "<"
-    S.OpLte -> "<=", result: C.Boolean }
+    S.OpLte -> "<=", operand: C.Int, result: C.Boolean }
   _ -> Nothing
 
 typeOf :: Context -> NeutralExpr -> Maybe ExprType
