@@ -1,58 +1,40 @@
 # sharpurs
 
 <img height="160" alt="sharpurs logo" src="https://github.com/user-attachments/assets/cfbf17c1-ada5-40ff-b804-e8f9cc75e328" />
-<br />
-<br />
 
 _Experimental WIP. Typed code generation and the native FFI ecosystem are actively evolving._
 
-An optimizing **PureScript-to-F# compiler**, written in PureScript, bringing PureScript's pure business logic to **.NET**, with its cross-platform runtime, threading facilities and library ecosystem. F# is the generated language; **C# is also supported for FFI implementations**.
+An optimizing **PureScript-to-F# compiler**, written in PureScript with JavaScript FFI helpers, bringing PureScript's pure business logic to **.NET**, with its cross-platform runtime, threading facilities and library ecosystem. F# is the generated language; **C# is also supported for FFI implementations**. Node.js runs the compiler; the generated application runs on .NET.
 
 `sharpurs` uses the enriched **TAST / Typed CoreFn (`tcorefn`)** produced by a [custom PureScript compiler](https://github.com/0x000000000000000000001/purescript). This retains structural types, ADT layouts, type-class declarations and type applications for native code generation. In the current toolchain, that typed payload is written to **`output/<Module>/corefn.json`**. The filename does not make it equivalent to the type-erased CoreFn emitted by the upstream compiler.
 
-## Why F# and C# (.NET)?
+## Features
 
 F# provides functional programming, discriminated unions and pattern matching on the same runtime as C#. `sharpurs` aims to let PureScript developers keep their pure code and type system while using .NET for services, command-line tools and existing applications.
 
-The backend generates an ordinary F# project that the .NET SDK can build and run. Native F# and C# bindings provide access to .NET APIs and NuGet libraries. Node.js runs the compiler; the generated application runs on .NET.
+- **Optimization before F# generation.** The compiler is implemented in PureScript with JavaScript FFI helpers. It uses the [`edge-sharpurs` fork of purescript-backend-optimizer](https://github.com/0x000000000000000000001/purescript-backend-optimizer/tree/edge-sharpurs), derived from [Arista's optimizer](https://github.com/aristanetworks/purescript-backend-optimizer), for transformations such as inlining and constant folding.
+- **Selected native representations.** Supported integer loops, arithmetic, direct calls, constructor calls and ADT workers use typed F# code. Validated ADT layouts become discriminated unions with native fields. General code and interoperability still use boxed `obj` values, curried functions and dynamic records; native representation is selected per supported shape.
+- **F# and C# foreign implementations.** Companion `.fs` and `.cs` files can coexist in one project. The backend emits curried wrappers and boxing conversions for simple exported declarations. Foreign code remains responsible for matching PureScript types and effect semantics.
+- **An ordinary .NET project.** Generated applications target `net8.0` with F# language version `7.0`. The .NET SDK builds the F# executable and any accompanying C# library project.
+- **Native asynchronous primitives.** [`sharpurs-aff`](https://github.com/0x000000000000000000001/sharpurs-aff) uses F# `Async`, .NET tasks and cancellation tokens. Its implementation and process-lifetime constraints are described [below](#asynchronous-io-and-concurrency-aff).
 
 ## Benchmarks
 
-The [F#/C# results in altbak.pub](https://github.com/0x000000000000000000001/altbak.pub#fc) compare compiled PureScript with native F#/C# implementations on CPU and allocation workloads. The repository also records [extended workloads covering I/O, mutability and async](https://github.com/0x000000000000000000001/altbak.pub#extended-benchmark-results-io-mutability-async).
+The [F#/C# results in altbak.pub](https://github.com/0x000000000000000000001/altbak.pub#fc) compare compiled PureScript with native F#/C# implementations on CPU and allocation workloads. The repository also records [extended workloads covering I/O, mutability and async](https://github.com/0x000000000000000000001/altbak.pub#extended-benchmark-results-io-mutability-async); its current extended results table covers JavaScript and Go, not sharpurs.
 
 Use those documented baselines, workload definitions and execution conditions when assessing a change. Results vary substantially by algorithm and representation; an isolated timing does not establish a general advantage over V8 or another backend.
 
-## Why a new .NET backend?
+## Getting started
 
-The ecosystem has evolved drastically, unlocking new architectural paradigms that make building a completely new .NET backend highly relevant today:
-
-### 1. The optimizer & bootstrapping
-While previous native compilers were often written in Haskell and parsed raw `CoreFn`, `sharpurs` is written 100% in PureScript. It integrates directly with a TAST-aware fork of [Arista's purescript-backend-optimizer](https://github.com/aristanetworks/purescript-backend-optimizer). This allows the compiler to instantly benefit from classical optimizations such as aggressive inlining, constant folding, and normalized function bodies at the AST level before .NET generation. The compiler itself runs on Node.js, ensuring it remains fully accessible.
-
-### 2. A refined memory layout for .NET
-`sharpurs` selects native representations for `.NET` where proven: integer loops, integer arithmetic, direct function and constructor calls, and typed ADT workers. Validated ADT layouts become F# discriminated unions with native fields, heavily reducing boxing and garbage collection overhead. While it preserves boxed interoperability for unsupported shapes, this selective unboxing massively improves hot-path performance.
-
-### 3. TAST: Breaking the performance ceiling
-To achieve native execution speeds, `sharpurs` consumes an enriched `tcorefn.json` (Typed CoreFn). This custom format preserves the deep structural typing information (`ann.type`), ADT layouts (`dataDecls`), type-class layouts (`classDecls`), and exact type applications (`TypeApp`) that standard `corefn` strips away. This metadata allows the compiler to generate idiomatic, structurally typed F# code end-to-end.
-
-### 4. Zero boilerplate FFI
-A unique strength of `sharpurs` is that it allows both F# and C# FFI in the same project. Companion `.fs` files can expose native F# functions, while companion `.cs` files can expose static C# methods. The backend automatically discovers these bindings and generates the necessary curried wrappers and boxing conversions needed by PureScript under the hood, making FFI development feel 100% native and type-safe.
-
-### 5. Up-to-date with modern PureScript & .NET
-`sharpurs` aims to be fully aligned with the current v0.15+ PureScript ecosystem and targets modern .NET 8 (`net8.0`). It natively leverages modern .NET SDK tooling, generating complete, ready-to-run `.fsproj` projects that integrate perfectly with the C# ecosystem and NuGet libraries.
-
-### 6. Native Parallelism behind Aff
-The [`sharpurs-aff`](https://github.com/0x000000000000000000001/sharpurs-aff) package maps PureScript's asynchronous monad (`Aff`) directly to F# `Async`, .NET tasks, and cancellation tokens. This connects PureScript asynchronous code to .NET's powerful scheduling and I/O facilities, bringing true multi-core scaling for free to CPU-bound parallel workloads.
-
-## Prerequisites
+### Prerequisites
 
 - **Node.js and npm** to install and run the compiler.
-- **Spago 0.93.x** on `PATH`; the optimizer checkout declares `^0.93.45`, and the package configurations use registry `77.10.1`.
-- A **TAST-capable `purs`** from the custom compiler fork. The backend's npm development dependency uses the [`purescript-npm` wrapper](https://github.com/0x000000000000000000001/purescript-npm). Ensure application builds select this compiler too.
+- **Spago** on `PATH`. The optimizer checkout declares `^0.93.45`, and the package configurations use registry `77.10.1`. The console example below has also been checked with Spago `1.0.3`.
+- A **TAST-capable `purs`** from the custom compiler fork for application builds. The backend's npm development dependency uses the [`purescript-npm` wrapper](https://github.com/0x000000000000000000001/purescript-npm), but its package name or version alone does not establish that the installed binary emits the required typed payload. Check the generated JSON as described below.
 - The **.NET 8 SDK**, including F#, to build the generated `net8.0` projects. `dotnet` must be on `PATH`; installing only the runtime is insufficient for compilation.
 - **Git** and the local compiler/FFI checkouts described below. The development scripts use Bash.
 
-## Installation and local setup
+### Build the backend
 
 The current [spago.yaml](spago.yaml) references a local optimizer checkout and sibling library forks. Its npm `prepare` hook runs the compiler build, so a bare `npm install --save-dev github:0x000000000000000000001/sharpurs` is not a self-contained installation while those paths are required.
 
@@ -88,13 +70,16 @@ cd sharpurs
 Clone the test runner's core package list from the compiler root. Run this snippet in **Bash**, since `bin/pkg` defines a Bash array:
 
 ```bash
+bash <<'BASH'
+set -e
 source bin/pkg
 for pkg in "${CORE_PACKAGES[@]}"; do
   if [ ! -d "../sharpurs-$pkg" ]; then
     git clone "https://github.com/0x000000000000000000001/sharpurs-$pkg.git" \
-      "../sharpurs-$pkg" || break
+      "../sharpurs-$pkg"
   fi
 done
+BASH
 ```
 
 With the prerequisites and local paths in place, install and build:
@@ -107,11 +92,7 @@ npm run build
 
 `npm install` runs `prepare`, which invokes `npm run build`. The build compiles the PureScript sources and bundles `Main` into `bin/sharpurs.js` for Node.js. The checked-in `bin/sharpurs` wrapper invokes that bundle with larger Node stack and heap limits.
 
-There is currently no `bin/setup` or `flake.nix` in this repository. The clone steps above replace the old setup-script instructions.
-
-## How to use
-
-### Configure an application
+### Compile and run an application
 
 Create `my-app` beside the compiler and library forks in the layout above. A minimal `spago.yaml` for a console application is:
 
@@ -162,14 +143,16 @@ prelude:
 
 Pin compatible revisions when maintaining an application. The [`sharpurs-hello-world`](https://github.com/0x000000000000000000001/sharpurs-hello-world) checkout contains a broader local override configuration and examples mixing F# and C# FFI.
 
-### Build and run
-
 From the application root, with the TAST compiler on `PATH`:
 
 ```bash
+# Replace this directory with the one containing your TAST-capable purs binary.
+export PATH="/path/to/tast-compiler/bin:$PATH"
 spago build
 dotnet run --project output/Main/Program.fsproj -c Release
 ```
+
+Spago requests the `corefn` code-generation target when a backend is configured. Check that `output/Main/corefn.json` contains the fork's `dataDecls` and `classDecls` fields, and that expression annotations retain type information, directly or through the `typeTable` used by newer fork revisions. A version string alone is insufficient: a compiler can emit ordinary CoreFn successfully while omitting those fields. After changing compiler binaries, clear the application's generated `output/` and rebuild so cached JSON cannot hide a mismatch.
 
 The configured backend reads the typed JSON from `output/` and writes a complete project to **`output/Main/`**, even when the selected entry module has another name:
 
@@ -209,9 +192,9 @@ spago build --backend-args "--main App.Main --ffi ffi"
 | `--main <Module>` | Selects the module whose `main` is called; defaults to `Main`. It does not select modules for entrypoint-based dead-code elimination. |
 | `--ffi <Directory>` | Adds a directory to the FFI search paths. A companion file beside the original `.purs` source takes precedence. |
 
-The shared argument parser also recognizes `--bundle`, `--output`, `--rewrite-limit` and `--autoload-path`, but this backend does not use them. Input is fixed to `output/`, generated files go to `output/Main/`, and the optimizer rewrite limit is currently `10000`. There is no automatic discovery of every module exporting `main`.
+The shared argument parser also recognizes `--bundle`, `--output`, `--rewrite-limit` and `--autoload-path`, but this backend does not use them. Input is fixed to `output/`, generated files go to `output/Main/`, and the optimizer rewrite limit is currently `10000`. There is no automatic discovery of every module exporting `main`, nor a dedicated `--help` handler. Argument values containing spaces are unsupported by the shared parser.
 
-## Writing FFI
+## Foreign function interface
 
 Place the implementation beside the corresponding `.purs` file. For example, `src/Hello.purs`:
 
@@ -260,15 +243,7 @@ If both companion files exist, `.fs` supplies the PureScript-facing wrappers and
 
 Use normal NuGet and MSBuild project references for native dependencies. The generated project files are rewritten by each backend run, so maintain application-specific dependency configuration outside those generated files, or apply it as a repeatable post-generation step. C# FFI dependencies belong to the C# project as well when they are used there.
 
-## Asynchronous I/O and concurrency (Aff)
-
-`sharpurs-aff` represents an asynchronous action as an F# workflow carrying cancellation and supervision state. Fibers use `TaskCompletionSource`, `Async.StartWithContinuations` and cancellation tokens; delays use `Task.Delay`, and parallel composition uses native asynchronous tasks.
-
-Use non-blocking .NET I/O APIs in foreign implementations and await them through the native async machinery. Starting an `Aff` does not turn blocking I/O into asynchronous I/O, and CPU parallelism depends on the operations and scheduling involved.
-
-**Process lifetime is still an integration constraint:** the generated runtime exposes `EventLoopAdd`, `EventLoopDone` and `EventLoopWait`, and the Aff package accounts for started fibers. However, the current `EntryPoint.fs` generator only starts and joins the thread that invokes `main`; it does not call `EventLoopWait`. A host running an application that launches background fibers must arrange to wait for their completion. Automatic draining of all pending Aff work is not currently guaranteed by the generated entrypoint.
-
-## Local development and testing
+## Development and testing
 
 The checked-in [bin/pkg](bin/pkg) is the authoritative list of sibling packages required by [bin/test](bin/test). The runner creates its Spago configuration on first use, copies fixtures into `tests/runner/src`, compiles them, generates F#, and executes the generated project in Release mode.
 
@@ -299,21 +274,6 @@ Focused regression commands are defined in [package.json](package.json):
 
 Build the compiler first for tests importing its `output/` modules. The runtime test reads source helpers directly and additionally needs `sharpurs-exceptions`. Tests that compile fixtures use the TAST `purs` and run generated F# through `dotnet fsi`; `PURS=/path/to/purs` and `DOTNET=/path/to/dotnet` select those executables in the focused scripts. The shell runner instead uses `purs` and `dotnet` through `PATH`.
 
-## Current status and milestones
-
-- [x] PureScript-to-F# code generation and executable .NET project generation.
-- [x] F# and C# foreign implementations, including mixed modules.
-- [x] TAST-aware integer, ADT, call and thunk optimizations with boxed interoperability.
-- [x] A vendored PureScript passing-test runner and focused runtime/code-generation regressions.
-- [x] An Aff implementation based on .NET async facilities and an alternate-library ecosystem.
-- [x] Integration with the `altbak.pub` multi-runtime benchmarks.
-- [ ] Broader coverage of native representations and optimizations.
-- [ ] A self-contained installation workflow without local development checkouts.
-- [ ] Reliable automatic waiting for pending Aff work in the generated entrypoint.
-- [ ] Further FFI coverage, compiler cleanup and compatibility validation.
-
-The project remains experimental. Contributions to the compiler, regression coverage, FFI libraries and application examples are welcome.
-
 ## Architecture
 
 The main parts of the compilation pipeline are:
@@ -324,7 +284,30 @@ The main parts of the compilation pipeline are:
 4. **FFI and printing:** [Sharpurs.FfiSupport](src/Sharpurs/FfiSupport.js) emits foreign wrappers; [Sharpurs.Printer](src/Sharpurs/Printer.purs) prints F# declarations.
 5. **Project generation:** [Main](src/Main.purs) writes the runtime, modules, entrypoint and .NET projects into `output/Main/`.
 
-The CLI compares generated text with existing files before writing, preserving timestamps when contents are unchanged. It currently returns no cached modules from the optimizer's skip hook and does not read or write an optimization cache. The earlier `.sharpurs-cache.json` description does not describe the current implementation.
+The CLI compares generated text with existing files before writing, preserving timestamps when contents are unchanged. It currently returns no cached modules from the optimizer's skip hook and does not read or write an optimization cache.
+
+## Current status and limitations
+
+The compiler and native libraries remain experimental. The main areas still being developed are:
+
+- Broader coverage of native representations and optimizations.
+- A self-contained installation workflow without local development checkouts.
+- Aff compatibility and automatic waiting for pending work in the generated entrypoint.
+- Further FFI coverage, compiler cleanup and compatibility validation.
+
+### Asynchronous I/O and concurrency (Aff)
+
+`sharpurs-aff` represents an asynchronous action as an F# workflow carrying cancellation and supervision state. Fibers use `TaskCompletionSource`, `Async.StartWithContinuations` and cancellation tokens; delays use `Task.Delay`, and parallel composition uses native asynchronous tasks. The package remains incomplete: for example, `_onCompleteFiber` is currently a no-op stub. Treat it as experimental rather than a fully compatible replacement for the JavaScript Aff runtime.
+
+Use non-blocking .NET I/O APIs in foreign implementations and await them through the native async machinery. Starting an `Aff` does not turn blocking I/O into asynchronous I/O, and CPU parallelism depends on the operations and scheduling involved.
+
+**Process lifetime is still an integration constraint:** the generated runtime exposes `EventLoopAdd`, `EventLoopDone` and `EventLoopWait`, and the Aff package accounts for started fibers. However, the current `EntryPoint.fs` generator only starts and joins the thread that invokes `main`; it does not call `EventLoopWait`. A host running an application that launches background fibers must arrange to wait for their completion. Automatic draining of all pending Aff work is not currently guaranteed by the generated entrypoint.
+
+### Generated output
+
+Generation does not remove obsolete files: after removing or renaming modules or C# FFI files, clear the application's generated `output/` and rebuild. In particular, every `.cs` file remaining in `output/Main/` is included in the generated C# project.
+
+Contributions to the compiler, regression coverage, FFI libraries and application examples are welcome.
 
 ## License
 
