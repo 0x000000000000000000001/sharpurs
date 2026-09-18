@@ -92,6 +92,8 @@ npm run build
 
 `npm install` runs `prepare`, which invokes `npm run build`. The build compiles the PureScript sources and bundles `Main` into `bin/sharpurs.js` for Node.js. The checked-in `bin/sharpurs` wrapper invokes that bundle with larger Node stack and heap limits.
 
+Each backend invocation reports monotonic elapsed times to stderr, in milliseconds, for `load TAST + sort`, `prepare`, `optimize + emit`, `finalize`, and `backend total`. The total includes these phases; it excludes the earlier `purs` compilation and target-language compilation or execution. Each phase waits for its asynchronous callbacks and file writes to finish. Failed phases and the total are marked `(failed)`, and the original error is rethrown.
+
 ### Compile and run an application
 
 Create `my-app` beside the compiler and library forks in the layout above. A minimal `spago.yaml` for a console application is:

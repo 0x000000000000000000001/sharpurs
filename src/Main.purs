@@ -1,6 +1,7 @@
 module Main where
 
 import Prelude
+import Sharpurs.Metrics as Metrics
 import Data.Either (Either(..))
 
 import Effect (Effect)
@@ -68,124 +69,128 @@ let sharpurs_apply (func: obj) (arg: obj) : obj =
 fsHeader :: String
 fsHeader = "let (|LitBool|_|) (expected: bool) (value: obj) = if value :? bool && unbox value = expected then Some() else None\nlet (|LitInt|_|) (expected: int) (value: obj) = if value :? int && unbox value = expected then Some() else None\nlet (|LitNumber|_|) (expected: float) (value: obj) = if value :? float && unbox value = expected then Some() else None\nlet (|LitString|_|) (expected: string) (value: obj) = if value :? string && unbox value = expected then Some() else None\nlet (|LitChar|_|) (expected: char) (value: obj) = if value :? char && unbox value = expected then Some() else None\nlet (|HasProp|_|) (key: string) (value: obj) = if value :? Map<string, obj> then Map.tryFind key (unbox<Map<string, obj>> value) else None\n\nmodule SharpursRuntime =\n    let eventLoopWg = new System.Threading.CountdownEvent(1)\n    let mutable loopHasTasks = false\n    \n    let EventLoopAdd (n: int) =\n        loopHasTasks <- true\n        eventLoopWg.AddCount(n)\n        \n    let EventLoopDone () =\n        if eventLoopWg.CurrentCount > 0 then\n            eventLoopWg.Signal() |> ignore\n        \n    let EventLoopWait () =\n        if eventLoopWg.CurrentCount > 0 then\n            eventLoopWg.Signal() |> ignore\n        if loopHasTasks then\n            eventLoopWg.Wait()\n\n"
 main :: Effect Unit
-main = launchAff_ do
+main = launchAff_ $ Metrics.measure "backend total" \_ -> do
   argsRaw <- liftEffect Process.argv
   let args = parseCLIArgs argsRaw
 
-  finalModules <- coreFnModulesFromOutput "output"
-  let modulesArr = Array.fromFoldable finalModules
+  finalModules <- Metrics.measure "load TAST + sort" \_ -> coreFnModulesFromOutput "output"
+  { modulesArr, globalAdtCtors, directives, nativeConstructors } <- Metrics.measure "prepare" \_ -> do
+    let modulesArr = Array.fromFoldable finalModules
 
-  let
-    globalAdtCtors = Array.foldl
-      ( \acc coreFnMod ->
-          let
-            (Module mod) = coreFnMod
-            modNameStr = unwrap mod.name
-            modPrefix = String.replaceAll (String.Pattern ".") (String.Replacement "_") modNameStr
-            ctors = Array.concatMap (\d -> map (\c -> Tuple (sanitizeName (modPrefix <> "_" <> c.name)) (Array.length c.fields)) d.constructors) mod.dataDecls
-          in
-            Map.union acc (Map.fromFoldable ctors)
-      )
-      Map.empty
-      modulesArr
+    let
+      globalAdtCtors = Array.foldl
+        ( \acc coreFnMod ->
+            let
+              (Module mod) = coreFnMod
+              modNameStr = unwrap mod.name
+              modPrefix = String.replaceAll (String.Pattern ".") (String.Replacement "_") modNameStr
+              ctors = Array.concatMap (\d -> map (\c -> Tuple (sanitizeName (modPrefix <> "_" <> c.name)) (Array.length c.fields)) d.constructors) mod.dataDecls
+            in
+              Map.union acc (Map.fromFoldable ctors)
+        )
+        Map.empty
+        modulesArr
 
-  _ <- attempt (FS.mkdir "output/Main")
-  
-  -- Write Sharpurs_Prelude.fs
-  let preludeContent = "[<AutoOpen>]\nmodule Sharpurs_Prelude\n\n#nowarn \"25\"\n#nowarn \"46\"\n#nowarn \"66\"\n#nowarn \"67\"\n#nowarn \"3370\"\n\nopen System\nopen System.Collections.Generic\n\n" <> fsHeader <> fsPrelude
-  writeIfChanged ("output/Main/Sharpurs_Prelude.fs") preludeContent
+    _ <- attempt (FS.mkdir "output/Main")
 
-  directives <- loadDirectives
-  let cacheVersion = "1.0.0"
-  nativeConstructors <- liftEffect (Ref.new Set.empty)
+    -- Write Sharpurs_Prelude.fs
+    let preludeContent = "[<AutoOpen>]\nmodule Sharpurs_Prelude\n\n#nowarn \"25\"\n#nowarn \"46\"\n#nowarn \"66\"\n#nowarn \"67\"\n#nowarn \"3370\"\n\nopen System\nopen System.Collections.Generic\n\n" <> fsHeader <> fsPrelude
+    writeIfChanged ("output/Main/Sharpurs_Prelude.fs") preludeContent
+
+    directives <- loadDirectives
+    let cacheVersion = "1.0.0"
+    nativeConstructors <- liftEffect (Ref.new Set.empty)
+    pure { modulesArr, globalAdtCtors, directives, nativeConstructors }
 
   -- Generate and write each module
-  buildModules
-    { directives
-    , rewriteLimit: 10000
-    , analyzeCustom: \_ _ -> Nothing
-    , foreignSemantics: Map.filterKeys (\(Qualified mbMod _) -> case mbMod of
-        Just (ModuleName m) -> not (String.contains (String.Pattern "Effect") m) && not (String.contains (String.Pattern "Control.Monad.ST") m)
-        _ -> true
-      ) coreForeignSemantics
-    , traceIdents: Set.empty
-    , onPrepareModule: \_ m -> pure m
-    , onSkipModule: \_ (Module coreFnMod) -> do
-        let modNameStr = unwrap coreFnMod.name
-        pure Nothing
-    , onCodegenModule: \_ (Module coreFnMod) backendMod _ -> do
-        let modNameStr = unwrap backendMod.name
-        -- Builder visits dependencies before their consumers. Register a
-        -- producer only after its complete layout and constructor wrappers
-        -- have passed validation, before emitting its own mixed bindings.
-        let native = AdtKernel.prepareUnary (Module coreFnMod) backendMod
-        let thunks = ThunkKernel.prepareModule (Module coreFnMod) backendMod
-        let constructors = case native of
-              Nothing -> Set.empty
-              Just selected -> Set.fromFoldable (Array.concatMap
-                (\decl -> map (\ctor -> case ctor.sourceName of
-                  Qualified (Just (ModuleName owner)) (Ident name) -> sanitizeName (String.replaceAll (String.Pattern ".") (String.Replacement "_") owner <> "_" <> name)
-                  _ -> ctor.name)
-                decl.constructors) selected.layout.declarations)
-        wrappers <- liftEffect (Ref.modify (Set.union constructors) nativeConstructors)
-        let (FsModule _ decls) = translateOptimizedModuleWithThunks wrappers native thunks globalAdtCtors backendMod (Module coreFnMod)
-        let fsCode = printModule (FsModule modNameStr decls)
-        
-        ffiPathMb <- liftEffect $ findFfiFile ".fs" ["../../bak/spago.d/fs/p", "bak/spago.d/fs/p"] args.mbFfiDir modNameStr (Just coreFnMod.path)
-        ffiContent <- case ffiPathMb of
-          Nothing -> pure ""
-          Just ffiPath -> do
-            content <- FS.readTextFile UTF8 ffiPath
-            let requiredForeigns = map (\(Ident f) -> f) (Array.fromFoldable (Map.keys coreFnMod.foreign))
-            let wrappers = appendFfiWrappers modNameStr requiredForeigns content
-            pure (wrappers <> "\n\n")
-            
-        let safeModName = String.replaceAll (String.Pattern ".") (String.Replacement "_") modNameStr
+  Metrics.measure "optimize + emit" \_ ->
+    buildModules
+      { directives
+      , rewriteLimit: 10000
+      , analyzeCustom: \_ _ -> Nothing
+      , foreignSemantics: Map.filterKeys (\(Qualified mbMod _) -> case mbMod of
+          Just (ModuleName m) -> not (String.contains (String.Pattern "Effect") m) && not (String.contains (String.Pattern "Control.Monad.ST") m)
+          _ -> true
+        ) coreForeignSemantics
+      , traceIdents: Set.empty
+      , onPrepareModule: \_ m -> pure m
+      , onSkipModule: \_ (Module coreFnMod) -> do
+          let modNameStr = unwrap coreFnMod.name
+          pure Nothing
+      , onCodegenModule: \_ (Module coreFnMod) backendMod _ -> do
+          let modNameStr = unwrap backendMod.name
+          -- Builder visits dependencies before their consumers. Register a
+          -- producer only after its complete layout and constructor wrappers
+          -- have passed validation, before emitting its own mixed bindings.
+          let native = AdtKernel.prepareUnary (Module coreFnMod) backendMod
+          let thunks = ThunkKernel.prepareModule (Module coreFnMod) backendMod
+          let constructors = case native of
+                Nothing -> Set.empty
+                Just selected -> Set.fromFoldable (Array.concatMap
+                  (\decl -> map (\ctor -> case ctor.sourceName of
+                    Qualified (Just (ModuleName owner)) (Ident name) -> sanitizeName (String.replaceAll (String.Pattern ".") (String.Replacement "_") owner <> "_" <> name)
+                    _ -> ctor.name)
+                  decl.constructors) selected.layout.declarations)
+          wrappers <- liftEffect (Ref.modify (Set.union constructors) nativeConstructors)
+          let (FsModule _ decls) = translateOptimizedModuleWithThunks wrappers native thunks globalAdtCtors backendMod (Module coreFnMod)
+          let fsCode = printModule (FsModule modNameStr decls)
 
-        csPathMb <- liftEffect $ findFfiFile ".cs" ["../../bak/spago.d/fs/p", "bak/spago.d/fs/p"] args.mbFfiDir modNameStr (Just coreFnMod.path)
-        csWrappers <- case csPathMb of
-          Nothing -> pure ""
-          Just csPath -> do
-            csContent <- FS.readTextFile UTF8 csPath
-            writeIfChanged ("output/Main/" <> modNameStr <> ".cs") csContent
-            if isJust ffiPathMb then
-              pure ""
-            else do
+          ffiPathMb <- liftEffect $ findFfiFile ".fs" ["../../bak/spago.d/fs/p", "bak/spago.d/fs/p"] args.mbFfiDir modNameStr (Just coreFnMod.path)
+          ffiContent <- case ffiPathMb of
+            Nothing -> pure ""
+            Just ffiPath -> do
+              content <- FS.readTextFile UTF8 ffiPath
               let requiredForeigns = map (\(Ident f) -> f) (Array.fromFoldable (Map.keys coreFnMod.foreign))
-              pure (appendCsFfiWrappers modNameStr requiredForeigns csContent <> "\n\n")
+              let wrappers = appendFfiWrappers modNameStr requiredForeigns content
+              pure (wrappers <> "\n\n")
 
-        let moduleContent = "[<AutoOpen>]\nmodule PureScript_" <> safeModName <> "\n\nopen System\nopen System.Collections.Generic\n\n" <> ffiContent <> csWrappers <> fsCode <> "\n"
-        
-        writeIfChanged ("output/Main/" <> modNameStr <> ".fs") moduleContent
+          let safeModName = String.replaceAll (String.Pattern ".") (String.Replacement "_") modNameStr
 
-    }
-    finalModules
-    
-  let entryPointContent = "module Sharpurs_EntryPoint\n\nopen System.Threading\n\n[<EntryPoint>]\nlet main argv =\n    let thread = Thread(ThreadStart(fun () ->\n        (unbox<obj -> obj> " <> (String.replaceAll (String.Pattern ".") (String.Replacement "_") (fromMaybe "Main" args.mbMainModule)) <> "_main) null |> ignore\n    ), 1024 * 1024 * 1024)\n    thread.Start()\n    thread.Join()\n    0\n"
-  writeIfChanged ("output/Main/EntryPoint.fs") entryPointContent
-  
-  filesInOutput <- FS.readdir "output/Main"
-  let csFiles = Array.sort (Array.filter (\f -> isJust (String.stripSuffix (Pattern ".cs") f)) filesInOutput)
-  
-  csProjRef <- if Array.length csFiles > 0 then do
-    let csProjHeader = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net8.0</TargetFramework>\n    <WarningsAsErrors>false</WarningsAsErrors>\n    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>\n    <OutputPath>bin/csharp/</OutputPath>\n  </PropertyGroup>\n  <ItemGroup>\n"
-    let csProjIncludes = String.joinWith "\n" (map (\f -> "    <Compile Include=\"" <> f <> "\" />") csFiles)
-    let csProjFooter = "  </ItemGroup>\n</Project>\n"
-    writeIfChanged ("output/Main/FFI.CSharp.csproj") (csProjHeader <> csProjIncludes <> "\n" <> csProjFooter)
-    pure "    <ProjectReference Include=\"FFI.CSharp.csproj\" />\n"
-  else pure ""
+          csPathMb <- liftEffect $ findFfiFile ".cs" ["../../bak/spago.d/fs/p", "bak/spago.d/fs/p"] args.mbFfiDir modNameStr (Just coreFnMod.path)
+          csWrappers <- case csPathMb of
+            Nothing -> pure ""
+            Just csPath -> do
+              csContent <- FS.readTextFile UTF8 csPath
+              writeIfChanged ("output/Main/" <> modNameStr <> ".cs") csContent
+              if isJust ffiPathMb then
+                pure ""
+              else do
+                let requiredForeigns = map (\(Ident f) -> f) (Array.fromFoldable (Map.keys coreFnMod.foreign))
+                pure (appendCsFfiWrappers modNameStr requiredForeigns csContent <> "\n\n")
 
-  let projHeader = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <OutputType>Exe</OutputType>\n    <TargetFramework>net8.0</TargetFramework>\n    <LangVersion>7.0</LangVersion>\n    <WarningsAsErrors>false</WarningsAsErrors>\n    <NoWarn>40,25,46,58,66,67,3370</NoWarn>\n  </PropertyGroup>\n  <ItemGroup>\n" <> csProjRef
-  let projFooter = "  </ItemGroup>\n</Project>\n"
-  let projFiles = Array.concat [ ["Sharpurs_Prelude.fs"], map (\(Module m) -> unwrap m.name <> ".fs") modulesArr, ["EntryPoint.fs"] ]
-  let projIncludes = String.joinWith "\n" (map (\f -> "    <Compile Include=\"" <> f <> "\" />") projFiles)
-  
-  writeIfChanged ("output/Main/Program.fsproj") (projHeader <> projIncludes <> "\n" <> projFooter)
+          let moduleContent = "[<AutoOpen>]\nmodule PureScript_" <> safeModName <> "\n\nopen System\nopen System.Collections.Generic\n\n" <> ffiContent <> csWrappers <> fsCode <> "\n"
 
-  let directoryBuildPropsContent = "<Project>\n  <PropertyGroup>\n    <BaseIntermediateOutputPath>obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>\n    <MSBuildProjectExtensionsPath>obj/$(MSBuildProjectName)/</MSBuildProjectExtensionsPath>\n  </PropertyGroup>\n</Project>\n"
-  writeIfChanged ("output/Main/Directory.Build.props") directoryBuildPropsContent
+          writeIfChanged ("output/Main/" <> modNameStr <> ".fs") moduleContent
 
-  pure unit
+      }
+      finalModules
+
+  Metrics.measure "finalize" \_ -> do
+    let entryPointContent = "module Sharpurs_EntryPoint\n\nopen System.Threading\n\n[<EntryPoint>]\nlet main argv =\n    let thread = Thread(ThreadStart(fun () ->\n        (unbox<obj -> obj> " <> (String.replaceAll (String.Pattern ".") (String.Replacement "_") (fromMaybe "Main" args.mbMainModule)) <> "_main) null |> ignore\n    ), 1024 * 1024 * 1024)\n    thread.Start()\n    thread.Join()\n    0\n"
+    writeIfChanged ("output/Main/EntryPoint.fs") entryPointContent
+
+    filesInOutput <- FS.readdir "output/Main"
+    let csFiles = Array.sort (Array.filter (\f -> isJust (String.stripSuffix (Pattern ".cs") f)) filesInOutput)
+
+    csProjRef <- if Array.length csFiles > 0 then do
+      let csProjHeader = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net8.0</TargetFramework>\n    <WarningsAsErrors>false</WarningsAsErrors>\n    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>\n    <OutputPath>bin/csharp/</OutputPath>\n  </PropertyGroup>\n  <ItemGroup>\n"
+      let csProjIncludes = String.joinWith "\n" (map (\f -> "    <Compile Include=\"" <> f <> "\" />") csFiles)
+      let csProjFooter = "  </ItemGroup>\n</Project>\n"
+      writeIfChanged ("output/Main/FFI.CSharp.csproj") (csProjHeader <> csProjIncludes <> "\n" <> csProjFooter)
+      pure "    <ProjectReference Include=\"FFI.CSharp.csproj\" />\n"
+    else pure ""
+
+    let projHeader = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <OutputType>Exe</OutputType>\n    <TargetFramework>net8.0</TargetFramework>\n    <LangVersion>7.0</LangVersion>\n    <WarningsAsErrors>false</WarningsAsErrors>\n    <NoWarn>40,25,46,58,66,67,3370</NoWarn>\n  </PropertyGroup>\n  <ItemGroup>\n" <> csProjRef
+    let projFooter = "  </ItemGroup>\n</Project>\n"
+    let projFiles = Array.concat [ ["Sharpurs_Prelude.fs"], map (\(Module m) -> unwrap m.name <> ".fs") modulesArr, ["EntryPoint.fs"] ]
+    let projIncludes = String.joinWith "\n" (map (\f -> "    <Compile Include=\"" <> f <> "\" />") projFiles)
+
+    writeIfChanged ("output/Main/Program.fsproj") (projHeader <> projIncludes <> "\n" <> projFooter)
+
+    let directoryBuildPropsContent = "<Project>\n  <PropertyGroup>\n    <BaseIntermediateOutputPath>obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>\n    <MSBuildProjectExtensionsPath>obj/$(MSBuildProjectName)/</MSBuildProjectExtensionsPath>\n  </PropertyGroup>\n</Project>\n"
+    writeIfChanged ("output/Main/Directory.Build.props") directoryBuildPropsContent
+
+    pure unit
 
 writeIfChanged :: String -> String -> Aff Unit
 writeIfChanged path content = do
