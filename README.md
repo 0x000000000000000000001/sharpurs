@@ -1,4 +1,4 @@
-# sharpurs
+# 🔷 sharpurs
 
 <img height="160" alt="sharpurs logo" src="https://github.com/user-attachments/assets/cfbf17c1-ada5-40ff-b804-e8f9cc75e328" />
 
