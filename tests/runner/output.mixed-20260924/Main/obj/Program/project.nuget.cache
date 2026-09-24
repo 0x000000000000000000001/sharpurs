@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "cOZPOhwu7I4=",
+  "success": true,
+  "projectFilePath": "/Users/0x1/Documents/htdocs/sharpurs/sharpurs/tests/runner/output/Main/Program.fsproj",
+  "expectedPackageFiles": [
+    "/Users/0x1/.nuget/packages/fsharp.core/8.0.403/fsharp.core.8.0.403.nupkg.sha512"
+  ],
+  "logs": []
+}

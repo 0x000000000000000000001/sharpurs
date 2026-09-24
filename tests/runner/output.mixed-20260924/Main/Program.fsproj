@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>7.0</LangVersion>
+    <WarningsAsErrors>false</WarningsAsErrors>
+    <NoWarn>40,25,46,58,66,67,3370</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="FFI.CSharp.csproj" />
+    <Compile Include="Sharpurs_Prelude.fs" />
+    <Compile Include="Control.Monad.ST.fs" />
+    <Compile Include="Control.Monad.ST.Ref.fs" />
+    <Compile Include="Control.Monad.ST.Uncurried.fs" />
+    <Compile Include="Data.NaturalTransformation.fs" />
+    <Compile Include="Data.Unit.fs" />
+    <Compile Include="Prelude.fs" />
+    <Compile Include="Data.Array.fs" />
+    <Compile Include="Unsafe.Coerce.fs" />
+    <Compile Include="Data.Array.NonEmpty.fs" />
+    <Compile Include="Data.Array.Partial.fs" />
+    <Compile Include="Data.Int.Bits.fs" />
+    <Compile Include="Data.String.Unsafe.fs" />
+    <Compile Include="Data.String.CodePoints.fs" />
+    <Compile Include="Data.String.fs" />
+    <Compile Include="Data.String.CaseInsensitive.fs" />
+    <Compile Include="Type.Proxy.fs" />
+    <Compile Include="Data.String.NonEmpty.Internal.fs" />
+    <Compile Include="Data.String.NonEmpty.CodePoints.fs" />
+    <Compile Include="Data.String.NonEmpty.fs" />
+    <Compile Include="Data.String.NonEmpty.CaseInsensitive.fs" />
+    <Compile Include="Data.String.NonEmpty.CodeUnits.fs" />
+    <Compile Include="Data.String.Regex.Flags.fs" />
+    <Compile Include="Data.String.Regex.fs" />
+    <Compile Include="Data.String.Regex.Unsafe.fs" />
+    <Compile Include="Data.Traversable.Accum.fs" />
+    <Compile Include="Effect.Unsafe.fs" />
+    <Compile Include="Foreign.Object.fs" />
+    <Compile Include="Foreign.Object.Gen.fs" />
+    <Compile Include="Foreign.Object.ST.Unsafe.fs" />
+    <Compile Include="Foreign.Object.Unsafe.fs" />
+    <Compile Include="Main.fs" />
+    <Compile Include="Record.Unsafe.fs" />
+    <Compile Include="Test.Assert.fs" />
+    <Compile Include="Type.Function.fs" />
+    <Compile Include="Type.Row.fs" />
+    <Compile Include="Type.Prelude.fs" />
+    <Compile Include="EntryPoint.fs" />
+  </ItemGroup>
+</Project>

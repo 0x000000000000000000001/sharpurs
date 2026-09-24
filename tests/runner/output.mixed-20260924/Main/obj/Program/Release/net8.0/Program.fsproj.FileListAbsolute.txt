@@ -1,0 +1,5 @@
+/Users/0x1/Documents/htdocs/sharpurs/sharpurs/tests/runner/output/Main/obj/Program/Release/net8.0/Program.fsproj.AssemblyReference.cache
+/Users/0x1/Documents/htdocs/sharpurs/sharpurs/tests/runner/output/Main/obj/Program/Release/net8.0/Program.AssemblyInfoInputs.cache
+/Users/0x1/Documents/htdocs/sharpurs/sharpurs/tests/runner/output/Main/obj/Program/Release/net8.0/Program.AssemblyInfo.fs
+/Users/0x1/Documents/htdocs/sharpurs/sharpurs/tests/runner/output/Main/obj/Program/Release/net8.0/Program.fsproj.CoreCompileInputs.cache
+/Users/0x1/Documents/htdocs/sharpurs/sharpurs/tests/runner/output/Main/obj/Program/Release/net8.0/Program.sourcelink.json

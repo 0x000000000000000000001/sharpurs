@@ -1,0 +1,12 @@
+/Users/0x1/Documents/htdocs/sharpurs/sharpurs/tests/runner/output/Main/bin/csharp/net8.0/FFI.CSharp.deps.json
+/Users/0x1/Documents/htdocs/sharpurs/sharpurs/tests/runner/output/Main/bin/csharp/net8.0/FFI.CSharp.dll
+/Users/0x1/Documents/htdocs/sharpurs/sharpurs/tests/runner/output/Main/bin/csharp/net8.0/FFI.CSharp.pdb
+/Users/0x1/Documents/htdocs/sharpurs/sharpurs/tests/runner/output/Main/obj/FFI.CSharp/Release/net8.0/FFI.CSharp.GeneratedMSBuildEditorConfig.editorconfig
+/Users/0x1/Documents/htdocs/sharpurs/sharpurs/tests/runner/output/Main/obj/FFI.CSharp/Release/net8.0/FFI.CSharp.AssemblyInfoInputs.cache
+/Users/0x1/Documents/htdocs/sharpurs/sharpurs/tests/runner/output/Main/obj/FFI.CSharp/Release/net8.0/FFI.CSharp.AssemblyInfo.cs
+/Users/0x1/Documents/htdocs/sharpurs/sharpurs/tests/runner/output/Main/obj/FFI.CSharp/Release/net8.0/FFI.CSharp.csproj.CoreCompileInputs.cache
+/Users/0x1/Documents/htdocs/sharpurs/sharpurs/tests/runner/output/Main/obj/FFI.CSharp/Release/net8.0/FFI.CSharp.sourcelink.json
+/Users/0x1/Documents/htdocs/sharpurs/sharpurs/tests/runner/output/Main/obj/FFI.CSharp/Release/net8.0/FFI.CSharp.dll
+/Users/0x1/Documents/htdocs/sharpurs/sharpurs/tests/runner/output/Main/obj/FFI.CSharp/Release/net8.0/refint/FFI.CSharp.dll
+/Users/0x1/Documents/htdocs/sharpurs/sharpurs/tests/runner/output/Main/obj/FFI.CSharp/Release/net8.0/FFI.CSharp.pdb
+/Users/0x1/Documents/htdocs/sharpurs/sharpurs/tests/runner/output/Main/obj/FFI.CSharp/Release/net8.0/ref/FFI.CSharp.dll
