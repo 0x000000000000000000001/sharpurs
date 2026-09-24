@@ -112,7 +112,7 @@ testRouting = case fromBinding self (tco self) of
   Just kernel -> do
     let
       ident = C.Ident "deepTailRec"
-      ann = C.Ann { span: C.emptySpan, meta: Nothing, type: Nothing }
+      ann = C.Ann { span: C.emptySpan, meta: Nothing, type: Nothing, sourceUsage: Nothing }
       binding = C.Binding ann ident (C.ExprLit ann (C.LitInt 1))
       other = C.Binding ann (C.Ident "other") (C.ExprLit ann (C.LitInt 2))
       kernels = Map.singleton ident kernel
