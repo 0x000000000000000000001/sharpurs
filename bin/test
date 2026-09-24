@@ -16,6 +16,8 @@ BLACKLIST=(
   "DerivingFunctorFromBi.purs"
   "DerivingFunctorFromPro.purs"
   "DerivingProfunctor.purs"
+  # JS-only semantics: dynamic import and initialization-order diagnostics
+  "4179.purs"
 )
 
 if [ -d "$HOME/.dotnet" ]; then
@@ -38,6 +40,7 @@ passed=0
 failed=0
 
 SKIP_BEFORE="" # E.g. "TCO" to run tests after TCO.purs
+UNTIL="" # E.g. "ExtendedInfixOperators" to stop after that test
 TEST_FILES=()
 CLEAN_CACHE=0
 
@@ -47,6 +50,10 @@ if [ $# -gt 0 ]; then
       SKIP_BEFORE="${arg#skip_before=}"
     elif [[ "$arg" == --skip-before=* ]]; then
       SKIP_BEFORE="${arg#--skip-before=}"
+    elif [[ "$arg" == until=* ]]; then
+      UNTIL="${arg#until=}"
+    elif [[ "$arg" == --until=* ]]; then
+      UNTIL="${arg#--until=}"
     elif [[ "$arg" == "-c" || "$arg" == "--clean" ]]; then
       CLEAN_CACHE=1
     else
@@ -135,8 +142,19 @@ for test_file in "${TEST_FILES[@]}"; do
   echo "=> Testing $test_name"
   
   rm -rf src/* output/Test* output/Main/bin output/Main/obj
+  # Drop modules compiled from a previous test's src (Main and companion modules).
+  for stale in output/*/corefn.json; do
+    if grep -q '"modulePath":"src/' "$stale" 2>/dev/null; then
+      rm -rf "$(dirname "$stale")"
+    fi
+  done
   
   cp "$test_file" "src/Main.purs"
+  # purs needs the JS implementation to typecheck a module with foreign imports.
+  sibling_js="${test_file%.purs}.js"
+  if [ -f "$sibling_js" ]; then
+    cp "$sibling_js" "src/Main.js"
+  fi
   
   test_dir="${test_file%.purs}"
   if [ -d "$test_dir" ]; then
@@ -185,6 +203,10 @@ for test_file in "${TEST_FILES[@]}"; do
     echo -e "   \033[0;31m[FAILED]\033[0m PureScript Compilation error"
     echo "$out"
     failed=$((failed+1))
+    break
+  fi
+
+  if [ -n "$UNTIL" ] && [[ "$test_name" == "$UNTIL" || "$test_name" == "$UNTIL.purs" ]]; then
     break
   fi
 done

@@ -385,6 +385,9 @@ translateExprGeneric adtCtors localEnv currentMod expr = case expr of
               Just arity -> generateConstructorCall adtCtors (sanitizeName fqName) arity (map (translateExpr adtCtors localEnv currentMod) flat.args)
               Nothing -> FsApp (translateExpr adtCtors localEnv currentMod flat.fn) (map (translateExpr adtCtors localEnv currentMod) flat.args)
       _ -> FsApp (translateExpr adtCtors localEnv currentMod flat.fn) (map (translateExpr adtCtors localEnv currentMod) flat.args)
+  -- A case over an uninhabited type has no alternatives at all. The branch is
+  -- unreachable, so it keeps the ordinary pattern-match failure.
+  ExprCase _ _ alts | Array.null alts -> FsIdent "(failwith \"Failed pattern match\")"
   ExprCase _ exprs alts -> 
     let 
       fsExprs = map (translateExpr adtCtors localEnv currentMod) exprs

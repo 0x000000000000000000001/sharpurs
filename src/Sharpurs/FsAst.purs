@@ -31,7 +31,16 @@ sanitizeName s =
     s16 = String.replaceAll (Pattern "?") (Replacement "_qmark_") s15
     s17 = String.replaceAll (Pattern "@") (Replacement "_at_") s16
     s18 = String.replaceAll (Pattern "\\") (Replacement "_bslash_") s17
-    sanitized = s18
+    -- Symbol instances and monomorphized names can embed arbitrary text
+    -- (e.g. IsSymbol "2:30"), which must not leak into F# identifiers.
+    s19 = String.replaceAll (Pattern ":") (Replacement "_colon_") s18
+    s20 = String.replaceAll (Pattern "#") (Replacement "_hash_") s19
+    s21 = String.replaceAll (Pattern "\"") (Replacement "_quote_") s20
+    s22 = String.replaceAll (Pattern " ") (Replacement "_space_") s21
+    s23 = String.replaceAll (Pattern ",") (Replacement "_comma_") s22
+    sanitized0 = s23
+    firstChar = CU.take 1 sanitized0
+    sanitized = if firstChar >= "0" && firstChar <= "9" then "X_" <> sanitized0 else sanitized0
   in if Array.elem sanitized reserved then sanitized <> "_var" else sanitized
 
 foreign import escapeString :: String -> String
