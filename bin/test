@@ -18,6 +18,13 @@ BLACKLIST=(
   "DerivingProfunctor.purs"
   # JS-only semantics: dynamic import and initialization-order diagnostics
   "4179.purs"
+  # Expects a stack overflow for non-TCO'd mutual recursion. The backend
+  # eta-expands these mismatched-arity partial applications and compiles them as
+  # tail-recursive loops, so they complete with correct values (ntco1 100000 =
+  # 1000009, ntco2/3/4 = 200000). The test itself notes that such an
+  # optimisation would invalidate the assertions, and the runner's 1 GiB stack
+  # would absorb the recursion anyway.
+  "TCOMutRec.purs"
 )
 
 if [ -d "$HOME/.dotnet" ]; then
@@ -75,7 +82,14 @@ fi
 if [ $CLEAN_CACHE -eq 1 ]; then
   echo "Building sharpurs compiler..."
   cd "$ROOT_DIR"
-  npm run build --silent || { echo -e "\n\033[0;31m[FAILED]\033[0m sharpurs build failed!"; exit 1; }
+  # Call spago directly: `npm run build` prepends every ancestor
+  # node_modules/.bin to PATH, where an unrelated legacy spago (0.20.x,
+  # dhall-based) can shadow the spago.yaml toolchain this project needs. The
+  # local bin directory still has to come first for the bundler's esbuild.
+  (
+    export PATH="$PWD/node_modules/.bin:$PATH"
+    spago build && spago bundle --module Main --platform node --outfile bin/sharpurs.js --bundle-type app
+  ) || { echo -e "\n\033[0;31m[FAILED]\033[0m sharpurs build failed!"; exit 1; }
 fi
 
 cd "$RUNNER_DIR"
