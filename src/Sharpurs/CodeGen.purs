@@ -15,6 +15,7 @@ import Data.Set (Set)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Tuple (Tuple(..))
+import Data.Traversable (traverse)
 import Data.Maybe (Maybe(..), fromMaybe)
 
 import PureScript.Backend.Optimizer.Convert (BackendModule)
@@ -171,7 +172,9 @@ translateBindUsing adtCtors currentMod = case _ of
     let
       recArities = Array.foldl (\acc (Binding _ (Ident n) e) -> 
           let ext = extractArgs e
-          in Map.insert (sanitizeName (fromMaybe "" currentMod <> "_" <> n)) (Array.length ext.args) acc
+          in if Array.length ext.args > 0
+               then Map.insert (sanitizeName (fromMaybe "" currentMod <> "_" <> n)) (Array.length ext.args) acc
+               else acc
         ) Map.empty bindings
 
       makeRec (Binding _ (Ident n) e) isFirst =
@@ -395,7 +398,10 @@ translateExprGeneric adtCtors localEnv currentMod expr = case expr of
         0 -> FsLitString "MissingExpr"
         1 -> FsIdent ("(unbox (" <> printExprInline (fromMaybe (FsLitString "MissingExpr") (Array.head fsExprs)) <> "))")
         _ -> FsIdent ("(" <> String.joinWith ", " (map (\e -> "(unbox (" <> printExprInline e <> "))") fsExprs) <> ")")
-    in FsMatch matchExpr (Array.concatMap (translateCaseAlternative adtCtors localEnv currentMod) alts)
+      plainMatch = FsMatch matchExpr (Array.concatMap (translateCaseAlternative adtCtors localEnv currentMod) alts)
+    in if Array.length exprs == 1 then
+         fromMaybe plainMatch (translateCaseTrie adtCtors localEnv currentMod matchExpr alts)
+       else plainMatch
   ExprAbs _ (Ident arg) body -> FsIdent ("(box (fun (" <> sanitizeName arg <> ": obj) -> " <> printExprInline (translateExpr adtCtors localEnv currentMod body) <> "))")
   ExprAccessor _ obj prop -> FsIdent ("(Map.find \"" <> prop <> "\" (unbox<Map<string, obj>> (" <> printExprInline (translateExpr adtCtors localEnv currentMod obj) <> ")))")
   ExprTypeApp _ expr _ -> translateExpr adtCtors localEnv currentMod expr
@@ -469,6 +475,146 @@ printPatternInline = case _ of
   FsPatIdent name -> name
   FsPatRaw s -> s
 
+-- | Patterns made only of nullary/var leaves and unary constructor chains.
+-- | They can be compiled to nested matches instead of nested patterns: a
+-- | nested pattern becomes `Unbox(...)` in F#, and F# compiles deeply nested
+-- | active patterns extremely slowly (the derived `Generic` dictionaries of
+-- | big sum types make it allocate gigabytes), while the equivalent chain of
+-- | small matches is cheap.
+data SimpleBinder
+  = SimpleNull
+  | SimpleVar String
+  | SimpleCtor String (Maybe SimpleBinder)
+  | SimpleRaw FsPattern
+
+simpleBinderDepth :: SimpleBinder -> Int
+simpleBinderDepth = case _ of
+  SimpleCtor _ (Just inner) -> 1 + simpleBinderDepth inner
+  _ -> 1
+
+moduleNamePrefix :: Maybe String -> String
+moduleNamePrefix = case _ of
+  Just name -> String.replaceAll (Pattern ".") (Replacement "_") name <> "_"
+  Nothing -> ""
+
+constructorFqName :: Maybe String -> Qualified Ident -> String
+constructorFqName currentMod qi =
+  let name = unwrap (unQualified qi) in
+    case qi of
+      Qualified (Just modName) _ -> String.replaceAll (Pattern ".") (Replacement "_") (unwrap modName) <> "_" <> name
+      Qualified Nothing _ -> moduleNamePrefix currentMod <> name
+
+-- | Nesting depth of the pattern as emitted (newtype layers are erased).
+binderNestingDepth :: ConstructorEnv -> Maybe String -> Binder Ann -> Int
+binderNestingDepth adtCtors currentMod = case _ of
+  BinderConstructor _ _ qi binders ->
+    case Map.lookup (constructorFqName currentMod qi) adtCtors.arities of
+      Just arity | arity == Array.length binders ->
+        if Array.null binders then 1
+        else 1 + Array.foldl (\acc child -> max acc (binderNestingDepth adtCtors currentMod child)) 0 binders
+      _ -> case binders of
+        [ inner ] -> binderNestingDepth adtCtors currentMod inner
+        _ -> 1 + Array.foldl (\acc child -> max acc (binderNestingDepth adtCtors currentMod child)) 0 binders
+  BinderNamed _ _ inner -> binderNestingDepth adtCtors currentMod inner
+  _ -> 0
+
+normalizeSimpleBinder :: ConstructorEnv -> Map String Int -> Maybe String -> Binder Ann -> Maybe SimpleBinder
+normalizeSimpleBinder adtCtors localEnv currentMod binder = case binder of
+  BinderNull _ -> Just SimpleNull
+  BinderVar _ (Ident name) -> Just (SimpleVar (sanitizeName name))
+  BinderConstructor _ _ qi binders ->
+    case Map.lookup (constructorFqName currentMod qi) adtCtors.arities of
+      Just arity | arity == Array.length binders ->
+        case binders of
+          [] -> Just (SimpleCtor (sanitizeName (constructorFqName currentMod qi) <> "usd_Ctor") Nothing)
+          [ inner ] -> map (\simple -> SimpleCtor (sanitizeName (constructorFqName currentMod qi) <> "usd_Ctor") (Just simple)) (normalizeSimpleBinder adtCtors localEnv currentMod inner)
+          _ -> simpleRawBinder adtCtors localEnv currentMod binder
+      _ -> case binders of
+        [ inner ] -> normalizeSimpleBinder adtCtors localEnv currentMod inner
+        _ -> simpleRawBinder adtCtors localEnv currentMod binder
+  _ -> simpleRawBinder adtCtors localEnv currentMod binder
+
+-- | Keep a small subtree with its existing nested pattern instead of failing
+-- | the whole case; nested patterns only become expensive when they are deep.
+simpleRawBinder :: ConstructorEnv -> Map String Int -> Maybe String -> Binder Ann -> Maybe SimpleBinder
+simpleRawBinder adtCtors localEnv currentMod binder =
+  if binderNestingDepth adtCtors currentMod binder <= 2 then
+    Just (SimpleRaw (translateBinder adtCtors localEnv currentMod binder))
+  else Nothing
+
+simpleCaseShape :: ConstructorEnv -> Map String Int -> Maybe String -> CaseAlternative Ann -> Maybe SimpleBinder
+simpleCaseShape adtCtors localEnv currentMod = case _ of
+  CaseAlternative binders (Unconditional _) | Array.length binders == 1 -> do
+    binder <- Array.head binders
+    normalizeSimpleBinder adtCtors localEnv currentMod binder
+  _ -> Nothing
+
+type SimpleCaseEntry = Tuple SimpleBinder FsExpr
+
+type SimpleCaseGroup = Tuple String (Array (Tuple (Maybe SimpleBinder) FsExpr))
+
+type SimpleCaseGroups = { groups :: Array SimpleCaseGroup, raws :: Array (Tuple FsPattern FsExpr), default :: Maybe SimpleCaseEntry }
+
+scanSimpleCaseEntries :: SimpleCaseGroups -> Array SimpleCaseEntry -> SimpleCaseGroups
+scanSimpleCaseEntries acc remaining = case Array.uncons remaining of
+  Nothing -> acc
+  Just { head: Tuple simple body, tail } -> case simple of
+    SimpleNull -> acc { default = Just (Tuple SimpleNull body) }
+    SimpleVar name -> acc { default = Just (Tuple (SimpleVar name) body) }
+    SimpleRaw pattern -> scanSimpleCaseEntries acc { raws = Array.snoc acc.raws (Tuple pattern body) } tail
+    SimpleCtor name inner ->
+      let
+        entry = Tuple inner body
+        groups = case Array.findIndex (\(Tuple groupName _) -> groupName == name) acc.groups of
+          Just index -> fromMaybe acc.groups (Array.modifyAt index (\(Tuple groupName groupEntries) -> Tuple groupName (Array.snoc groupEntries entry)) acc.groups)
+          Nothing -> Array.snoc acc.groups (Tuple name [ entry ])
+      in scanSimpleCaseEntries acc { groups = groups } tail
+
+-- | Compile the alternatives of a single-scrutinee `Case` into nested matches
+-- | when their binders form deep unary constructor chains.
+translateCaseTrie :: ConstructorEnv -> Map String Int -> Maybe String -> FsExpr -> Array (CaseAlternative Ann) -> Maybe FsExpr
+translateCaseTrie adtCtors localEnv currentMod matchExpr alts = do
+  shape <- traverse (simpleCaseShape adtCtors localEnv currentMod) alts
+  let maxDepth = Array.foldl (\acc simple -> max acc (simpleBinderDepth simple)) 0 shape
+  if maxDepth < 4 then Nothing
+  else do
+    bodies <- traverse (case _ of
+      CaseAlternative _ (Unconditional expr) -> Just (translateExpr adtCtors localEnv currentMod expr)
+      _ -> Nothing) alts
+    pure (compileSimpleCaseLevel 0 matchExpr matchExpr (Array.zipWith Tuple shape bodies) (FsIdent "(failwith \"Failed pattern match\")"))
+
+compileSimpleCaseLevel :: Int -> FsExpr -> FsExpr -> Array SimpleCaseEntry -> FsExpr -> FsExpr
+compileSimpleCaseLevel depth boxedValue scrutinee entries fallback =
+  let
+    scanned = scanSimpleCaseEntries { groups: [], raws: [], default: Nothing } entries
+    fallbackBody = case scanned.default of
+      Just (Tuple _ body) -> body
+      Nothing -> fallback
+    cases = Array.mapWithIndex (compileSimpleCaseGroup depth fallbackBody) scanned.groups
+    rawCases = map (\(Tuple pattern body) -> FsMatchCase pattern Nothing body) scanned.raws
+    defaultCases = case scanned.default of
+      Just (Tuple SimpleNull body) -> [ FsMatchCase FsPatWildcard Nothing body ]
+      Just (Tuple (SimpleVar name) body) ->
+        if depth == 0 then
+          [ FsMatchCase (FsPatIdent name) Nothing body ]
+        else
+          [ FsMatchCase FsPatWildcard Nothing (FsIdent ("(let " <> name <> " = " <> printExprInline boxedValue <> " in " <> printExprInline body <> ")")) ]
+      Just _ -> []
+      Nothing -> [ FsMatchCase FsPatWildcard Nothing fallback ]
+  in FsMatch scrutinee (cases <> rawCases <> defaultCases)
+
+compileSimpleCaseGroup :: Int -> FsExpr -> Int -> SimpleCaseGroup -> FsMatchCase
+compileSimpleCaseGroup depth fallbackBody index (Tuple name groupEntries) = case Array.head groupEntries of
+  Just (Tuple Nothing body) -> FsMatchCase (FsPatCtor name []) Nothing body
+  Just (Tuple (Just SimpleNull) body) -> FsMatchCase (FsPatCtor name [ FsPatWildcard ]) Nothing body
+  Just (Tuple (Just (SimpleVar boundName)) body) -> FsMatchCase (FsPatCtor name [ FsPatIdent boundName ]) Nothing body
+  _ ->
+    let
+      variable = "usd_case_" <> show depth <> "_" <> show index
+      innerEntries = map (\(Tuple inner body) -> Tuple (fromMaybe SimpleNull inner) body) groupEntries
+    in FsMatchCase (FsPatCtor name [ FsPatIdent variable ]) Nothing
+         (compileSimpleCaseLevel (depth + 1) (FsIdent variable) (FsIdent ("(unbox " <> variable <> ")")) innerEntries fallbackBody)
+
 translateCaseAlternative :: ConstructorEnv -> Map String Int -> Maybe String -> CaseAlternative Ann -> Array FsMatchCase
 translateCaseAlternative adtCtors localEnv currentMod (CaseAlternative binders guards) =
   let
@@ -514,12 +660,12 @@ translateLitBinder adtCtors localEnv currentMod = case _ of
     LitString s -> FsPatRaw ("LitString " <> escapeString s <> " ()")
     LitChar c -> FsPatRaw ("LitChar '" <> escapeChar c <> "' ()")
     LitArray items -> 
-      FsPatRaw ("[| " <> String.joinWith "; " (map (printPatternInline <<< translateBinder adtCtors localEnv currentMod) items) <> " |]")
+      FsPatRaw ("[| " <> String.joinWith "; " (map (printNestedPatternInline <<< translateBinder adtCtors localEnv currentMod) items) <> " |]")
     LitRecord props ->
       if Array.length props == 0 then
         FsPatWildcard
       else
         let
           propToPat (Prop key val) = 
-            "HasProp \"" <> key <> "\" (" <> printPatternInline (translateBinder adtCtors localEnv currentMod val) <> ")"
+            "HasProp \"" <> key <> "\" (" <> printNestedPatternInline (translateBinder adtCtors localEnv currentMod val) <> ")"
         in FsPatRaw ("(" <> String.joinWith " & " (map propToPat props) <> ")")
