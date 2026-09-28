@@ -166,7 +166,7 @@ main = launchAff_ $ Metrics.measure "backend total" \_ -> do
       finalModules
 
   Metrics.measure "finalize" \_ -> do
-    let entryPointContent = "module Sharpurs_EntryPoint\n\nopen System.Threading\n\n[<EntryPoint>]\nlet main argv =\n    let thread = Thread(ThreadStart(fun () ->\n        (unbox<obj -> obj> " <> (String.replaceAll (String.Pattern ".") (String.Replacement "_") (fromMaybe "Main" args.mbMainModule)) <> "_main) null |> ignore\n    ), 1024 * 1024 * 1024)\n    thread.Start()\n    thread.Join()\n    0\n"
+    let entryPointContent = "module Sharpurs_EntryPoint\n\nopen System.Threading\n\n[<EntryPoint>]\nlet main argv =\n    let thread = Thread(ThreadStart(fun () ->\n        (unbox<obj -> obj> " <> (String.replaceAll (String.Pattern ".") (String.Replacement "_") (fromMaybe "Main" args.mbMainModule)) <> "_main) null |> ignore\n    ), 1024 * 1024 * 1024)\n    thread.Start()\n    thread.Join()\n    // `launchAff_` forks the fiber, so wait for pending async work before\n    // letting the process exit.\n    Sharpurs_Prelude.SharpursRuntime.EventLoopWait()\n    0\n"
     writeIfChanged ("output/Main/EntryPoint.fs") entryPointContent
 
     filesInOutput <- FS.readdir "output/Main"
