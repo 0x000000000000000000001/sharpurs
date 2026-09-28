@@ -342,14 +342,25 @@ translateExprGeneric adtCtors localEnv currentMod expr = case expr of
           Qualified Nothing _ -> case currentMod of
                                    Just cmod -> String.replaceAll (Pattern ".") (Replacement "_") cmod <> "_" <> nameStr
                                    Nothing -> nameStr
-    in case Map.lookup (sanitizeName fqName) adtCtors.arities of
-      Just arity -> generateConstructorCall adtCtors (sanitizeName fqName) arity []
-      Nothing ->
-        case qi of
-          Qualified (Just modName) (Ident name) -> 
-            let mname = String.replaceAll (Pattern ".") (Replacement "_") (unwrap modName)
-            in FsIdent ("(box " <> sanitizeName (mname <> "_" <> name) <> ")")
-          Qualified Nothing (Ident name) -> FsIdent ("(box " <> sanitizeName name <> ")")
+    in case Map.lookup (sanitizeName nameStr) localEnv of
+      Just arity | arity < 0 ->
+        -- Local recursive binding used as a value: it only has a `_tco`
+        -- entry, so build the curried function from it.
+        let
+          names = map (\i -> "usd_eta_" <> show i) (Array.range 0 (negate arity - 1))
+          lambdas = String.joinWith "" (map (\nm -> "(fun (" <> nm <> ": obj) -> ") names)
+          rest = String.joinWith " " (map (\nm -> "(" <> nm <> ")") names)
+          closes = String.joinWith "" (map (const ")") names)
+        in FsIdent ("(box (" <> lambdas <> "(" <> sanitizeName nameStr <> "_tco " <> rest <> ")" <> closes <> "))")
+      _ ->
+        case Map.lookup (sanitizeName fqName) adtCtors.arities of
+          Just arity -> generateConstructorCall adtCtors (sanitizeName fqName) arity []
+          Nothing ->
+            case qi of
+              Qualified (Just modName) (Ident name) -> 
+                let mname = String.replaceAll (Pattern ".") (Replacement "_") (unwrap modName)
+                in FsIdent ("(box " <> sanitizeName (mname <> "_" <> name) <> ")")
+              Qualified Nothing (Ident name) -> FsIdent ("(box " <> sanitizeName name <> ")")
   ExprApp _ _ _ -> 
     let flat = flattenApp expr
     in case flat.fn of
@@ -374,13 +385,25 @@ translateExprGeneric adtCtors localEnv currentMod expr = case expr of
                     Nothing -> Nothing
         in case mArity of
           Just { arity: arity, targetName: targetName } ->
-             if Array.length flat.args == arity then
+             let arity' = if arity < 0 then negate arity else arity in
+             if Array.length flat.args == arity' then
                 FsDirectApp (targetName <> "_tco") (map (translateExpr adtCtors localEnv currentMod) flat.args)
-             else if Array.length flat.args > arity then
-                let tcoArgs = Array.take arity flat.args
-                    restArgs = Array.drop arity flat.args
+             else if Array.length flat.args > arity' then
+                let tcoArgs = Array.take arity' flat.args
+                    restArgs = Array.drop arity' flat.args
                     baseCall = FsDirectApp (targetName <> "_tco") (map (translateExpr adtCtors localEnv currentMod) tcoArgs)
                 in Array.foldl (\acc arg -> FsApp acc [translateExpr adtCtors localEnv currentMod arg]) baseCall restArgs
+             else if arity < 0 then
+                -- Local recursive binding: only its uncurried `_tco` entry
+                -- exists, so an unsaturated use builds the curried value.
+                let
+                  missing = arity' - Array.length flat.args
+                  names = map (\i -> "usd_eta_" <> show i) (Array.range 0 (missing - 1))
+                  applied = map (\arg -> "(" <> printExprInline (translateExpr adtCtors localEnv currentMod arg) <> ")") flat.args
+                  rest = map (\nm -> "(" <> nm <> ")") names
+                  lambdas = String.joinWith "" (map (\nm -> "(fun (" <> nm <> ": obj) -> ") names)
+                  closes = String.joinWith "" (map (const ")") names)
+                in FsIdent ("(box (" <> lambdas <> "(" <> targetName <> "_tco " <> String.joinWith " " (applied <> rest) <> ")" <> closes <> "))")
              else
                 FsApp (translateExpr adtCtors localEnv currentMod flat.fn) (map (translateExpr adtCtors localEnv currentMod) flat.args)
           Nothing ->
@@ -410,41 +433,38 @@ translateExprGeneric adtCtors localEnv currentMod expr = case expr of
       newEnv = Array.foldl (\acc b -> case b of
         Rec bindings -> Array.foldl (\acc2 (Binding _ (Ident n) e) -> 
           let ext = extractArgs e 
-          in if Array.length ext.args > 0 then Map.insert (sanitizeName n) (Array.length ext.args) acc2 else acc2
+          in if Array.length ext.args > 0 then Map.insert (sanitizeName n) (negate (Array.length ext.args)) acc2 else acc2
         ) acc bindings
         _ -> acc
       ) localEnv binds
 
-      bindStrs = Array.concatMap (\b -> case b of
-        NonRec (Binding _ (Ident n) e) -> ["let " <> sanitizeName n <> " = " <> printExprInline (translateExpr adtCtors newEnv currentMod e) <> " in "]
+      -- Column (0-based) reached at the end of a fragment, and an indent
+      -- strictly deeper than it: F#'s offside rule requires the continuation
+      -- lines of a local `let rec` to be indented past the enclosing `let`.
+      -- The real column is only known once the surrounding text is laid out,
+      -- so the group is emitted with markers that `normalizeRecIndent`
+      -- replaces at write time.
+      stepAcc acc b = case b of
+        NonRec (Binding _ (Ident n) e) -> acc <> "let " <> sanitizeName n <> " = " <> printExprInline (translateExpr adtCtors newEnv currentMod e) <> " in "
         Rec bindings -> 
           let
-            indent = "                                                                                                                                                                                                        "
             makeLocalRec (Binding _ (Ident n) e) idx =
               let
                 ext = extractArgs e
                 sName = sanitizeName n
+                keyword = if idx == 0 then "\x02let rec " else "\n\x02and "
               in if Array.length ext.args > 0 then
                 let
                   argStrs = String.joinWith " " (map (\a -> "(" <> a <> ": obj)") ext.args)
                   bodyStr = printExprInline (translateExpr adtCtors newEnv currentMod ext.body)
-                  curriedArgs = String.joinWith "" (map (\a -> "(fun (" <> a <> ": obj) -> ") ext.args)
-                  closes = String.joinWith "" (map (const ")") ext.args)
-                  keyword = if idx == 0 then "\n" <> indent <> "let rec " else "\n" <> indent <> "and "
-                  wrapper = sName <> " = box (" <> curriedArgs <> sName <> "_tco " <> String.joinWith " " ext.args <> closes <> ")"
-                in [ keyword <> sName <> "_tco " <> argStrs <> " : obj = (" <> bodyStr <> ") ", "\n" <> indent <> "and " <> wrapper <> " " ]
+                in [ keyword <> sName <> "_tco " <> argStrs <> " : obj = (" <> bodyStr <> ") " ]
               else
-                let
-                  keyword = if idx == 0 then "\n" <> indent <> "let rec " else "\n" <> indent <> "and "
-                in [ keyword <> sName <> " : obj = (" <> printExprInline (translateExpr adtCtors newEnv currentMod e) <> ") " ]
+                [ keyword <> sName <> " : obj = (" <> printExprInline (translateExpr adtCtors newEnv currentMod e) <> ") " ]
             recStrs = Array.concat (Array.mapWithIndex (\i b -> makeLocalRec b i) bindings)
-          in ["\n" <> indent <> String.joinWith "" recStrs <> "\n" <> indent <> "in\n" <> indent]
-      ) binds
+          in acc <> "\x01\n" <> String.joinWith "" recStrs <> "\n\x02in\n\x02\x03"
       
-      bodyTerm = case binds of
-        [Rec _] -> printExprInline (translateExpr adtCtors newEnv currentMod body) <> "\n                                                                                                                                                                                                        )"
-        _ -> printExprInline (translateExpr adtCtors newEnv currentMod body) <> ")"
-    in FsIdent ("(" <> String.joinWith "" bindStrs <> bodyTerm)
+      bodyTerm = printExprInline (translateExpr adtCtors newEnv currentMod body) <> ")"
+    in FsIdent (Array.foldl stepAcc "(" binds <> bodyTerm)
   ExprUpdate _ obj props ->
     let
       mapAdd (Prop k v) prev = "(Map.add \"" <> k <> "\" (box (" <> printExprInline (translateExpr adtCtors localEnv currentMod v) <> ")) " <> prev <> ")"

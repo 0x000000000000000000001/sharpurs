@@ -29,7 +29,7 @@ import Sharpurs.AdtKernel as AdtKernel
 import Sharpurs.ThunkKernel as ThunkKernel
 import Sharpurs.Printer (printModule)
 import PureScript.Backend.Optimizer.FfiSupport (findFfiFile)
-import Sharpurs.FfiSupport (appendFfiWrappers, appendCsFfiWrappers)
+import Sharpurs.FfiSupport (appendFfiWrappers, appendCsFfiWrappers, normalizeRecIndent)
 import Data.Newtype (unwrap)
 import Data.Maybe (Maybe(..), fromMaybe, isJust)
 import Data.String (joinWith)
@@ -161,7 +161,7 @@ main = launchAff_ $ Metrics.measure "backend total" \_ -> do
                 let requiredForeigns = map (\(Ident f) -> f) (Array.fromFoldable (Map.keys coreFnMod.foreign))
                 pure (appendCsFfiWrappers modNameStr requiredForeigns csContent <> "\n\n")
 
-          let moduleContent = "[<AutoOpen>]\nmodule PureScript_" <> safeModName <> "\n\nopen System\nopen System.Collections.Generic\n\n" <> ffiContent <> csWrappers <> fsCode <> "\n"
+          let moduleContent = normalizeRecIndent ("[<AutoOpen>]\nmodule PureScript_" <> safeModName <> "\n\nopen System\nopen System.Collections.Generic\n\n" <> ffiContent <> csWrappers <> fsCode <> "\n")
 
           writeIfChanged ("output/Main/" <> modNameStr <> ".fs") moduleContent
 

@@ -100,3 +100,33 @@ export const appendCsFfiWrappersImpl = function(moduleName) {
         };
     };
 };
+
+// Local `let rec` groups are emitted with marker characters instead of a fixed
+// indentation: F#'s offside rule needs their continuation lines deeper than the
+// enclosing `let`, which is only known once the surrounding text is laid out.
+const REC_START = "\u0001";
+const REC_INDENT = "\u0002";
+const REC_END = "\u0003";
+
+export const normalizeRecIndentImpl = (text) => {
+    let out = "";
+    let col = 0;
+    const stack = [];
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (ch === REC_START) {
+            stack.push(col);
+        } else if (ch === REC_END) {
+            stack.pop();
+        } else if (ch === REC_INDENT) {
+            const base = stack.length > 0 ? stack[stack.length - 1] : col;
+            const indent = " ".repeat(base + 2);
+            out += indent;
+            col += indent.length;
+        } else {
+            out += ch;
+            if (ch === "\n") col = 0; else col++;
+        }
+    }
+    return out;
+};
