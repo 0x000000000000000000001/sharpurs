@@ -134,17 +134,20 @@ main = launchAff_ $ Metrics.measure "backend total" \_ -> do
           wrappers <- liftEffect (Ref.modify (Set.union constructors) nativeConstructors)
           let (FsModule _ decls) = translateOptimizedModuleWithThunks wrappers native thunks globalAdtCtors backendMod (Module coreFnMod)
           let fsCode = printModule (FsModule modNameStr decls)
+          let safeModName = String.replaceAll (String.Pattern ".") (String.Replacement "_") modNameStr
 
           ffiPathMb <- liftEffect $ findFfiFile ".fs" ["../../bak/spago.d/fs/p", "bak/spago.d/fs/p"] args.mbFfiDir modNameStr (Just coreFnMod.path)
+          let requiredForeigns = map (\(Ident f) -> f) (Array.fromFoldable (Map.keys coreFnMod.foreign))
           ffiContent <- case ffiPathMb of
-            Nothing -> pure ""
+            Nothing ->
+              -- No F# FFI for this module: emit a stub per foreign so the whole
+              -- project still compiles; calling one fails loudly at runtime.
+              if Array.null requiredForeigns then pure ""
+              else pure (Array.foldMap (\f -> "let " <> safeModName <> "_" <> f <> " = box (fun (_: obj) -> failwith \"FFI not implemented: " <> modNameStr <> "." <> f <> "\")\n") requiredForeigns <> "\n\n")
             Just ffiPath -> do
               content <- FS.readTextFile UTF8 ffiPath
-              let requiredForeigns = map (\(Ident f) -> f) (Array.fromFoldable (Map.keys coreFnMod.foreign))
               let wrappers = appendFfiWrappers modNameStr requiredForeigns content
               pure (wrappers <> "\n\n")
-
-          let safeModName = String.replaceAll (String.Pattern ".") (String.Replacement "_") modNameStr
 
           csPathMb <- liftEffect $ findFfiFile ".cs" ["../../bak/spago.d/fs/p", "bak/spago.d/fs/p"] args.mbFfiDir modNameStr (Just coreFnMod.path)
           csWrappers <- case csPathMb of
