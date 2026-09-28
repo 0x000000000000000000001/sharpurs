@@ -241,7 +241,7 @@ translateLit adtCtors localEnv currentMod lit = case lit of
     LitRecord props ->
       let
         mapAdd (Prop key val) acc = "(Map.add \"" <> key <> "\" (box (" <> printExprInline (translateExpr adtCtors localEnv currentMod val) <> ")) " <> acc <> ")"
-      in FsIdent ("(box (" <> Array.foldr mapAdd "Map.empty" props <> "))")
+      in FsIdent ("(box (" <> Array.foldr mapAdd "objMap" props <> "))")
 
 generateConstructorCall :: ConstructorEnv -> String -> Int -> Array FsExpr -> FsExpr
 generateConstructorCall env name arity args =
