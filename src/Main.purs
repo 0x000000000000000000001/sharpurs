@@ -18,7 +18,7 @@ import Data.Tuple (Tuple(..))
 import Data.Map as Map
 import Data.String as String
 import Data.String.Pattern (Pattern(..))
-import PureScript.Backend.Optimizer.CoreFn (Module(..), Ident(..), Qualified(..), ModuleName(..))
+import PureScript.Backend.Optimizer.CoreFn (Module(..), Ident(..), Qualified(..), ModuleName(..), ExprType(..))
 import Data.List (List(..))
 import PureScript.Backend.Optimizer.App (coreFnModulesFromOutput, parseCLIArgs, checkCache, writeCache, loadDirectives)
 import PureScript.Backend.Optimizer.Builder (buildModules)
@@ -55,15 +55,23 @@ let sharpurs_int_mod (left: int) (right: int) : int =
         else remainder
 
 let sharpurs_apply (func: obj) (arg: obj) : obj =
-    if isNull func then failwith "sharpurs_apply: func is null!"
+    if isNull func then
+        let details = "sharpurs_apply: func is null!\n" + System.Diagnostics.StackTrace(true).ToString()
+        System.Console.Error.WriteLine(details)
+        failwith details
     match func with
     | :? (obj -> obj) as invoke ->
         try invoke arg
-        // Keep the exception boundary of MethodInfo.Invoke for callers and FFI.
-        with ex -> raise (System.Reflection.TargetInvocationException(ex))
+        // Keep the exception boundary of MethodInfo.Invoke for callers and FFI,
+        // while preserving the original message for diagnostics.
+        with ex -> raise (System.Reflection.TargetInvocationException(ex.Message, ex))
     | _ ->
-        let method = func.GetType().GetMethods() |> Array.find (fun m -> m.Name = "Invoke" && m.GetParameters().Length = 1)
-        method.Invoke(func, [| arg |])
+        let methods = func.GetType().GetMethods() |> Array.filter (fun m -> m.Name = "Invoke")
+        match methods |> Array.tryFind (fun m -> m.GetParameters().Length = 1) with
+        | Some method -> method.Invoke(func, [| arg |])
+        | None ->
+            let arities = methods |> Array.map (fun m -> string (m.GetParameters().Length)) |> String.concat ","
+            failwith (sprintf "sharpurs_apply: cannot apply a value of type %s (Invoke arities: %s)" (func.GetType().FullName) arities)
 """
 
 fsHeader :: String
@@ -137,19 +145,39 @@ main = launchAff_ $ Metrics.measure "backend total" \_ -> do
           let safeModName = String.replaceAll (String.Pattern ".") (String.Replacement "_") modNameStr
 
           ffiPathMb <- liftEffect $ findFfiFile ".fs" ["../../bak/spago.d/fs/p", "bak/spago.d/fs/p"] args.mbFfiDir modNameStr (Just coreFnMod.path)
+          csPathMb <- liftEffect $ findFfiFile ".cs" ["../../bak/spago.d/fs/p", "bak/spago.d/fs/p"] args.mbFfiDir modNameStr (Just coreFnMod.path)
           let requiredForeigns = map (\(Ident f) -> f) (Array.fromFoldable (Map.keys coreFnMod.foreign))
+          let
+            foreignArity f = case Map.lookup (Ident f) coreFnMod.foreign of
+              Just (Just ty) -> typeArity ty
+              _ -> 0
+            typeArity = case _ of
+              Func args _ -> Array.length args
+              ForAll _ inner -> typeArity inner
+              ConstrainedType _ inner -> typeArity inner
+              TypeApp inner _ -> typeArity inner
+              _ -> 0
+            stubForeign f =
+              let
+                n = foreignArity f
+                opens = if n > 0 then String.joinWith "" (map (\i -> "(fun (arg" <> show i <> ": obj) -> ") (Array.range 0 (n - 1))) else "(fun (_: obj) -> "
+                closes = if n > 0 then String.joinWith "" (map (const ")") (Array.range 0 (n - 1))) else ")"
+              in "let " <> safeModName <> "_" <> f <> " = box (" <> opens <> "failwith \"FFI not implemented: " <> modNameStr <> "." <> f <> "\"" <> closes <> ")\n"
+
           ffiContent <- case ffiPathMb of
             Nothing ->
               -- No F# FFI for this module: emit a stub per foreign so the whole
               -- project still compiles; calling one fails loudly at runtime.
-              if Array.null requiredForeigns then pure ""
-              else pure (Array.foldMap (\f -> "let " <> safeModName <> "_" <> f <> " = box (fun (_: obj) -> failwith \"FFI not implemented: " <> modNameStr <> "." <> f <> "\")\n") requiredForeigns <> "\n\n")
+              -- The stub is curried like the real FFI, so partial applications
+              -- performed at module initialisation do not throw. A C# FFI (if
+              -- any) provides its own wrappers below.
+              if Array.null requiredForeigns || isJust csPathMb then pure ""
+              else pure (Array.foldMap stubForeign requiredForeigns <> "\n\n")
             Just ffiPath -> do
               content <- FS.readTextFile UTF8 ffiPath
               let wrappers = appendFfiWrappers modNameStr requiredForeigns content
               pure (wrappers <> "\n\n")
 
-          csPathMb <- liftEffect $ findFfiFile ".cs" ["../../bak/spago.d/fs/p", "bak/spago.d/fs/p"] args.mbFfiDir modNameStr (Just coreFnMod.path)
           csWrappers <- case csPathMb of
             Nothing -> pure ""
             Just csPath -> do
@@ -183,7 +211,15 @@ main = launchAff_ $ Metrics.measure "backend total" \_ -> do
       pure "    <ProjectReference Include=\"FFI.CSharp.csproj\" />\n"
     else pure ""
 
-    let projHeader = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <OutputType>Exe</OutputType>\n    <TargetFramework>net8.0</TargetFramework>\n    <LangVersion>7.0</LangVersion>\n    <WarningsAsErrors>false</WarningsAsErrors>\n    <NoWarn>40,25,46,58,66,67,3370</NoWarn>\n  </PropertyGroup>\n  <ItemGroup>\n" <> csProjRef
+    -- Projects may declare extra NuGet packages next to their spago.yaml; the
+    -- fragment is inserted verbatim into the generated project's ItemGroup.
+    packageRefs <- do
+      fragment <- attempt (FS.readTextFile UTF8 "sharp.packages.props")
+      pure case fragment of
+        Left _ -> ""
+        Right content -> content <> "\n"
+
+    let projHeader = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <OutputType>Exe</OutputType>\n    <TargetFramework>net8.0</TargetFramework>\n    <LangVersion>7.0</LangVersion>\n    <WarningsAsErrors>false</WarningsAsErrors>\n    <NoWarn>40,25,46,58,66,67,3370</NoWarn>\n  </PropertyGroup>\n  <ItemGroup>\n" <> csProjRef <> packageRefs
     let projFooter = "  </ItemGroup>\n</Project>\n"
     let projFiles = Array.concat [ ["Sharpurs_Prelude.fs"], map (\(Module m) -> unwrap m.name <> ".fs") modulesArr, ["EntryPoint.fs"] ]
     let projIncludes = String.joinWith "\n" (map (\f -> "    <Compile Include=\"" <> f <> "\" />") projFiles)

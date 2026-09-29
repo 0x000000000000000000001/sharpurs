@@ -2,7 +2,8 @@ module Sharpurs.FsAst where
 
 import Prelude
 
-import Data.Maybe (Maybe)
+import Data.Char (toCharCode)
+import Data.Maybe (Maybe, fromMaybe)
 import Data.String.Pattern (Pattern(..), Replacement(..))
 import Data.String.Common as String
 import Data.Array as Array
@@ -11,7 +12,7 @@ import Data.String.CodeUnits as CU
 sanitizeName :: String -> String
 sanitizeName s = 
   let
-    reserved = ["abstract", "and", "as", "assert", "base", "base_", "begin", "class", "default", "delegate", "do", "done", "downcast", "downto", "elif", "else", "end", "exception", "extern", "false", "finally", "for", "fun", "function", "global", "if", "in", "inherit", "inline", "interface", "internal", "lazy", "let", "match", "member", "module", "mutable", "namespace", "new", "not", "null", "of", "open", "or", "override", "private", "public", "rec", "return", "sig", "static", "struct", "then", "to", "true", "try", "type", "upcast", "use", "val", "void", "when", "while", "with", "yield", "pure", "bind", "const", "object", "mod"]
+    reserved = ["abstract", "and", "as", "assert", "base", "base_", "begin", "class", "default", "delegate", "do", "done", "downcast", "downto", "elif", "else", "end", "exception", "extern", "false", "finally", "for", "fun", "function", "global", "if", "in", "inherit", "inline", "interface", "internal", "lazy", "let", "match", "member", "module", "mutable", "namespace", "new", "not", "null", "of", "open", "or", "override", "private", "public", "rec", "return", "sig", "static", "struct", "then", "to", "true", "try", "type", "upcast", "use", "val", "void", "when", "while", "with", "yield", "pure", "bind", "const", "object", "mod", "box", "unbox", "sharpurs_apply", "failwith", "obj", "string", "float", "int", "int64", "bool", "char", "unit", "System"]
     s0 = if s == "$__unused" then "usd__unused" else s
     s1 = String.replaceAll (Pattern "$") (Replacement "usd_") s0
     s2 = String.replaceAll (Pattern "'") (Replacement "_prime") s1
@@ -38,12 +39,24 @@ sanitizeName s =
     s21 = String.replaceAll (Pattern "\"") (Replacement "_quote_") s20
     s22 = String.replaceAll (Pattern " ") (Replacement "_space_") s21
     s23 = String.replaceAll (Pattern ",") (Replacement "_comma_") s22
-    sanitized0 = s23
+    sanitizeChar c =
+      if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'
+        then CU.singleton c
+        else "_u" <> hex4 (toCharCode c) <> "_"
+    s24 = String.joinWith "" (map sanitizeChar (CU.toCharArray s23))
+    sanitized0 = s24
     firstChar = CU.take 1 sanitized0
     sanitized = if firstChar >= "0" && firstChar <= "9" then "X_" <> sanitized0 else sanitized0
   in if Array.elem sanitized reserved then sanitized <> "_var" else sanitized
 
 foreign import escapeString :: String -> String
+
+hex4 :: Int -> String
+hex4 n =
+  let
+    digits = "0123456789abcdef"
+    nibble k = fromMaybe '0' (CU.charAt (k `mod` 16) digits)
+  in CU.singleton (nibble (n `div` 4096)) <> CU.singleton (nibble (n `div` 256)) <> CU.singleton (nibble (n `div` 16)) <> CU.singleton (nibble n)
 
 escapeChar :: Char -> String
 escapeChar '\n' = "\\n"
@@ -51,7 +64,14 @@ escapeChar '\r' = "\\r"
 escapeChar '\t' = "\\t"
 escapeChar '\\' = "\\\\"
 escapeChar '\'' = "\\'"
-escapeChar c = CU.singleton c
+escapeChar c =
+  let
+    code = toCharCode c
+    digits = "0123456789abcdef"
+    nibble n = fromMaybe '0' (CU.charAt (n `mod` 16) digits)
+  in if code < 0x20 || code == 0x7f || (code >= 0xd800 && code <= 0xdfff) || code == 0x85 || code == 0x2028 || code == 0x2029
+       then "\\u" <> CU.singleton (nibble (code `div` 4096)) <> CU.singleton (nibble (code `div` 256)) <> CU.singleton (nibble (code `div` 16)) <> CU.singleton (nibble code)
+       else CU.singleton c
 
 data FsModule = FsModule String (Array FsDecl)
 

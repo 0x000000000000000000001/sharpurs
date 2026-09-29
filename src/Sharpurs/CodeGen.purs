@@ -157,7 +157,7 @@ printDirectBinding env modPrefix entry =
     -- the saturated body receive the wrapper that sharpurs_apply would add.
     <> "\n\nlet " <> name <> "_direct_apply " <> parameters <> " : obj =\n"
     <> "    try " <> invocation <> "\n"
-    <> "    with ex -> raise (System.Reflection.TargetInvocationException(ex))\n"
+    <> "    with ex -> raise (System.Reflection.TargetInvocationException(\"" <> name <> "_direct: \" + ex.Message, ex))\n"
     -- The public curried entry already has that boundary in sharpurs_apply.
     <> "\nlet " <> name <> " = " <> prefix <> "(" <> invocation <> ")" <> suffix
     ) ]
@@ -452,7 +452,7 @@ translateExprGeneric adtCtors localEnv currentMod expr = case expr of
               let
                 ext = extractArgs e
                 sName = sanitizeName n
-                keyword = if idx == 0 then "\x02let rec " else "\n\x02and "
+                keyword = if idx == 0 then "\x02" <> "let rec " else "\n\x02" <> "and "
               in if Array.length ext.args > 0 then
                 let
                   argStrs = String.joinWith " " (map (\a -> "(" <> a <> ": obj)") ext.args)
@@ -528,7 +528,7 @@ constructorFqName currentMod qi =
 binderNestingDepth :: ConstructorEnv -> Maybe String -> Binder Ann -> Int
 binderNestingDepth adtCtors currentMod = case _ of
   BinderConstructor _ _ qi binders ->
-    case Map.lookup (constructorFqName currentMod qi) adtCtors.arities of
+    case Map.lookup (sanitizeName (constructorFqName currentMod qi)) adtCtors.arities of
       Just arity | arity == Array.length binders ->
         if Array.null binders then 1
         else 1 + Array.foldl (\acc child -> max acc (binderNestingDepth adtCtors currentMod child)) 0 binders
@@ -543,7 +543,7 @@ normalizeSimpleBinder adtCtors localEnv currentMod binder = case binder of
   BinderNull _ -> Just SimpleNull
   BinderVar _ (Ident name) -> Just (SimpleVar (sanitizeName name))
   BinderConstructor _ _ qi binders ->
-    case Map.lookup (constructorFqName currentMod qi) adtCtors.arities of
+    case Map.lookup (sanitizeName (constructorFqName currentMod qi)) adtCtors.arities of
       Just arity | arity == Array.length binders ->
         case binders of
           [] -> Just (SimpleCtor (sanitizeName (constructorFqName currentMod qi) <> "usd_Ctor") Nothing)
@@ -663,7 +663,7 @@ translateBinder adtCtors localEnv currentMod = case _ of
     let fqName = case qi of
           Qualified (Just modName) _ -> String.replaceAll (Pattern ".") (Replacement "_") (unwrap modName) <> "_" <> name
           Qualified Nothing _ -> modPrefix <> name
-    in if Map.member fqName adtCtors.arities then
+    in if Map.member (sanitizeName fqName) adtCtors.arities then
       FsPatCtor (sanitizeName fqName <> "usd_Ctor") (map (translateBinder adtCtors localEnv currentMod) binders)
     else
       case Array.index binders 0 of
