@@ -243,7 +243,13 @@ If both companion files exist, `.fs` supplies the PureScript-facing wrappers and
 
 ### .NET dependencies
 
-Use normal NuGet and MSBuild project references for native dependencies. The generated project files are rewritten by each backend run, so maintain application-specific dependency configuration outside those generated files, or apply it as a repeatable post-generation step. C# FFI dependencies belong to the C# project as well when they are used there.
+For additional F# project dependencies, place a `sharp.packages.props` file beside the application's `spago.yaml`:
+
+```xml
+<PackageReference Include="Npgsql" Version="8.0.7" />
+```
+
+The backend inserts this optional fragment verbatim into the generated `Program.fsproj`'s `ItemGroup`. It contains item elements, not an outer `<Project>` or `<ItemGroup>`. The fragment is not added to `FFI.CSharp.csproj`; dependencies used by C# FFI still need their own repeatable project-configuration step. Generated project files are rewritten by each backend run.
 
 ## Development and testing
 
@@ -259,13 +265,14 @@ From the compiler root:
 ./bin/test TCO -c
 ```
 
-The runner skips five fixtures requiring newer compiler features and stops at the first failure. Its result applies to this vendored suite and the selected toolchain; it is not a claim that every current upstream PureScript test or library is supported. The `-c` / `--clean` option clears the runner's `.spago`, `output` and `output-es` contents.
+The runner skips seven fixtures: five require newer compiler features, `4179` relies on JavaScript-specific behavior, and `TCOMutRec` expects a stack overflow that this backend's tail-call optimization avoids. The reasons live beside the blacklist in `bin/test`. The runner stops at the first failure. Its result applies to this vendored suite and the selected toolchain; it is not a claim that every current upstream PureScript test or library is supported. The `-c` / `--clean` option clears the runner's `.spago`, `output` and `output-es` contents.
 
 Focused regression commands are defined in [package.json](package.json):
 
 | Commands | Coverage |
 | --- | --- |
 | `npm run test:runtime` | Generic function application, FFI wrappers and exception boundaries. |
+| `npm run test:printer` | Direct-call rendering conventions, structured patterns and nested recursive layout. |
 | `npm run test:kernel`, `npm run test:local-kernel` | Native integer loops and locally nested kernels. |
 | `npm run test:adt-kernel`, `npm run test:adt-interop` | Typed ADT generation and boxed/native boundaries. |
 | `npm run test:adt-unary`, `npm run test:adt-multi` | Native recursive ADT workers and multiple arguments. |
@@ -274,7 +281,7 @@ Focused regression commands are defined in [package.json](package.json):
 | `npm run test:thunk-kernel` | Selected typed thunk fusion and its exclusion cases. |
 | `npm run test:constructor-typeapp` | Constructor calls with explicit and inferred type applications. |
 
-Build the compiler first for tests importing its `output/` modules. The runtime test reads source helpers directly and additionally needs `sharpurs-exceptions`. Tests that compile fixtures use the TAST `purs` and run generated F# through `dotnet fsi`; `PURS=/path/to/purs` and `DOTNET=/path/to/dotnet` select those executables in the focused scripts. The shell runner instead uses `purs` and `dotnet` through `PATH`.
+Build the compiler first: the focused tests import its `output/` modules, including the runtime source exported by `Sharpurs.Runtime`. The runtime test additionally needs `sharpurs-exceptions`. Tests that compile fixtures use the TAST `purs` and run generated F# through `dotnet fsi`; `PURS=/path/to/purs` and `DOTNET=/path/to/dotnet` select those executables in the focused scripts. The shell runner instead uses `purs` and `dotnet` through `PATH`.
 
 ## Architecture
 
@@ -282,9 +289,11 @@ The main parts of the compilation pipeline are:
 
 1. **Typed input:** the custom `purs` compiler emits enriched `corefn.json` files. The TAST-aware optimizer reader decodes them and sorts modules by dependencies.
 2. **Optimization and selection:** the optimizer prepares `BackendModule` values. `Sharpurs.IntKernel`, `Sharpurs.AdtKernel` and `Sharpurs.ThunkKernel` select supported typed transformations while retaining access to the source AST.
-3. **Code generation:** [Sharpurs.CodeGen](src/Sharpurs/CodeGen.purs) combines those selections with the general generator and produces [Sharpurs.FsAst](src/Sharpurs/FsAst.purs) values. Separate helpers recognize direct calls, instantiated constructors and integer operations.
-4. **FFI and printing:** [Sharpurs.FfiSupport](src/Sharpurs/FfiSupport.js) emits foreign wrappers; [Sharpurs.Printer](src/Sharpurs/Printer.purs) prints F# declarations.
-5. **Project generation:** [Main](src/Main.purs) writes the runtime, modules, entrypoint and .NET projects into `output/Main/`.
+3. **Code generation:** [Sharpurs.CodeGen](src/Sharpurs/CodeGen.purs) combines those selections with the general generator and produces [Sharpurs.FsAst](src/Sharpurs/FsAst.purs) values. [Sharpurs.CodeGen.Boxed](src/Sharpurs/CodeGen/Boxed.purs) owns the generic object-ABI source templates. Separate helpers recognize direct calls, instantiated constructors and integer operations.
+4. **FFI and printing:** [Sharpurs.Ffi](src/Sharpurs/Ffi.purs) resolves foreign sources, chooses wrappers or missing-implementation stubs, and delegates source recognition to [Sharpurs.FfiSupport](src/Sharpurs/FfiSupport.js). [Sharpurs.Printer](src/Sharpurs/Printer.purs) prints F# declarations.
+5. **Project generation:** [Sharpurs.Project](src/Sharpurs/Project.purs) writes the sources and ordered .NET projects into `output/Main/`. [Sharpurs.Runtime](src/Sharpurs/Runtime.purs) owns the shared F# prelude and entrypoint templates.
+
+[Main](src/Main.purs) coordinates these phases and tracks the validated native constructor wrappers available to subsequent modules. See the [compiler maintenance guide](docs/compiler.md) for responsibilities, representation conventions and relevant checks.
 
 The CLI compares generated text with existing files before writing, preserving timestamps when contents are unchanged. It currently returns no cached modules from the optimizer's skip hook and does not read or write an optimization cache.
 
@@ -294,7 +303,7 @@ The compiler and native libraries remain experimental. The main areas still bein
 
 - Broader coverage of native representations and optimizations.
 - A self-contained installation workflow without local development checkouts.
-- Aff compatibility and automatic waiting for pending work in the generated entrypoint.
+- Aff compatibility and process-lifetime accounting for pending asynchronous work.
 - Further FFI coverage, compiler cleanup and compatibility validation.
 
 ### Asynchronous I/O and concurrency (Aff)
@@ -303,7 +312,7 @@ The compiler and native libraries remain experimental. The main areas still bein
 
 Use non-blocking .NET I/O APIs in foreign implementations and await them through the native async machinery. Starting an `Aff` does not turn blocking I/O into asynchronous I/O, and CPU parallelism depends on the operations and scheduling involved.
 
-**Process lifetime is still an integration constraint:** the generated runtime exposes `EventLoopAdd`, `EventLoopDone` and `EventLoopWait`, and the Aff package accounts for started fibers. However, the current `EntryPoint.fs` generator only starts and joins the thread that invokes `main`; it does not call `EventLoopWait`. A host running an application that launches background fibers must arrange to wait for their completion. Automatic draining of all pending Aff work is not currently guaranteed by the generated entrypoint.
+**Process lifetime follows the runtime's bookkeeping:** the generated entrypoint joins the thread invoking `main`, then calls `EventLoopWait`. The Aff package accounts for started fibers through `EventLoopAdd` and `EventLoopDone`. Native background work must participate in that accounting to keep the process alive; permanently registered work can also prevent it from exiting.
 
 ### Generated output
 

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { helpers as preludeFs } from "../output/Sharpurs.Runtime/index.js";
 import * as C from "../output/PureScript.Backend.Optimizer.CoreFn/index.js";
 import * as Aff from "../output/Effect.Aff/index.js";
 import { Left } from "../output/Data.Either/index.js";
@@ -162,9 +163,6 @@ try {
   }
   const fallback = generate(fallbackCore);
   yes(!/let DirectFallback_\w+_direct \(/.test(fallback), "fallback oracle has no direct entry points");
-  const main = await readFile(join(backend, "src/Main.purs"), "utf8");
-  const preludeFs = main.match(/^fsPrelude = """\r?\n([\s\S]*?)^"""/m)?.[1];
-  assert.ok(preludeFs);
   const support = `
 let (|LitBool|_|) (expected: bool) (value: obj) = if value :? bool && unbox<bool> value = expected then Some() else None
 let events = ResizeArray<int>()

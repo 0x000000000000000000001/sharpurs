@@ -14,16 +14,17 @@ let captured action =
     | Some ex -> ex
     | None -> failwith "Expected an exception"
 
-let expectChain label depth (cause: Exception) action =
-    let rec inspect remaining (ex: Exception) =
-        if remaining = 0 then Object.ReferenceEquals(ex, cause)
-        else
+let expectChain label messages (cause: Exception) action =
+    let rec inspect expectedMessages (ex: Exception) =
+        match expectedMessages with
+        | [] -> Object.ReferenceEquals(ex, cause)
+        | message :: remaining ->
             match ex with
             | :? TargetInvocationException as wrapper ->
-                wrapper.Message = (TargetInvocationException(cause)).Message
-                && inspect (remaining - 1) wrapper.InnerException
+                wrapper.Message = message
+                && inspect remaining wrapper.InnerException
             | _ -> false
-    check label (inspect depth (captured action))
+    check label (inspect messages (captured action))
 
 let direct = box (fun (value: obj) -> box (unbox<int> value + 1))
 expectInt "obj -> obj closure" 42 (apply direct (box 41))
@@ -50,16 +51,18 @@ expectInt "FFI unboxed function return" 42 (apply (apply RuntimeFixture_returnFu
 
 let failure = InvalidOperationException("target failure")
 let throwing = box (fun (_: obj) -> raise failure : obj)
-expectChain "direct exception wrapper" 1 failure (fun () -> apply throwing null)
+expectChain "direct exception wrapper preserves the cause message" [failure.Message] failure (fun () -> apply throwing null)
 let typedThrowing = box (fun (_: int) -> raise failure : int)
-expectChain "fallback exception wrapper" 1 failure (fun () -> apply typedThrowing (box 0))
+expectChain "reflection retains its standard wrapper message" [(TargetInvocationException(failure)).Message] failure
+    (fun () -> apply typedThrowing (box 0))
 let nested = box (fun (_: obj) -> apply throwing null)
-expectChain "nested exception wrappers" 2 failure (fun () -> apply nested null)
+expectChain "nested exception wrappers preserve the cause message" [failure.Message; failure.Message] failure
+    (fun () -> apply nested null)
 
 let nullError = captured (fun () -> apply null null)
 check "null guard remains outside invocation wrapping"
     (nullError.GetType() = typeof<Exception>
-     && nullError.Message = "sharpurs_apply: func is null!")
+     && nullError.Message.StartsWith("sharpurs_apply: func is null!\n"))
 
 let mutable effects = 0
 let effect = box (fun (_: obj) -> effects <- effects + 1; box 42)
@@ -79,7 +82,7 @@ check "catchException preserves invocation wrapper"
      | _ -> false)
 let handlerFailure = ArgumentException("handler failure")
 let throwingHandler = box (fun (_: obj) -> box (fun (_: obj) -> raise handlerFailure : obj))
-expectChain "handler failure escapes catchException" 1 handlerFailure
+expectChain "handler failure escapes catchException" [handlerFailure.Message] handlerFailure
     (fun () -> apply (caught throwingHandler failingEffect) null)
 
 printfn "runtime-apply: %d checks passed" checks

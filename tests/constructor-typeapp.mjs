@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { helpers as preludeFs } from '../output/Sharpurs.Runtime/index.js';
 import * as C from '../output/PureScript.Backend.Optimizer.CoreFn/index.js';
 import * as Aff from '../output/Effect.Aff/index.js';
 import * as Applicative from '../output/Control.Applicative/index.js';
@@ -69,13 +70,13 @@ function forceCurried(core) {
   });
   return result;
 }
-async function collect(compiler, directory) {
+async function collect(compiler, directory, builderDictionary = compiler.Aff.monadEffectAff) {
   const { C, Aff, Applicative, Either, Maybe, Map, Set, App, Builder, Foreign } = compiler;
   const pure = Applicative.pure(Aff.applicativeAff);
   const runAff = action => new Promise((resolve, reject) => Aff.runAff(result => () =>
     result instanceof Either.Left ? reject(result.value0) : resolve(result.value0))(action)());
   const captured = new globalThis.Map();
-  await runAff(Builder.buildModules(Aff.monadAff)({
+  await runAff(Builder.buildModules(builderDictionary)({
     directives: await runAff(App.loadDirectives), rewriteLimit: 10000,
     analyzeCustom: _ => _ => Maybe.Nothing.value,
     foreignSemantics: Map.filterKeys(C.ordQualified(C.ordIdent))(qualified => {
@@ -209,7 +210,8 @@ try {
   yes(line(generated,'nativePair').includes('ConstructorNative_Node_adt_native'), 'native factory interop retained inside polymorphic constructor');
   if (process.env.CONSTRUCTOR_TYPEAPP_ORACLE_OUTPUT) {
     const old=await oldCompiler(resolve(process.env.CONSTRUCTOR_TYPEAPP_ORACLE_OUTPUT));
-    const oldState=await collect(old,directory), oldConfig=configuration(old,oldState);
+    // The historical constructor-call baseline predates Builder's MonadEffect constraint.
+    const oldState=await collect(old,directory,old.Aff.monadAff), oldConfig=configuration(old,oldState);
     const actualOld=old.Printer.printModule(old.CodeGen.translateModuleWithConstructorWrappers(oldConfig.wrappers)(oldConfig.constructors)(oldState.get('ConstructorTypeApp').core));
     yes(actualOld===oracle, 'metadata-disabled oracle is byte-identical to actual pre-change generator');
     if (artifacts) { await mkdir(artifacts,{recursive:true}); await writeFile(join(artifacts,'actual-before.fs'),actualOld); }
@@ -222,9 +224,6 @@ try {
     const list=js.list(value), next=Number(BigInt.asIntN(32,BigInt(value)+1n));
     yes(list.value0===value && list.value1.value0===next,'JS List wrapping and field order');
   }
-  const main=await readFile(join(backend,'src/Main.purs'),'utf8');
-  const preludeFs=main.match(/^fsPrelude = """\r?\n([\s\S]*?)^"""/m)?.[1];
-  assert.ok(preludeFs);
   const support=`
 let (|LitInt|_|) (expected: int) (value: obj) = if value :? int && unbox<int> value = expected then Some() else None
 let (|LitBool|_|) (expected: bool) (value: obj) = if value :? bool && unbox<bool> value = expected then Some() else None

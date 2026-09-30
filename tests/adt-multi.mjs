@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { helpers as preludeFs } from "../output/Sharpurs.Runtime/index.js";
 import * as C from "../output/PureScript.Backend.Optimizer.CoreFn/index.js";
 import * as S from "../output/PureScript.Backend.Optimizer.Syntax/index.js";
 import * as Aff from "../output/Effect.Aff/index.js";
@@ -73,7 +74,7 @@ try {
   assert.doesNotMatch(compiled.stdout + compiled.stderr, /Warning \d+ of/, "fixture has no PureScript warnings");
   process.chdir(directory);
   const captured = new globalThis.Map();
-  await runAff(Builder.buildModules(Aff.monadAff)({
+  await runAff(Builder.buildModules(Aff.monadEffectAff)({
     directives: await runAff(App.loadDirectives), rewriteLimit: 10000,
     analyzeCustom: _ => _ => Nothing.value,
     foreignSemantics: Map.filterKeys(C.ordQualified(C.ordIdent))(qualified => {
@@ -220,9 +221,6 @@ try {
   yes(reduced instanceof Just && !reduced.value0.nativeNames.includes("insert") && reduced.value0.nativeNames.includes("depth"),
     "unsupported native dependency keeps dependent function generic without dropping independent functions");
 
-  const main = await readFile(join(backend, "src/Main.purs"), "utf8");
-  const preludeFs = main.match(/^fsPrelude = """\r?\n([\s\S]*?)^"""/m)?.[1];
-  assert.ok(preludeFs, "actual runtime prelude extracted");
   const support = `
 let (|LitInt|_|) (expected: int) (value: obj) = if value :? int && unbox<int> value = expected then Some() else None
 let (|LitBool|_|) (expected: bool) (value: obj) = if value :? bool && unbox<bool> value = expected then Some() else None

@@ -11,12 +11,9 @@ import { Just, Nothing } from "../output/Data.Maybe/index.js";
 import { intAdd } from "../output/Data.Semiring/foreign.js";
 import { intSub } from "../output/Data.Ring/foreign.js";
 import { intMod } from "../output/Data.EuclideanRing/foreign.js";
+import { helpers as prelude } from "../output/Sharpurs.Runtime/index.js";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
-const main = await read("../src/Main.purs");
-const prelude = main.match(/^fsPrelude = """\r?\n([\s\S]*?)^"""/m)?.[1];
-if (!prelude) throw new Error("Cannot extract fsPrelude from src/Main.purs");
-
 const lit = (value) => new K.IntLiteral(value);
 const local = (level) => new K.IntLocal(level);
 const binary = (operator, left, right) => new K.IntBinary(operator, left, right);

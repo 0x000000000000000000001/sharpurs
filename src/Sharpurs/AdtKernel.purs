@@ -244,8 +244,8 @@ fromModule core@(Module source) backend = do
           C.Func args result -> { args, result }
           result -> { args: [], result }
     _ <- traverse (Layout.nativeType layout) (Array.snoc sig.args sig.result)
-    let publicName = sanitizeName (String.replaceAll (Pattern ".") (Replacement "_") layout.moduleName <> "_" <> unwrap name)
-    pure (Tuple (Qualified (Just backend.name) name) { args: sig.args, result: sig.result, nativeName: publicName <> "_adt_native", publicName })
+    let emittedName = sanitizeName (String.replaceAll (Pattern ".") (Replacement "_") layout.moduleName <> "_" <> unwrap name)
+    pure (Tuple (Qualified (Just backend.name) name) { args: sig.args, result: sig.result, nativeName: emittedName <> "_adt_native", publicName: emittedName })
     ) bindings
   let names = Array.concatMap (\(Tuple _ sig) -> [ sig.nativeName, sig.publicName ]) signatures
   guard (all Layout.validIdentifier names && Array.length (Array.nub names) == Array.length names)

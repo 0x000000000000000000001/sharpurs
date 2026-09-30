@@ -42,7 +42,7 @@ lower locals expected expression@(NeutralExpr syntax) =
       guard case expected of
         Just ty -> ty == C.Int
         Nothing -> true
-      pure { expr: FsIdent (printLocalKernel kernel), hasKernel: true }
+      pure { expr: FsRawExpr (printLocalKernel kernel), hasKernel: true }
     Nothing -> case syntax of
       S.Typed ty body -> do
         -- Repeated function annotations must agree before they establish the
@@ -61,7 +61,7 @@ lower locals expected expression@(NeutralExpr syntax) =
       S.Local _ level -> do
         guard (Map.member level locals)
         pure { expr: FsIdent (localName level), hasKernel: false }
-      S.Lit (C.LitInt value) -> pure { expr: FsIdent ("(box (" <> show value <> "))"), hasKernel: false }
+      S.Lit (C.LitInt value) -> pure { expr: FsRawExpr ("(box (" <> show value <> "))"), hasKernel: false }
       S.Lit (C.LitString value) -> pure { expr: FsLitString value, hasKernel: false }
       S.Lit (C.LitBoolean value) -> pure { expr: FsLitBool value, hasKernel: false }
       S.App fn args -> do
@@ -89,7 +89,7 @@ lower locals expected expression@(NeutralExpr syntax) =
         let
           lambda = foldr (\level inner -> "(box (fun (" <> localName level <> ": obj) -> " <> inner <> "))")
             (printExpr result.expr) levels
-        pure { expr: FsIdent lambda, hasKernel: result.hasKernel }
+        pure { expr: FsRawExpr lambda, hasKernel: result.hasKernel }
       _ -> Nothing
 
 localName :: Level -> String

@@ -1,15 +1,12 @@
-// Run with: DOTNET=/path/to/dotnet node tests/runtime-apply.mjs
+// Run after npm run build: DOTNET=/path/to/dotnet node tests/runtime-apply.mjs
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { appendFfiWrappersImpl } from "../src/Sharpurs/FfiSupport.js";
+import { helpers as prelude } from "../output/Sharpurs.Runtime/index.js";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
-const main = await read("../src/Main.purs");
-const prelude = main.match(/^fsPrelude = """\r?\n([\s\S]*?)^"""/m)?.[1];
-if (!prelude) throw new Error("Cannot extract fsPrelude from src/Main.purs");
-
 const exceptionFfi = appendFfiWrappersImpl("Effect.Exception")([
   "throwException", "catchException",
 ])(await read("../../sharpurs-exceptions/src/Effect/Exception.fs"));

@@ -75,7 +75,7 @@ try {
 
   process.chdir(directory); // Keep Builder .purmeta and directives lookup isolated.
   let captured;
-  await runAff(Builder.buildModules(Aff.monadAff)({
+  await runAff(Builder.buildModules(Aff.monadEffectAff)({
     directives: await runAff(App.loadDirectives),
     rewriteLimit: 10000,
     analyzeCustom: (_) => (_) => Nothing.value,

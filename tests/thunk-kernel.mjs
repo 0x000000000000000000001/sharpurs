@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { helpers as preludeFs } from '../output/Sharpurs.Runtime/index.js';
 import * as C from '../output/PureScript.Backend.Optimizer.CoreFn/index.js';
 import * as S from '../output/PureScript.Backend.Optimizer.Syntax/index.js';
 import * as Aff from '../output/Effect.Aff/index.js';
@@ -64,7 +65,7 @@ try {
   assert.doesNotMatch(compiled.stdout + compiled.stderr, /Warning \d+ of/, 'fixture has no PureScript warning');
   process.chdir(directory);
   const captured = new globalThis.Map();
-  await runAff(Builder.buildModules(Aff.monadAff)({
+  await runAff(Builder.buildModules(Aff.monadEffectAff)({
     directives: await runAff(App.loadDirectives), rewriteLimit: 10000,
     analyzeCustom: _ => _ => Nothing.value,
     foreignSemantics: Map.filterKeys(C.ordQualified(C.ordIdent))(qualified => {
@@ -146,9 +147,6 @@ try {
     yes(js.run(depth)(seed) === expected, 'JS result agrees with Int32 oracle');
     cases.push([depth, seed, expected]);
   }
-  const main = await readFile(join(backend, 'src/Main.purs'), 'utf8');
-  const preludeFs = main.match(/^fsPrelude = """\r?\n([\s\S]*?)^"""/m)?.[1];
-  assert.ok(preludeFs);
   const support = `
 open System
 let (|LitInt|_|) (expected: int) (value: obj) = if value :? int && unbox<int> value = expected then Some() else None

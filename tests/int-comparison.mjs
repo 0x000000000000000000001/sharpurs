@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
+import { helpers as preludeFs } from "../output/Sharpurs.Runtime/index.js";
 import * as C from "../output/PureScript.Backend.Optimizer.CoreFn/index.js";
 import * as Aff from "../output/Effect.Aff/index.js";
 import { Left } from "../output/Data.Either/index.js";
@@ -105,9 +106,6 @@ try {
   const values = [-2147483648, -2147483647, -1, 0, 1, 2147483646, 2147483647];
   const cases = values.flatMap(x => values.map(y => [x, y, js.less(x)(y), js.greater(x)(y), js.custom(x)(y)]));
   const fsCases = cases.map(row => `    (${row.join(", ")})`).join(";\n");
-  const main = await readFile(join(backend, "src/Main.purs"), "utf8");
-  const preludeFs = main.match(/^fsPrelude = """\r?\n([\s\S]*?)^"""/m)?.[1];
-  assert.ok(preludeFs);
   // Instrumented object-ABI dependencies: fallback calls must still dispatch
   // through their supplied dictionary, including the reversed custom order.
   const support = `

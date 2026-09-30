@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { helpers as preludeFs } from "../output/Sharpurs.Runtime/index.js";
 import * as C from "../output/PureScript.Backend.Optimizer.CoreFn/index.js";
 import * as Aff from "../output/Effect.Aff/index.js";
 import * as Applicative from "../output/Control.Applicative/index.js";
@@ -66,7 +67,7 @@ try {
     join(prelude, "**/*.purs"), "--output", join(directory, "output"), "--codegen", "corefn,js"], directory), "TAST fixture compilation");
   process.chdir(directory);
   const captured = new globalThis.Map();
-  await runAff(Builder.buildModules(Aff.monadAff)({
+  await runAff(Builder.buildModules(Aff.monadEffectAff)({
     directives: await runAff(App.loadDirectives), rewriteLimit: 10000,
     analyzeCustom: (_) => (_) => Nothing.value,
     foreignSemantics: Map.filterKeys(C.ordQualified(C.ordIdent))((qualified) => {
@@ -125,9 +126,6 @@ try {
   retain("unsupported TypeApp retains only that function", s => { depth(s).value1.value1 = new S.TypeApp(depth(s).value1.value1, C.Int.value); });
   retain("contradictory signature retains only that function", s => { depth(s).value1.value0 = new C.Func([C.Int.value], C.Int.value); });
   retain("mutual source recursion is not partially replaced", s => { const group = s.core.decls.find(b => b instanceof C.Rec); const extra = clone(group.value0[0]); extra.value1="otherDepth"; group.value0.push(extra); });
-  const main = await readFile(join(backend, "src/Main.purs"), "utf8");
-  const preludeFs = main.match(/^fsPrelude = """\r?\n([\s\S]*?)^"""/m)?.[1];
-  assert.ok(preludeFs, "actual runtime prelude extracted");
   const header = `let (|LitInt|_|) (expected: int) (value: obj) = if value :? int && unbox value = expected then Some() else None\n`;
   const foreign = `
 let events = ResizeArray<int>()

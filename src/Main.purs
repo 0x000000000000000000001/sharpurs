@@ -1,239 +1,121 @@
-module Main where
+module Main (main) where
 
 import Prelude
-import Sharpurs.Metrics as Metrics
-import Data.Either (Either(..))
 
-import Effect (Effect)
-import Effect.Aff (launchAff_, attempt, Aff)
-import Effect.Class (liftEffect)
-import Effect.Class.Console as Console
-import Effect.Ref as Ref
-import Node.FS.Aff as FS
-import Node.Encoding (Encoding(..))
-import Node.Process as Process
 import Data.Array as Array
-import Data.Set as Set
-import Data.Tuple (Tuple(..))
+import Data.Map (Map)
 import Data.Map as Map
-import Data.String as String
-import Data.String.Pattern (Pattern(..))
-import PureScript.Backend.Optimizer.CoreFn (Module(..), Ident(..), Qualified(..), ModuleName(..), ExprType(..))
-import Data.List (List(..))
-import PureScript.Backend.Optimizer.App (coreFnModulesFromOutput, parseCLIArgs, checkCache, writeCache, loadDirectives)
-import PureScript.Backend.Optimizer.Builder (buildModules)
-import PureScript.Backend.Optimizer.Semantics.Foreign (coreForeignSemantics)
-import Sharpurs.FsAst (FsModule(..), sanitizeName)
-import Sharpurs.CodeGen (translateOptimizedModuleWithThunks)
-import Sharpurs.AdtKernel as AdtKernel
-import Sharpurs.ThunkKernel as ThunkKernel
-import Sharpurs.Printer (printModule)
-import PureScript.Backend.Optimizer.FfiSupport (findFfiFile)
-import Sharpurs.FfiSupport (appendFfiWrappers, appendCsFfiWrappers, normalizeRecIndent)
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (unwrap)
-import Data.Maybe (Maybe(..), fromMaybe, isJust)
-import Data.String (joinWith)
+import Data.Set (Set)
+import Data.Set as Set
+import Data.String as String
+import Data.Tuple (Tuple(..))
+import Effect (Effect)
+import Effect.Aff (Aff, launchAff_)
+import Effect.Class (liftEffect)
+import Effect.Ref as Ref
+import Node.Process as Process
+import PureScript.Backend.Optimizer.App (coreFnModulesFromOutput, loadDirectives, parseCLIArgs)
+import PureScript.Backend.Optimizer.Builder (buildModules)
+import PureScript.Backend.Optimizer.Convert (BackendModule)
+import PureScript.Backend.Optimizer.CoreFn (Ann, Ident(..), Module(..), ModuleName(..), Qualified(..))
+import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignEval, coreForeignSemantics)
+import Sharpurs.AdtKernel as AdtKernel
+import Sharpurs.CodeGen (translateOptimizedModuleWithThunks)
+import Sharpurs.Ffi as Ffi
+import Sharpurs.FsAst (modulePrefix, sanitizeName)
+import Sharpurs.Metrics as Metrics
+import Sharpurs.Printer (printModule)
+import Sharpurs.Project as Project
+import Sharpurs.ThunkKernel as ThunkKernel
 
-fsPrelude :: String
-fsPrelude = """
-let objMap = Map.empty<string, obj>
-let unbox<'a> (x: obj) : 'a = unbox x
-let (|Unbox|) (x: obj) = unbox x
-
-let undefined = Unchecked.defaultof<obj>
-let Prim_undefined = undefined
-let intMod a b = unbox<int> a % unbox<int> b
-let semiringInt = 0
-
-// PureScript's Euclidean Int modulo, including zero and Int32.MinValue / -1.
-let sharpurs_int_mod (left: int) (right: int) : int =
-    if right = 0 || right = -1 then 0
-    else
-        let remainder = left % right
-        if remainder < 0 then
-            if right > 0 then remainder + right else remainder - right
-        else remainder
-
-let sharpurs_apply (func: obj) (arg: obj) : obj =
-    if isNull func then
-        let details = "sharpurs_apply: func is null!\n" + System.Diagnostics.StackTrace(true).ToString()
-        System.Console.Error.WriteLine(details)
-        failwith details
-    match func with
-    | :? (obj -> obj) as invoke ->
-        try invoke arg
-        // Keep the exception boundary of MethodInfo.Invoke for callers and FFI,
-        // while preserving the original message for diagnostics.
-        with ex -> raise (System.Reflection.TargetInvocationException(ex.Message, ex))
-    | _ ->
-        let methods = func.GetType().GetMethods() |> Array.filter (fun m -> m.Name = "Invoke")
-        match methods |> Array.tryFind (fun m -> m.GetParameters().Length = 1) with
-        | Some method -> method.Invoke(func, [| arg |])
-        | None ->
-            let arities = methods |> Array.map (fun m -> string (m.GetParameters().Length)) |> String.concat ","
-            failwith (sprintf "sharpurs_apply: cannot apply a value of type %s (Invoke arities: %s)" (func.GetType().FullName) arities)
-"""
-
-fsHeader :: String
-fsHeader = "let (|LitBool|_|) (expected: bool) (value: obj) = if value :? bool && unbox value = expected then Some() else None\nlet (|LitInt|_|) (expected: int) (value: obj) = if value :? int && unbox value = expected then Some() else None\nlet (|LitNumber|_|) (expected: float) (value: obj) = if value :? float && unbox value = expected then Some() else None\nlet (|LitString|_|) (expected: string) (value: obj) = if value :? string && unbox value = expected then Some() else None\nlet (|LitChar|_|) (expected: char) (value: obj) = if value :? char && unbox value = expected then Some() else None\nlet (|HasProp|_|) (key: string) (value: obj) = if value :? Map<string, obj> then Map.tryFind key (unbox<Map<string, obj>> value) else None\n\nmodule SharpursRuntime =\n    let eventLoopWg = new System.Threading.CountdownEvent(1)\n    let mutable loopHasTasks = false\n    \n    let EventLoopAdd (n: int) =\n        loopHasTasks <- true\n        eventLoopWg.AddCount(n)\n        \n    let EventLoopDone () =\n        if eventLoopWg.CurrentCount > 0 then\n            eventLoopWg.Signal() |> ignore\n        \n    let EventLoopWait () =\n        if eventLoopWg.CurrentCount > 0 then\n            eventLoopWg.Signal() |> ignore\n        if loopHasTasks then\n            eventLoopWg.Wait()\n\n"
 main :: Effect Unit
 main = launchAff_ $ Metrics.measure "backend total" \_ -> do
-  argsRaw <- liftEffect Process.argv
-  let args = parseCLIArgs argsRaw
+  args <- parseCLIArgs <$> liftEffect Process.argv
+  modules <- Metrics.measure "load TAST + sort" \_ -> coreFnModulesFromOutput "output"
+  let modulesArray = Array.fromFoldable modules
 
-  finalModules <- Metrics.measure "load TAST + sort" \_ -> coreFnModulesFromOutput "output"
-  { modulesArr, globalAdtCtors, directives, nativeConstructors } <- Metrics.measure "prepare" \_ -> do
-    let modulesArr = Array.fromFoldable finalModules
-
-    let
-      globalAdtCtors = Array.foldl
-        ( \acc coreFnMod ->
-            let
-              (Module mod) = coreFnMod
-              modNameStr = unwrap mod.name
-              modPrefix = String.replaceAll (String.Pattern ".") (String.Replacement "_") modNameStr
-              ctors = Array.concatMap (\d -> map (\c -> Tuple (sanitizeName (modPrefix <> "_" <> c.name)) (Array.length c.fields)) d.constructors) mod.dataDecls
-            in
-              Map.union acc (Map.fromFoldable ctors)
-        )
-        Map.empty
-        modulesArr
-
-    _ <- attempt (FS.mkdir "output/Main")
-
-    -- Write Sharpurs_Prelude.fs
-    let preludeContent = "[<AutoOpen>]\nmodule Sharpurs_Prelude\n\n#nowarn \"25\"\n#nowarn \"46\"\n#nowarn \"66\"\n#nowarn \"67\"\n#nowarn \"3370\"\n\nopen System\nopen System.Collections.Generic\n\n" <> fsHeader <> fsPrelude
-    writeIfChanged ("output/Main/Sharpurs_Prelude.fs") preludeContent
-
+  { directives, context } <- Metrics.measure "prepare" \_ -> do
+    Project.prepare
     directives <- loadDirectives
-    let cacheVersion = "1.0.0"
     nativeConstructors <- liftEffect (Ref.new Set.empty)
-    pure { modulesArr, globalAdtCtors, directives, nativeConstructors }
+    pure
+      { directives
+      , context:
+          { ffiDirectory: args.mbFfiDir
+          , constructorArities: collectConstructorArities modulesArray
+          , nativeConstructors
+          }
+      }
 
-  -- Generate and write each module
   Metrics.measure "optimize + emit" \_ ->
     buildModules
       { directives
       , rewriteLimit: 10000
       , analyzeCustom: \_ _ -> Nothing
-      , foreignSemantics: Map.filterKeys (\(Qualified mbMod _) -> case mbMod of
-          Just (ModuleName m) -> not (String.contains (String.Pattern "Effect") m) && not (String.contains (String.Pattern "Control.Monad.ST") m)
-          _ -> true
-        ) coreForeignSemantics
+      , foreignSemantics
       , traceIdents: Set.empty
-      , onPrepareModule: \_ m -> pure m
-      , onSkipModule: \_ (Module coreFnMod) -> do
-          let modNameStr = unwrap coreFnMod.name
-          pure Nothing
-      , onCodegenModule: \_ (Module coreFnMod) backendMod _ -> do
-          let modNameStr = unwrap backendMod.name
-          -- Builder visits dependencies before their consumers. Register a
-          -- producer only after its complete layout and constructor wrappers
-          -- have passed validation, before emitting its own mixed bindings.
-          let native = AdtKernel.prepareUnary (Module coreFnMod) backendMod
-          let thunks = ThunkKernel.prepareModule (Module coreFnMod) backendMod
-          let constructors = case native of
-                Nothing -> Set.empty
-                Just selected -> Set.fromFoldable (Array.concatMap
-                  (\decl -> map (\ctor -> case ctor.sourceName of
-                    Qualified (Just (ModuleName owner)) (Ident name) -> sanitizeName (String.replaceAll (String.Pattern ".") (String.Replacement "_") owner <> "_" <> name)
-                    _ -> ctor.name)
-                  decl.constructors) selected.layout.declarations)
-          wrappers <- liftEffect (Ref.modify (Set.union constructors) nativeConstructors)
-          let (FsModule _ decls) = translateOptimizedModuleWithThunks wrappers native thunks globalAdtCtors backendMod (Module coreFnMod)
-          let fsCode = printModule (FsModule modNameStr decls)
-          let safeModName = String.replaceAll (String.Pattern ".") (String.Replacement "_") modNameStr
-
-          ffiPathMb <- liftEffect $ findFfiFile ".fs" ["../../bak/spago.d/fs/p", "bak/spago.d/fs/p"] args.mbFfiDir modNameStr (Just coreFnMod.path)
-          csPathMb <- liftEffect $ findFfiFile ".cs" ["../../bak/spago.d/fs/p", "bak/spago.d/fs/p"] args.mbFfiDir modNameStr (Just coreFnMod.path)
-          let requiredForeigns = map (\(Ident f) -> f) (Array.fromFoldable (Map.keys coreFnMod.foreign))
-          let
-            foreignArity f = case Map.lookup (Ident f) coreFnMod.foreign of
-              Just (Just ty) -> typeArity ty
-              _ -> 0
-            typeArity = case _ of
-              Func args _ -> Array.length args
-              ForAll _ inner -> typeArity inner
-              ConstrainedType _ inner -> typeArity inner
-              TypeApp inner _ -> typeArity inner
-              _ -> 0
-            stubForeign f =
-              let
-                n = foreignArity f
-                opens = if n > 0 then String.joinWith "" (map (\i -> "(fun (arg" <> show i <> ": obj) -> ") (Array.range 0 (n - 1))) else "(fun (_: obj) -> "
-                closes = if n > 0 then String.joinWith "" (map (const ")") (Array.range 0 (n - 1))) else ")"
-              in "let " <> safeModName <> "_" <> f <> " = box (" <> opens <> "failwith \"FFI not implemented: " <> modNameStr <> "." <> f <> "\"" <> closes <> ")\n"
-
-          ffiContent <- case ffiPathMb of
-            Nothing ->
-              -- No F# FFI for this module: emit a stub per foreign so the whole
-              -- project still compiles; calling one fails loudly at runtime.
-              -- The stub is curried like the real FFI, so partial applications
-              -- performed at module initialisation do not throw. A C# FFI (if
-              -- any) provides its own wrappers below.
-              if Array.null requiredForeigns || isJust csPathMb then pure ""
-              else pure (Array.foldMap stubForeign requiredForeigns <> "\n\n")
-            Just ffiPath -> do
-              content <- FS.readTextFile UTF8 ffiPath
-              let wrappers = appendFfiWrappers modNameStr requiredForeigns content
-              pure (wrappers <> "\n\n")
-
-          csWrappers <- case csPathMb of
-            Nothing -> pure ""
-            Just csPath -> do
-              csContent <- FS.readTextFile UTF8 csPath
-              writeIfChanged ("output/Main/" <> modNameStr <> ".cs") csContent
-              if isJust ffiPathMb then
-                pure ""
-              else do
-                let requiredForeigns = map (\(Ident f) -> f) (Array.fromFoldable (Map.keys coreFnMod.foreign))
-                pure (appendCsFfiWrappers modNameStr requiredForeigns csContent <> "\n\n")
-
-          let moduleContent = normalizeRecIndent ("[<AutoOpen>]\nmodule PureScript_" <> safeModName <> "\n\nopen System\nopen System.Collections.Generic\n\n" <> ffiContent <> csWrappers <> fsCode <> "\n")
-
-          writeIfChanged ("output/Main/" <> modNameStr <> ".fs") moduleContent
-
+      , onPrepareModule: \_ source -> pure source
+      -- No optimizer cache: every module must register its native constructors
+      -- and emit its files in dependency order on each invocation.
+      , onSkipModule: \_ _ -> pure Nothing
+      , onCodegenModule: \_ source optimized _ -> emitModule context source optimized
       }
-      finalModules
+      modules
 
-  Metrics.measure "finalize" \_ -> do
-    let entryPointContent = "module Sharpurs_EntryPoint\n\nopen System.Threading\n\n[<EntryPoint>]\nlet main argv =\n    let thread = Thread(ThreadStart(fun () ->\n        (unbox<obj -> obj> " <> (String.replaceAll (String.Pattern ".") (String.Replacement "_") (fromMaybe "Main" args.mbMainModule)) <> "_main) null |> ignore\n    ), 1024 * 1024 * 1024)\n    thread.Start()\n    thread.Join()\n    // `launchAff_` forks the fiber, so wait for pending async work before\n    // letting the process exit.\n    Sharpurs_Prelude.SharpursRuntime.EventLoopWait()\n    0\n"
-    writeIfChanged ("output/Main/EntryPoint.fs") entryPointContent
+  Metrics.measure "finalize" \_ ->
+    Project.finalize
+      { mainModule: fromMaybe "Main" args.mbMainModule
+      , moduleNames: map (\(Module source) -> unwrap source.name) modulesArray
+      }
 
-    filesInOutput <- FS.readdir "output/Main"
-    let csFiles = Array.sort (Array.filter (\f -> isJust (String.stripSuffix (Pattern ".cs") f)) filesInOutput)
+type EmitContext =
+  { ffiDirectory :: Maybe String
+  , constructorArities :: Map String Int
+  , nativeConstructors :: Ref.Ref (Set String)
+  }
 
-    csProjRef <- if Array.length csFiles > 0 then do
-      let csProjHeader = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net8.0</TargetFramework>\n    <WarningsAsErrors>false</WarningsAsErrors>\n    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>\n    <OutputPath>bin/csharp/</OutputPath>\n  </PropertyGroup>\n  <ItemGroup>\n"
-      let csProjIncludes = String.joinWith "\n" (map (\f -> "    <Compile Include=\"" <> f <> "\" />") csFiles)
-      let csProjFooter = "  </ItemGroup>\n</Project>\n"
-      writeIfChanged ("output/Main/FFI.CSharp.csproj") (csProjHeader <> csProjIncludes <> "\n" <> csProjFooter)
-      pure "    <ProjectReference Include=\"FFI.CSharp.csproj\" />\n"
-    else pure ""
+emitModule :: EmitContext -> Module Ann -> BackendModule -> Aff Unit
+emitModule context source optimized = do
+  let
+    name = unwrap optimized.name
+    native = AdtKernel.prepareUnary source optimized
+    thunks = ThunkKernel.prepareModule source optimized
+  -- The builder visits dependencies first. Register a producer only after its
+  -- layout and constructor wrappers pass validation, before its mixed bindings.
+  wrappers <- liftEffect (Ref.modify (Set.union (nativeConstructorNames native)) context.nativeConstructors)
+  let generated = translateOptimizedModuleWithThunks wrappers native thunks context.constructorArities optimized source
+  ffi <- Ffi.loadModule context.ffiDirectory source
+  Project.writeModule name ffi (printModule generated)
 
-    -- Projects may declare extra NuGet packages next to their spago.yaml; the
-    -- fragment is inserted verbatim into the generated project's ItemGroup.
-    packageRefs <- do
-      fragment <- attempt (FS.readTextFile UTF8 "sharp.packages.props")
-      pure case fragment of
-        Left _ -> ""
-        Right content -> content <> "\n"
+collectConstructorArities :: Array (Module Ann) -> Map String Int
+collectConstructorArities = Array.foldl collect Map.empty
+  where
+  collect arities (Module source) =
+    let
+      prefix = modulePrefix (unwrap source.name)
+      constructors = Array.concatMap
+        (\decl -> map (\ctor -> Tuple (sanitizeName (prefix <> "_" <> ctor.name)) (Array.length ctor.fields)) decl.constructors)
+        source.dataDecls
+    in Map.union arities (Map.fromFoldable constructors)
 
-    let projHeader = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <OutputType>Exe</OutputType>\n    <TargetFramework>net8.0</TargetFramework>\n    <LangVersion>7.0</LangVersion>\n    <WarningsAsErrors>false</WarningsAsErrors>\n    <NoWarn>40,25,46,58,66,67,3370</NoWarn>\n  </PropertyGroup>\n  <ItemGroup>\n" <> csProjRef <> packageRefs
-    let projFooter = "  </ItemGroup>\n</Project>\n"
-    let projFiles = Array.concat [ ["Sharpurs_Prelude.fs"], map (\(Module m) -> unwrap m.name <> ".fs") modulesArr, ["EntryPoint.fs"] ]
-    let projIncludes = String.joinWith "\n" (map (\f -> "    <Compile Include=\"" <> f <> "\" />") projFiles)
+nativeConstructorNames :: Maybe AdtKernel.UnaryModule -> Set String
+nativeConstructorNames = case _ of
+  Nothing -> Set.empty
+  Just selected -> Set.fromFoldable (Array.concatMap (map publicName <<< _.constructors) selected.layout.declarations)
+  where
+  publicName ctor = case ctor.sourceName of
+    Qualified (Just (ModuleName owner)) (Ident name) -> sanitizeName (modulePrefix owner <> "_" <> name)
+    _ -> ctor.name
 
-    writeIfChanged ("output/Main/Program.fsproj") (projHeader <> projIncludes <> "\n" <> projFooter)
-
-    let directoryBuildPropsContent = "<Project>\n  <PropertyGroup>\n    <BaseIntermediateOutputPath>obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>\n    <MSBuildProjectExtensionsPath>obj/$(MSBuildProjectName)/</MSBuildProjectExtensionsPath>\n  </PropertyGroup>\n</Project>\n"
-    writeIfChanged ("output/Main/Directory.Build.props") directoryBuildPropsContent
-
-    pure unit
-
-writeIfChanged :: String -> String -> Aff Unit
-writeIfChanged path content = do
-  oldContent <- attempt (FS.readTextFile UTF8 path)
-  case oldContent of
-    Right old | old == content -> pure unit
-    _ -> FS.writeTextFile UTF8 path content
+-- Keep Effect and ST calls on the native FFI path rather than lowering them
+-- through the optimizer's effect-specific semantics.
+foreignSemantics :: Map (Qualified Ident) ForeignEval
+foreignSemantics = Map.filterKeys supported coreForeignSemantics
+  where
+  supported (Qualified owner _) = case owner of
+    Just (ModuleName name) ->
+      not (String.contains (String.Pattern "Effect") name)
+        && not (String.contains (String.Pattern "Control.Monad.ST") name)
+    Nothing -> true

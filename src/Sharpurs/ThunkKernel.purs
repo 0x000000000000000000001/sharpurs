@@ -372,7 +372,7 @@ fromExpr selected expr = do
       name <- helperReference Force fn
       guard (Map.lookup name selected.helpers == Just Force)
       native <- sourceThunk selected Map.empty value
-      pure (FsIdent ("(box (" <> native <> " ()))"))
+      pure (FsRawExpr ("(box (" <> native <> " ()))"))
     _ -> Nothing
 
 helperReference :: Helper -> C.Expr Ann -> Maybe (Qualified Ident)

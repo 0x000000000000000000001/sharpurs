@@ -9,6 +9,10 @@ import Data.String.Common as String
 import Data.Array as Array
 import Data.String.CodeUnits as CU
 
+-- Module qualification is flattened before identifier escaping is applied.
+modulePrefix :: String -> String
+modulePrefix = String.replaceAll (Pattern ".") (Replacement "_")
+
 sanitizeName :: String -> String
 sanitizeName s = 
   let
@@ -95,7 +99,12 @@ data FsType
 data FsExpr
   = FsLitString String
   | FsLitBool Boolean
+  | FsLitInt Int
+  | FsLitNumber Number
+  | FsLitChar Char
   | FsIdent String
+  -- Target-language fragments produced by the boxed ABI and native kernels.
+  | FsRawExpr String
   | FsApp FsExpr (Array FsExpr)
   | FsCtorApp String (Array FsExpr)
   | FsDirectApp String (Array FsExpr)
@@ -108,3 +117,12 @@ data FsPattern
   | FsPatIdent String
   | FsPatRaw String
   | FsPatWildcard
+  | FsPatTuple (Array FsPattern)
+  | FsPatNamed String FsPattern
+  | FsPatArray (Array FsPattern)
+  | FsPatRecord (Array { key :: String, pattern :: FsPattern })
+  | FsPatLitBool Boolean
+  | FsPatLitInt Int
+  | FsPatLitNumber Number
+  | FsPatLitString String
+  | FsPatLitChar Char

@@ -1,6 +1,6 @@
 // Run after npm run build: DOTNET=/path/to/dotnet node tests/local-int-kernel.mjs
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -15,6 +15,7 @@ import { fromBinding } from "../output/Sharpurs.Optimized/index.js";
 import { translateBind, translateBindWithOptimizations } from "../output/Sharpurs.CodeGen/index.js";
 import { FsLet } from "../output/Sharpurs.FsAst/index.js";
 import { printDecl, printExpr } from "../output/Sharpurs.Printer/index.js";
+import { helpers as prelude } from "../output/Sharpurs.Runtime/index.js";
 
 const int = C.Int.value;
 const string = C.String.value;
@@ -174,9 +175,6 @@ const effects = cases.map(([iterations, initial], index) => {
   const output = printExpr(accepted(`effect envelope ${iterations}/${initial}`, fromBinding(effectFixture(iterations, initial))));
   return `let effect${index} : obj = ${output}`;
 });
-const main = await readFile(new URL("../src/Main.purs", import.meta.url), "utf8");
-const prelude = main.match(/^fsPrelude = """\r?\n([\s\S]*?)^"""/m)?.[1];
-if (!prelude) throw new Error("Cannot extract fsPrelude from src/Main.purs");
 const doubles = `
 let events = ResizeArray<string>()
 let mutable throwOnShow = false

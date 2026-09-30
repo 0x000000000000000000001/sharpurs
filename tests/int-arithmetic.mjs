@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
+import { helpers as preludeFs } from "../output/Sharpurs.Runtime/index.js";
 import * as C from "../output/PureScript.Backend.Optimizer.CoreFn/index.js";
 import * as Aff from "../output/Effect.Aff/index.js";
 import { Left } from "../output/Data.Either/index.js";
@@ -175,9 +176,6 @@ try {
     return [x, y, sum, difference];
   });
   const fsCases = cases.map(row => `    (${row.join(", ")})`).join(";\n");
-  const main = await readFile(join(backend, "src/Main.purs"), "utf8");
-  const preludeFs = main.match(/^fsPrelude = """\r?\n([\s\S]*?)^"""/m)?.[1];
-  assert.ok(preludeFs);
   const support = `
 let mutable fallbackCalls = 0
 let events = ResizeArray<int>()
