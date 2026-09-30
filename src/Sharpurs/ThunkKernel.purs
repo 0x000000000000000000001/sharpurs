@@ -11,7 +11,6 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
 import Data.String as String
-import Data.String.Pattern (Pattern(..), Replacement(..))
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import PureScript.Backend.Optimizer.Convert (BackendModule)
@@ -21,8 +20,10 @@ import PureScript.Backend.Optimizer.Semantics (NeutralExpr(..))
 import PureScript.Backend.Optimizer.Syntax (Level(..), Pair(..))
 import PureScript.Backend.Optimizer.Syntax as S
 import Sharpurs.AdtLayout (validIdentifier)
+import Sharpurs.Analysis.Source as Source
 import Sharpurs.FsAst (FsDecl(..), FsExpr(..), sanitizeName)
 import Sharpurs.IntArithmetic as IntArithmetic
+import Sharpurs.Names as Names
 
 -- Public values keep their object ABI. These workers are usable only by the
 -- closed call-site recognizer below: typed callbacks alone do not prove purity.
@@ -33,7 +34,6 @@ derive instance eqHelper :: Eq Helper
 type Worker = { name :: Qualified Ident, nativeName :: String, args :: Array ExprType, result :: ExprType }
 type Parameter = { level :: Level, type :: ExprType }
 type Context = { worker :: Worker, helpers :: Map (Qualified Ident) Helper, locals :: Map Level ExprType }
-type SourceBinding = { name :: Ident, expr :: C.Expr Ann, recursive :: Boolean, singleton :: Boolean }
 
 type ThunkModule =
   { declarations :: Array FsDecl
@@ -45,14 +45,12 @@ type ThunkModule =
 thunk :: ExprType
 thunk = C.Func [ C.Unit ] C.Int
 
+-- The worker may return a function. Source signatures flatten this suffix;
+-- this normalization is specific to the thunk recognizer's function boundary.
 arrow :: Array ExprType -> ExprType -> ExprType
 arrow args result = if Array.null args then result else case result of
   C.Func tail ret -> C.Func (args <> tail) ret
   _ -> C.Func args result
-
-annotation :: C.Expr Ann -> Maybe ExprType
-annotation expr = case C.exprAnn expr of
-  C.Ann ann -> ann.type
 
 pboAnnotation :: NeutralExpr -> Maybe ExprType
 pboAnnotation (NeutralExpr (S.Typed ty _)) = Just ty
@@ -61,12 +59,6 @@ pboAnnotation _ = Nothing
 strip :: NeutralExpr -> NeutralExpr
 strip (NeutralExpr (S.Typed _ inner)) = strip inner
 strip expr = expr
-
-sourceGroup :: C.Bind Ann -> Array SourceBinding
-sourceGroup = case _ of
-  C.NonRec (C.Binding _ name expr) -> [ { name, expr, recursive: false, singleton: true } ]
-  C.Rec [ C.Binding _ name expr ] -> [ { name, expr, recursive: true, singleton: true } ]
-  C.Rec bindings -> map (\(C.Binding _ name expr) -> { name, expr, recursive: true, singleton: false }) bindings
 
 lookupExpression :: Ident -> BackendModule -> Maybe NeutralExpr
 lookupExpression name backend = Array.findMap
@@ -129,15 +121,15 @@ helperBody kind expr = case do
 
 helperSource :: Helper -> C.Expr Ann -> Boolean
 helperSource kind expr = case do
-  ty <- annotation expr
+  ty <- Source.annotation expr
   result <- helperResult kind ty
   case expr of
     C.ExprAbs (C.Ann ann) parameter body -> do
       let returned = if kind == Identity then C.Func [ C.Unit ] result else result
           newtypeIdentity = kind == Identity && ann.meta == Just C.IsNewtype && case body of
-            C.ExprVar _ (Qualified Nothing name) -> name == parameter && annotation body == Nothing
+            C.ExprVar _ (Qualified Nothing name) -> name == parameter && Source.annotation body == Nothing
             _ -> false
-      guard (annotation body == Just returned || newtypeIdentity)
+      guard (Source.annotation body == Just returned || newtypeIdentity)
     _ -> Nothing
   of
     Just _ -> true
@@ -147,22 +139,22 @@ prepareModule :: Module Ann -> BackendModule -> Maybe ThunkModule
 prepareModule (Module source) backend = do
   guard (source.name == backend.name)
   let
-    bindings = Array.concatMap sourceGroup source.decls
+    bindings = Array.concatMap Source.bindings source.decls
     qualify = Qualified (Just source.name)
-    prefix = String.replaceAll (Pattern ".") (Replacement "_") (unwrap source.name)
-    publicNames = map (\name -> sanitizeName (prefix <> "_" <> unwrap name))
+    publicName = Names.inModule (unwrap source.name) <<< unwrap
+    publicNames = map publicName
       (map _.name bindings <> Array.fromFoldable (Map.keys source.foreign))
     localNames = foldMap (sourceNames <<< _.expr) bindings
     helpers = Array.foldl (\known binding -> case do
       guard (binding.singleton && not binding.recursive)
       expr <- lookupExpression binding.name backend
-      sourceType <- annotation binding.expr
+      sourceType <- Source.annotation binding.expr
       optimizedType <- pboAnnotation expr
       let direct kind = helperShape kind sourceType && helperShape kind optimizedType && helperBody kind expr && helperSource kind binding.expr
           allowed name = case name of
             Qualified Nothing _ -> true
             _ -> unitReference name || Map.member name known
-      guard (all allowed (sourceReferences binding.expr))
+      guard (all allowed (Source.references binding.expr))
       kind <- if direct Identity then Just Identity else if direct Force then Just Force else case strip expr, binding.expr of
         NeutralExpr (S.Var name), C.ExprVar _ sourceName | name == sourceName -> do
           kind <- Map.lookup name known
@@ -178,9 +170,9 @@ prepareModule (Module source) backend = do
       group <- Array.find (Array.any (\(Tuple name _) -> name == binding.name) <<< _.bindings) backend.bindings
       guard (group.recursive == binding.recursive && (not group.recursive || Array.length group.bindings == 1))
       expression <- lookupExpression binding.name backend
-      sourceType <- annotation binding.expr
+      sourceType <- Source.annotation binding.expr
       guard (pboAnnotation expression == Just sourceType)
-      let count = sourceArity binding.expr
+      let count = Array.length (Source.lambdas binding.expr).parameters
       worker <- case sourceType of
         C.Func arguments result -> do
           guard (count > 0 && count < Array.length arguments)
@@ -188,11 +180,11 @@ prepareModule (Module source) backend = do
               returned = arrow (Array.drop count arguments) result
           guard (returned == thunk && Array.elem thunk args)
           _ <- traverse nativeType args
-          pure { name: qualify binding.name, nativeName: sanitizeName (prefix <> "_" <> unwrap binding.name) <> "_thunk_native", args, result: returned }
+          pure { name: qualify binding.name, nativeName: publicName binding.name <> "_thunk_native", args, result: returned }
         _ -> Nothing
       validateSource worker.args worker.result binding.expr
-      guard (all (allowedReference worker helpers) (sourceReferences binding.expr))
-      guard (binding.recursive || not (Array.elem worker.name (sourceReferences binding.expr)))
+      guard (all (allowedReference worker helpers) (Source.references binding.expr))
+      guard (binding.recursive || not (Array.elem worker.name (Source.references binding.expr)))
       collected <- collect worker.args worker.result [] expression
       let levels = map _.level collected.args
       guard (all (\(Level level) -> level >= 0) levels && unique levels)
@@ -224,14 +216,10 @@ allowedReference worker helpers = case _ of
     "Data.Ord" -> Array.elem name [ "lessThan", "lessThanOrEq", "greaterThan", "greaterThanOrEq", "ordInt" ]
     _ -> false
 
-sourceArity :: C.Expr Ann -> Int
-sourceArity = case _ of
-  C.ExprAbs _ _ body -> 1 + sourceArity body
-  _ -> 0
-
+-- Stop at the worker's declared arity, leaving a returned lambda in its body.
 validateSource :: Array ExprType -> ExprType -> C.Expr Ann -> Maybe Unit
 validateSource remaining result expr = do
-  guard (annotation expr == Just (arrow remaining result))
+  guard (Source.annotation expr == Just (arrow remaining result))
   if Array.null remaining then pure unit else case expr of
     C.ExprAbs _ _ body -> validateSource (Array.drop 1 remaining) result body
     _ -> Nothing
@@ -366,7 +354,7 @@ typeOf ctx (NeutralExpr syntax) = case syntax of
 
 fromExpr :: ThunkModule -> C.Expr Ann -> Maybe FsExpr
 fromExpr selected expr = do
-  guard (annotation expr == Just C.Int)
+  guard (Source.annotation expr == Just C.Int)
   case expr of
     C.ExprApp _ fn value -> do
       name <- helperReference Force fn
@@ -377,18 +365,16 @@ fromExpr selected expr = do
 
 helperReference :: Helper -> C.Expr Ann -> Maybe (Qualified Ident)
 helperReference kind = case _ of
-  expr@(C.ExprVar _ name) -> guard (annotation expr == Just (helperType kind C.Int)) $> name
-  expr@(C.ExprTypeApp _ generic@(C.ExprVar _ name) C.Int) -> do
-    guard (annotation expr == Just (helperType kind C.Int))
-    ty <- annotation generic
-    case ty of
-      C.ForAll [ variable ] body -> guard (body == helperType kind (C.TypeVar variable)) $> name
-      _ -> Nothing
+  expr@(C.ExprVar _ name) -> guard (Source.annotation expr == Just (helperType kind C.Int)) $> name
+  expr@(C.ExprTypeApp _ (C.ExprVar genericAnn name) C.Int) -> do
+    guard (Source.annotation expr == Just (helperType kind C.Int))
+    guard (Source.hasPolymorphicType (helperType kind) genericAnn)
+    pure name
   _ -> Nothing
 
 sourceThunk :: ThunkModule -> Map Ident String -> C.Expr Ann -> Maybe String
 sourceThunk selected locals expr = do
-  guard (annotation expr == Just thunk)
+  guard (Source.annotation expr == Just thunk)
   case expr of
     C.ExprAbs _ name body -> do
       let captures = Array.nub (Array.filter (_ /= name) (intReferences body))
@@ -410,12 +396,12 @@ sourceThunk selected locals expr = do
       guard (Map.lookup name selected.helpers == Just Identity)
       sourceThunk selected locals value
     _ -> do
-      let flat = flattenApp expr
+      let flat = Source.flattenApp expr
       name <- case flat.fn of
         C.ExprVar _ name -> Just name
         _ -> Nothing
       worker <- Map.lookup name selected.workers
-      guard (annotation flat.fn == Just (arrow worker.args worker.result))
+      guard (Source.annotation flat.fn == Just (arrow worker.args worker.result))
       guard (Array.length flat.args == Array.length worker.args)
       validateApplications worker.args worker.result expr
       values <- traverse (\(Tuple ty arg) -> if ty == thunk then sourceThunk selected locals arg
@@ -424,7 +410,7 @@ sourceThunk selected locals expr = do
 
 sourceInt :: Map Ident String -> C.Expr Ann -> Maybe String
 sourceInt locals expr = do
-  guard (annotation expr == Just C.Int)
+  guard (Source.annotation expr == Just C.Int)
   case expr of
     C.ExprLit _ (C.LitInt n) -> Just ("(" <> show n <> ")")
     C.ExprVar _ (Qualified Nothing name) -> do
@@ -444,34 +430,25 @@ sourceInt locals expr = do
 
 intReferences :: C.Expr Ann -> Array Ident
 intReferences expr = case expr of
-  C.ExprVar _ (Qualified Nothing name) | annotation expr == Just C.Int -> [ name ]
-  _ -> foldMap intReferences (sourceChildren expr)
-
-flattenApp :: C.Expr Ann -> { fn :: C.Expr Ann, args :: Array (C.Expr Ann) }
-flattenApp (C.ExprApp _ fn arg) = let flat = flattenApp fn in flat { args = Array.snoc flat.args arg }
-flattenApp expr = { fn: expr, args: [] }
+  C.ExprVar _ (Qualified Nothing name) | Source.annotation expr == Just C.Int -> [ name ]
+  _ -> foldMap intReferences (Source.children expr)
 
 validateApplications :: Array ExprType -> ExprType -> C.Expr Ann -> Maybe Unit
 validateApplications args result expr = do
-  guard (annotation expr == Just result)
+  guard (Source.annotation expr == Just result)
   case Array.unsnoc args, expr of
     Just { init, last }, C.ExprApp _ fn arg -> do
-      guard (annotation arg == Just last)
+      guard (Source.annotation arg == Just last)
       validateApplications init (arrow [ last ] result) fn
     Nothing, _ -> pure unit
     _, _ -> Nothing
 
-sourceReferences :: C.Expr Ann -> Array (Qualified Ident)
-sourceReferences = case _ of
-  C.ExprVar _ name -> [ name ]
-  expr -> foldMap sourceReferences (sourceChildren expr)
-
 sourceNames :: C.Expr Ann -> Array String
 sourceNames expr = map (sanitizeName <<< unwrap) (case expr of
   C.ExprAbs _ name _ -> [ name ]
-  C.ExprLet _ bindings _ -> map _.name (Array.concatMap sourceGroup bindings)
+  C.ExprLet _ bindings _ -> map _.name (Array.concatMap Source.bindings bindings)
   C.ExprCase _ _ branches -> foldMap (\(C.CaseAlternative binders _) -> foldMap binderNames binders) branches
-  _ -> []) <> foldMap sourceNames (sourceChildren expr)
+  _ -> []) <> foldMap sourceNames (Source.children expr)
   where
   binderNames = case _ of
     C.BinderVar _ name -> [ name ]
@@ -479,17 +456,3 @@ sourceNames expr = map (sanitizeName <<< unwrap) (case expr of
     C.BinderLit _ literal -> foldMap binderNames literal
     C.BinderConstructor _ _ _ binders -> foldMap binderNames binders
     _ -> []
-
-sourceChildren :: C.Expr Ann -> Array (C.Expr Ann)
-sourceChildren = case _ of
-  C.ExprLit _ literal -> foldMap (\expr -> [ expr ]) literal
-  C.ExprAccessor _ target _ -> [ target ]
-  C.ExprUpdate _ target props -> [ target ] <> map C.propValue props
-  C.ExprAbs _ _ body -> [ body ]
-  C.ExprApp _ fn arg -> [ fn, arg ]
-  C.ExprCase _ targets branches -> targets <> foldMap (\(C.CaseAlternative _ result) -> case result of
-    C.Unconditional body -> [ body ]
-    C.Guarded guards -> foldMap (\(C.Guard condition body) -> [ condition, body ]) guards) branches
-  C.ExprLet _ bindings body -> map _.expr (Array.concatMap sourceGroup bindings) <> [ body ]
-  C.ExprTypeApp _ expr _ -> [ expr ]
-  _ -> []

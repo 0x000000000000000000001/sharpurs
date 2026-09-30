@@ -24,8 +24,8 @@ import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignEval, coreForeignS
 import Sharpurs.AdtKernel as AdtKernel
 import Sharpurs.CodeGen (translateOptimizedModuleWithThunks)
 import Sharpurs.Ffi as Ffi
-import Sharpurs.FsAst (modulePrefix, sanitizeName)
 import Sharpurs.Metrics as Metrics
+import Sharpurs.Names as Names
 import Sharpurs.Printer (printModule)
 import Sharpurs.Project as Project
 import Sharpurs.ThunkKernel as ThunkKernel
@@ -94,9 +94,8 @@ collectConstructorArities = Array.foldl collect Map.empty
   where
   collect arities (Module source) =
     let
-      prefix = modulePrefix (unwrap source.name)
       constructors = Array.concatMap
-        (\decl -> map (\ctor -> Tuple (sanitizeName (prefix <> "_" <> ctor.name)) (Array.length ctor.fields)) decl.constructors)
+        (\decl -> map (\ctor -> Tuple (Names.inModule (unwrap source.name) ctor.name) (Array.length ctor.fields)) decl.constructors)
         source.dataDecls
     in Map.union arities (Map.fromFoldable constructors)
 
@@ -106,7 +105,7 @@ nativeConstructorNames = case _ of
   Just selected -> Set.fromFoldable (Array.concatMap (map publicName <<< _.constructors) selected.layout.declarations)
   where
   publicName ctor = case ctor.sourceName of
-    Qualified (Just (ModuleName owner)) (Ident name) -> sanitizeName (modulePrefix owner <> "_" <> name)
+    Qualified (Just (ModuleName owner)) (Ident name) -> Names.inModule owner name
     _ -> ctor.name
 
 -- Keep Effect and ST calls on the native FFI path rather than lowering them

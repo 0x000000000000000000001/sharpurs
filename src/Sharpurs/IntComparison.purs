@@ -5,9 +5,10 @@ import Prelude
 import Control.Alternative (guard)
 import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple(..))
-import PureScript.Backend.Optimizer.CoreFn (Ann(..), Expr(..), ExprType, Ident(..), ModuleName(..), Qualified(..), exprAnn)
+import PureScript.Backend.Optimizer.CoreFn (Ann, Expr(..), ExprType, Ident(..), ModuleName(..), Qualified(..), exprAnn)
 import PureScript.Backend.Optimizer.CoreFn as C
 import PureScript.Backend.Optimizer.Syntax (BackendOperatorOrd(..))
+import Sharpurs.Analysis.Source (hasType, hasPolymorphicType)
 
 -- Recognize only the canonical Ord Int dictionary at a fully saturated call.
 -- Int arguments alone do not establish the ordering of a custom dictionary.
@@ -34,12 +35,12 @@ fromExpr = case _ of
 fromHead :: Expr Ann -> Maybe BackendOperatorOrd
 fromHead = case _ of
   ExprVar ann qualified -> do
-    guard (hasType (comparisonSignature C.Int) ann || isPolymorphic ann)
+    guard (hasType (comparisonSignature C.Int) ann || hasPolymorphicType comparisonSignature ann)
     fromQualified qualified
   ExprTypeApp ann (ExprVar genericAnn qualified) C.Int -> do
     -- TypeApp instantiates the single quantified variable of the canonical
     -- signature. Extra or conflicting type applications are not discarded.
-    guard (isPolymorphic genericAnn)
+    guard (hasPolymorphicType comparisonSignature genericAnn)
     guard (hasType (comparisonSignature C.Int) ann)
     fromQualified qualified
   _ -> Nothing
@@ -54,11 +55,3 @@ comparisonSignature :: ExprType -> ExprType
 comparisonSignature ty =
   C.ConstrainedType [ Tuple [ "Data", "Ord", "Ord" ] [ ty ] ]
     (C.Func [ ty, ty ] C.Boolean)
-
-isPolymorphic :: Ann -> Boolean
-isPolymorphic (Ann ann) = case ann.type of
-  Just (C.ForAll [ variable ] body) -> body == comparisonSignature (C.TypeVar variable)
-  _ -> false
-
-hasType :: ExprType -> Ann -> Boolean
-hasType expected (Ann ann) = ann.type == Just expected

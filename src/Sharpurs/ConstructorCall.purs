@@ -8,10 +8,8 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
-import Data.String as String
-import Data.String.Pattern (Pattern(..), Replacement(..))
 import PureScript.Backend.Optimizer.CoreFn (Ann(..), Expr(..), Ident(..), Meta(..), Qualified(..))
-import Sharpurs.FsAst (sanitizeName)
+import Sharpurs.Names as Names
 
 type Call =
   { name :: String
@@ -32,20 +30,16 @@ fromExpr arities currentMod expression = do
       fields <- case ann.meta of
         Just (IsConstructor _ fields) -> Just fields
         _ -> Nothing
-      pure { name: qualifiedName (unwrap moduleName) name, fields: Array.length fields }
+      pure { name: Names.inModule (unwrap moduleName) name, fields: Array.length fields }
     ExprConstructor _ _ (Ident name) fields -> do
       moduleName <- currentMod
-      pure { name: qualifiedName moduleName name, fields: Array.length fields }
+      pure { name: Names.inModule moduleName name, fields: Array.length fields }
     -- An unqualified variable can refer to a local binder, including one that
     -- shadows a constructor name. Only explicit constructor nodes are local.
     _ -> Nothing
   arity <- Map.lookup target.name arities
   guard (arity == target.fields && arity == Array.length call.args)
   pure { name: target.name, arity, args: call.args }
-
-qualifiedName :: String -> String -> String
-qualifiedName moduleName name =
-  sanitizeName (String.replaceAll (Pattern ".") (Replacement "_") moduleName <> "_" <> name)
 
 applications :: Expr Ann -> Array (Expr Ann) -> Boolean ->
   { head :: Expr Ann, args :: Array (Expr Ann), hasTypeApp :: Boolean }

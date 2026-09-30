@@ -5,9 +5,10 @@ import Prelude
 import Control.Alternative (guard)
 import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple(..))
-import PureScript.Backend.Optimizer.CoreFn (Ann(..), Expr(..), ExprType, Ident(..), ModuleName(..), Qualified(..), exprAnn)
+import PureScript.Backend.Optimizer.CoreFn (Ann, Expr(..), ExprType, Ident(..), ModuleName(..), Qualified(..), exprAnn)
 import PureScript.Backend.Optimizer.CoreFn as C
 import PureScript.Backend.Optimizer.Syntax (BackendOperatorNum(..))
+import Sharpurs.Analysis.Source (hasType, hasPolymorphicType)
 
 type Arithmetic =
   { operator :: BackendOperatorNum
@@ -45,13 +46,13 @@ fromHead :: Expr Ann -> Maybe Arithmetic
 fromHead = case _ of
   ExprVar ann qualified -> do
     arithmetic <- fromQualified qualified
-    guard (hasType (signature arithmetic C.Int) ann || isPolymorphic arithmetic ann)
+    guard (hasType (signature arithmetic C.Int) ann || hasPolymorphicType (signature arithmetic) ann)
     pure arithmetic
   ExprTypeApp ann (ExprVar genericAnn qualified) C.Int -> do
     arithmetic <- fromQualified qualified
     -- Instantiate exactly the single quantified variable. Contradictory or
     -- additional TypeApp nodes must retain the generic translation.
-    guard (isPolymorphic arithmetic genericAnn)
+    guard (hasPolymorphicType (signature arithmetic) genericAnn)
     guard (hasType (signature arithmetic C.Int) ann)
     pure arithmetic
   _ -> Nothing
@@ -68,11 +69,3 @@ signature :: Arithmetic -> ExprType -> ExprType
 signature arithmetic ty =
   C.ConstrainedType [ Tuple [ "Data", arithmetic.className, arithmetic.className ] [ ty ] ]
     (C.Func [ ty, ty ] ty)
-
-isPolymorphic :: Arithmetic -> Ann -> Boolean
-isPolymorphic arithmetic (Ann ann) = case ann.type of
-  Just (C.ForAll [ variable ] body) -> body == signature arithmetic (C.TypeVar variable)
-  _ -> false
-
-hasType :: ExprType -> Ann -> Boolean
-hasType expected (Ann ann) = ann.type == Just expected

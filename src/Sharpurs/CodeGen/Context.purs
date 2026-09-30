@@ -9,7 +9,6 @@ module Sharpurs.CodeGen.Context
   , registerRecursive
   , localRecursive
   , recursiveCall
-  , qualifiedName
   ) where
 
 import Prelude
@@ -20,12 +19,11 @@ import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
 import Data.Set (Set)
 import Data.Set as Set
-import Data.String as String
-import Data.String.Pattern (Pattern(..), Replacement(..))
-import PureScript.Backend.Optimizer.CoreFn (Ident, Qualified(..), unQualified)
+import PureScript.Backend.Optimizer.CoreFn (Ident, Qualified, unQualified)
 import Sharpurs.AdtKernel (UnaryModule)
 import Sharpurs.DirectCall as DirectCall
 import Sharpurs.FsAst (sanitizeName)
+import Sharpurs.Names as Names
 import Sharpurs.ThunkKernel as ThunkKernel
 
 -- Constructor identity/layout remains available for patterns even when
@@ -78,20 +76,7 @@ localRecursive context ident = case Map.lookup (localName ident) context.recursi
 recursiveCall :: Context -> Qualified Ident -> Maybe RecursiveFunction
 recursiveCall context ident = case Map.lookup (localName ident) context.recursive of
   Just entry -> Just entry
-  Nothing -> Map.lookup (qualifiedName context.currentModule ident) context.recursive
+  Nothing -> Map.lookup (Names.qualified context.currentModule ident) context.recursive
 
 localName :: Qualified Ident -> String
 localName = sanitizeName <<< unwrap <<< unQualified
-
--- An explicit qualifier wins; otherwise use the supplied current module.
--- Passing Nothing preserves an unqualified reference to a lexical binder.
-qualifiedName :: Maybe String -> Qualified Ident -> String
-qualifiedName currentModule ident =
-  let
-    owner = case ident of
-      Qualified (Just moduleName) _ -> Just (unwrap moduleName)
-      Qualified Nothing _ -> currentModule
-    prefix = case owner of
-      Just name -> String.replaceAll (Pattern ".") (Replacement "_") name <> "_"
-      Nothing -> ""
-  in sanitizeName (prefix <> unwrap (unQualified ident))

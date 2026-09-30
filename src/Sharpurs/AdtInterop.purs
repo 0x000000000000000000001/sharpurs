@@ -14,15 +14,14 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Set as Set
-import Data.String as String
-import Data.String.Pattern (Pattern(..), Replacement(..))
 import Data.Tuple (Tuple(..))
 import PureScript.Backend.Optimizer.Convert (BackendModule)
 import PureScript.Backend.Optimizer.CoreFn (Ann, Ident(..), Module(..), ModuleName(..), unQualified)
 import Sharpurs.AdtKernel as Kernel
 import Sharpurs.AdtLayout as Layout
 import Sharpurs.CodeGen as CodeGen
-import Sharpurs.FsAst (FsModule, sanitizeName)
+import Sharpurs.FsAst (FsModule, modulePrefix)
+import Sharpurs.Names as Names
 
 -- The constructor is private: a layout cannot be registered without the whole
 -- producer having passed the native emitter, including its public wrappers.
@@ -51,8 +50,8 @@ translateConsumer producers arities source@(Module consumer) = do
     wrapperNames = map _.name entries
     producerNames = Array.concatMap layoutNames layouts
     consumerNames = Array.concatMap
-      (\decl -> Array.cons (qualifiedName consumerName decl.name)
-        (Array.concatMap (\ctor -> let name = qualifiedName consumerName ctor.name in [ name, name <> "usd_Ctor" ]) decl.constructors))
+      (\decl -> Array.cons (Names.inModule consumerName decl.name)
+        (Array.concatMap (\ctor -> let name = Names.inModule consumerName ctor.name in [ name, name <> "usd_Ctor" ]) decl.constructors))
       consumer.dataDecls
   guard (unique moduleNames && not (Array.elem consumerName moduleNames))
   guard (unique (map modulePrefix (Array.snoc moduleNames consumerName)))
@@ -66,7 +65,7 @@ constructors = Array.concatMap _.constructors <<< _.declarations
 
 wrapperName :: Layout.Layout -> Layout.Ctor -> String
 wrapperName layout ctor = case unQualified ctor.sourceName of
-  Ident name -> qualifiedName layout.moduleName name
+  Ident name -> Names.inModule layout.moduleName name
 
 -- A type and its value constructor may intentionally have the same name in
 -- one module. Cross-module collisions after F# name flattening are rejected.
@@ -74,13 +73,6 @@ layoutNames :: Layout.Layout -> Array String
 layoutNames layout = Array.nub
   (map _.name layout.declarations
     <> Array.concatMap (\ctor -> [ ctor.name, wrapperName layout ctor ]) (constructors layout))
-
-qualifiedName :: String -> String -> String
-qualifiedName moduleName name =
-  sanitizeName (modulePrefix moduleName <> "_" <> name)
-
-modulePrefix :: String -> String
-modulePrefix = String.replaceAll (Pattern ".") (Replacement "_")
 
 unique :: forall a. Ord a => Array a -> Boolean
 unique values = Array.length (Array.nub values) == Array.length values

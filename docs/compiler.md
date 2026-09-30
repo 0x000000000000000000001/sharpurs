@@ -21,7 +21,9 @@ The input is the enriched typed CoreFn produced by the compiler fork. `Module An
 | Generated file paths, write-if-changed behavior, MSBuild items and templates | [`Sharpurs/Project.purs`](../src/Sharpurs/Project.purs) |
 | F# runtime helpers, event-loop bookkeeping, process entrypoint | [`Sharpurs/Runtime.purs`](../src/Sharpurs/Runtime.purs) |
 | General expression/binding translation and native-path selection | [`Sharpurs/CodeGen.purs`](../src/Sharpurs/CodeGen.purs) |
-| Translation contexts, recursive worker registration and name lookup | [`Sharpurs/CodeGen/Context.purs`](../src/Sharpurs/CodeGen/Context.purs) |
+| Translation contexts, recursive worker registration and lookup | [`Sharpurs/CodeGen/Context.purs`](../src/Sharpurs/CodeGen/Context.purs) |
+| Source TAST annotations, lambda/application spines and expression traversal | [`Sharpurs/Analysis/Source.purs`](../src/Sharpurs/Analysis/Source.purs) |
+| Qualified F# value names | [`Sharpurs/Names.purs`](../src/Sharpurs/Names.purs) |
 | Source patterns, newtype erasure and eligible constructor chains | [`Sharpurs/CodeGen/Pattern.purs`](../src/Sharpurs/CodeGen/Pattern.purs) |
 | Case strategy selection, guards, constructor groups and fallback matches | [`Sharpurs/CodeGen/Case.purs`](../src/Sharpurs/CodeGen/Case.purs) |
 | Boxed-ABI templates: closures, records, adapters, recursive groups | [`Sharpurs/CodeGen/Boxed.purs`](../src/Sharpurs/CodeGen/Boxed.purs) |
@@ -34,7 +36,7 @@ The input is the enriched typed CoreFn produced by the compiler fork. `Module An
 
 `CodeGen` inspects the source AST and chooses implementations; `CodeGen.Boxed` accepts already translated `FsExpr` values and escaped target identifiers. It owns the F# fragments for the object ABI. Literal expressions and compound patterns are represented structurally in `FsAst` and rendered by `Printer`. `FsIdent` denotes an identifier; `FsRawExpr` explicitly marks an already-rendered expression supplied by a template or native kernel.
 
-`CodeGen.Context.ModuleEnv` holds module-wide constructor information and native selections. Expression translation receives a `Context` combining that environment, the current module prefix and the visible recursive workers. Entering a recursive group extends this context; leaving it restores the enclosing context. Variable references, applications and local bindings have separate translation helpers in `CodeGen`, sharing name resolution through `Context.qualifiedName`.
+`CodeGen.Context.ModuleEnv` holds module-wide constructor information and native selections. Expression translation receives a `Context` combining that environment, the current module prefix and the visible recursive workers. Entering a recursive group extends this context; leaving it restores the enclosing context. Variable references, applications and local bindings have separate translation helpers in `CodeGen`, sharing name qualification through `Names.qualified`.
 
 For `ExprCase`, `CodeGen` supplies `Case.translate` with the pattern environment and an expression-translation callback. `Pattern` needs only constructor arities and the current module; it translates ordinary binders and recognizes unary chains with shallow leaves. `Case` selects the matching strategy before translating branch bodies. Its nested path uses named records for branches, constructor groups, catch-alls and match targets, including the distinction between an unboxed scrutinee and the boxed field captured by a variable.
 
@@ -50,6 +52,31 @@ For `ExprCase`, `CodeGen` supplies `Case.translate` with the pattern environment
 - **Local recursive groups need a final layout pass.** `CodeGen.Boxed` emits markers from `Printer.Layout` for groups whose indentation depends on their enclosing expression. `Project.writeModule` calls `normalizeRecIndent` after assembling the whole source file. Marker definitions and decoding share one source; column accounting uses UTF-16 code units.
 - **Function-call exceptions have a boundary.** `sharpurs_apply` preserves `TargetInvocationException` wrapping for both its fast path and reflection path. Direct-call wrappers must preserve the corresponding behavior.
 - **Project writes are incremental.** Identical text keeps its timestamp. Generation does not delete stale files, and all `.cs` files remaining in `output/Main/` enter the C# project. `sharp.packages.props` supplies raw item elements for the F# project only.
+
+## Shared analyses and recognition contracts
+
+`Analysis.Source` provides structural views of the source TAST. Its consumers still own native eligibility: accepted types, canonical dictionaries, exact saturation, captures, dependencies, collisions and exception boundaries. Missing or contradictory annotations provide no type evidence; each consumer retains its existing checks, including the explicit newtype-identity exception in the thunk helper recognizer.
+
+The shared operations follow these contracts:
+
+| Analysis | Shared behavior and consumers |
+| --- | --- |
+| `Source.annotation`, `hasType` | Read the source annotation and compare types structurally. Used by direct calls, integer operators and the ADT/thunk kernels. No inference or substitution is performed. |
+| `Source.hasPolymorphicType` | Check exactly one quantified variable against the caller's complete signature. Integer arithmetic, comparison and thunk helper calls retain their own identities and check any explicit `TypeApp Int` against both signatures. |
+| `Source.lambdas` | Collect consecutive `ExprAbs` nodes, their identifiers and annotations. `let`, `case` and `TypeApp` end the spine. Shared by direct-call selection, generic recursive emission and thunk worker arity detection. |
+| `Source.applications`, `flattenApp` | Traverse only `ExprApp`, in argument order. The annotated view retains the result annotation of each application for direct-call suffix checks; the value-only view serves generic calls and thunk calls. `TypeApp` remains in the head. |
+| `Source.bindings` | Flatten source binding groups while retaining recursive/singleton status. ADT and thunk selection continue to distinguish a recursive singleton from a mutual group. |
+| `Source.children`, `references` | Traverse all expression children, including guards, let right-hand sides, literals, record updates and `TypeApp`. Variable references retain their order and duplicates. ADT dependency checks and thunk capture/reference checks share this traversal. |
+| `Names.inModule`, `qualified` | Flatten the owner, then escape the complete value name. An explicit qualifier wins over the current module; an unqualified lexical reference can retain no owner. Constructor registries, native producers and consumers use the same value-name convention. |
+
+Some similar-looking walks have different contracts:
+
+- **Constructor saturation:** `ConstructorCall.applications` deliberately traverses both `App` and `TypeApp`. Eligibility still requires a registered constructor, matching field metadata and exact saturation; an unqualified local variable is not constructor evidence.
+- **Source and optimized annotations:** `Analysis.Source` handles `Expr Ann`. Optimized kernels inspect `NeutralExpr` / `Typed` and validate their nested annotations during lowering. Reading an outer type does not authorize discarding contradictory inner types or unresolved type applications.
+- **Function boundaries:** ADT source validation consumes the full parameter list and rejects extra lambdas. Thunk validation stops at the worker's arity and retains a returned function as its body; its `arrow` helper normalizes the function-valued suffix. Integer kernels additionally enforce native Int arguments, valid lexical levels and tail position. These validators remain specific to their kernels.
+- **Whole-tree traversal versus call recognition:** dependency/capture analysis descends through a `TypeApp` to inspect its contents; that traversal does not grant permission to recognize a call across the same node.
+
+The direct-call, integer-operation, constructor and ADT/thunk suites exercise these contracts through the production recognizers. They compile real TAST fixtures and also check targeted mutations: missing or contradictory annotations, polymorphic signatures, unresolved type applications, partial/over-applied calls and disagreement between source lambdas and optimized arity. Their F# runtime checks cover argument order, reusable partial applications and exception boundaries.
 
 ## Checks for a change
 

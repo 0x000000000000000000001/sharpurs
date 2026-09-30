@@ -14,8 +14,8 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import PureScript.Backend.Optimizer.CoreFn (Ann, Binder(..), Ident(..), Literal(..), Prop(..))
-import Sharpurs.CodeGen.Context as Context
 import Sharpurs.FsAst (FsPattern(..), sanitizeName)
+import Sharpurs.Names as Names
 
 -- Patterns only need constructor identity and the current module, independently
 -- of native expression selections or the visible recursive workers.
@@ -27,7 +27,7 @@ translate env = case _ of
   BinderVar _ (Ident name) -> FsPatIdent (sanitizeName name)
   BinderLit _ lit -> translateLiteral env lit
   BinderConstructor _ _ ident binders ->
-    let name = Context.qualifiedName env.currentModule ident
+    let name = Names.qualified env.currentModule ident
     in if Map.member name env.arities then
       FsPatCtor (name <> "usd_Ctor") (map (translate env) binders)
     else
@@ -67,7 +67,7 @@ forChain env binder = case binder of
   BinderNull _ -> Just ChainWildcard
   BinderVar _ (Ident name) -> Just (ChainVariable (sanitizeName name))
   BinderConstructor _ _ ident binders ->
-    let name = Context.qualifiedName env.currentModule ident
+    let name = Names.qualified env.currentModule ident
     in case Map.lookup name env.arities of
       Just arity | arity == Array.length binders ->
         case binders of
@@ -94,7 +94,7 @@ maxLeafDepth = 2
 constructorDepth :: Env -> Binder Ann -> Int
 constructorDepth env = case _ of
   BinderConstructor _ _ ident binders ->
-    case Map.lookup (Context.qualifiedName env.currentModule ident) env.arities of
+    case Map.lookup (Names.qualified env.currentModule ident) env.arities of
       Just arity | arity == Array.length binders ->
         if Array.null binders then 1
         else 1 + Array.foldl (\depth child -> max depth (constructorDepth env child)) 0 binders

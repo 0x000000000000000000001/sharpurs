@@ -9,25 +9,25 @@ import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (unwrap)
 import Data.Set (Set)
 import Data.Set as Set
-import Data.String as String
-import Data.String.Pattern (Pattern(..), Replacement(..))
 import Data.Tuple (Tuple(..))
 import PureScript.Backend.Optimizer.Convert (BackendModule)
 import PureScript.Backend.Optimizer.CoreFn (Module(..), Bind(..), Binding(..), Expr(..), Ident(..), Literal(..), Ann, DataDecl, DataConstructor, ExprType(..), Prop(..), Qualified(..))
 import PureScript.Backend.Optimizer.Syntax (BackendOperatorOrd(..), BackendOperatorNum(..))
 import Sharpurs.AdtKernel (UnaryModule)
 import Sharpurs.AdtLayout as AdtLayout
+import Sharpurs.Analysis.Source as Source
 import Sharpurs.CodeGen.Boxed as Boxed
 import Sharpurs.CodeGen.Case as Case
 import Sharpurs.CodeGen.Context (Context, ModuleEnv, RecursiveFunction, RecursiveScope(..))
 import Sharpurs.CodeGen.Context as Context
 import Sharpurs.ConstructorCall as ConstructorCall
 import Sharpurs.DirectCall as DirectCall
-import Sharpurs.FsAst (FsDecl(..), FsExpr(..), FsModule(..), FsType(..), FsDUCase(..), FsDataCtor(..), sanitizeName)
+import Sharpurs.FsAst (FsDecl(..), FsExpr(..), FsModule(..), FsType(..), FsDUCase(..), FsDataCtor(..), modulePrefix, sanitizeName)
 import Sharpurs.IntArithmetic as IntArithmetic
 import Sharpurs.IntComparison as IntComparison
 import Sharpurs.IntKernel (IntKernel, fromBinding)
 import Sharpurs.IntKernel.CodeGen (printKernel)
+import Sharpurs.Names as Names
 import Sharpurs.Optimized as Optimized
 import Sharpurs.ThunkKernel as ThunkKernel
 
@@ -66,10 +66,10 @@ translateModuleUsing :: ModuleEnv -> Map Ident IntKernel -> Map Ident FsExpr -> 
 translateModuleUsing env kernels expressions (Module m) =
   let
     modNameStr = unwrap m.name
-    modPrefix = String.replaceAll (Pattern ".") (Replacement "_") modNameStr
+    modPrefix = modulePrefix modNameStr
     translateDataCtor c = FsDataCtor (modPrefix <> "_" <> sanitizeName c.name <> "usd_Ctor") (Array.length c.fields)
     translateBoxedDataDecl decl = FsDeclData (modPrefix <> "_" <> sanitizeName decl.name) (map translateDataCtor decl.constructors)
-    nameStr = sanitizeName (String.replaceAll (Pattern ".") (Replacement "_") modNameStr)
+    nameStr = sanitizeName modPrefix
     dataDecls = case env.native of
       Just selected -> [ FsRaw (AdtLayout.printDeclarations selected.layout) ]
       Nothing -> map translateBoxedDataDecl m.dataDecls
@@ -183,12 +183,6 @@ translateConstructor :: DataConstructor -> FsDUCase
 translateConstructor ctor =
   FsDUCase (sanitizeName ctor.name <> "usd_Ctor") (map translateType ctor.fields)
 
-flattenApp :: Expr Ann -> { fn :: Expr Ann, args :: Array (Expr Ann) }
-flattenApp (ExprApp _ f x) =
-  let flat = flattenApp f
-  in { fn: flat.fn, args: Array.snoc flat.args x }
-flattenApp expr = { fn: expr, args: [] }
-
 translateLit :: Context -> Literal (Expr Ann) -> FsExpr
 translateLit context lit = case lit of
   LitInt value -> FsLitInt value
@@ -230,10 +224,9 @@ generateConstructorLambda name arity args =
       Boxed.curry argNames body
 
 extractArgs :: Expr Ann -> { args :: Array String, body :: Expr Ann }
-extractArgs (ExprAbs _ (Ident arg) body) = 
-  let next = extractArgs body
-  in { args: Array.cons (sanitizeName arg) next.args, body: next.body }
-extractArgs e = { args: [], body: e }
+extractArgs expr =
+  let chain = Source.lambdas expr
+  in { args: map (sanitizeName <<< unwrap <<< _.name) chain.parameters, body: chain.body }
 
 registerRecursiveBindings :: RecursiveScope -> (String -> String) -> Array (Binding Ann) -> Context -> Context
 registerRecursiveBindings scope bindingName bindings context =
@@ -296,12 +289,12 @@ translateExprGeneric :: Context -> Expr Ann -> FsExpr
 translateExprGeneric context expr = case expr of
   ExprLit _ lit -> translateLit context lit
   ExprConstructor _ _ ident@(Ident name) _ ->
-    let fqName = Context.qualifiedName context.currentModule (Qualified Nothing ident)
+    let fqName = Names.qualified context.currentModule (Qualified Nothing ident)
     in case Map.lookup fqName context.moduleEnv.arities of
       Just arity -> generateConstructorCall context.moduleEnv fqName arity []
       Nothing -> Boxed.reference (sanitizeName name)
   ExprVar _ qi -> translateVariable context qi
-  ExprApp _ _ _ -> translateApplication context (flattenApp expr)
+  ExprApp _ _ _ -> translateApplication context (Source.flattenApp expr)
   ExprCase _ exprs alts -> Case.translate
     { arities: context.moduleEnv.arities, currentModule: context.currentModule }
     (translateExpr context) exprs alts
@@ -316,10 +309,10 @@ translateVariable :: Context -> Qualified Ident -> FsExpr
 translateVariable context ident = case Context.localRecursive context ident of
   Just entry -> Boxed.etaExpand entry.worker entry.arity []
   Nothing ->
-    let name = Context.qualifiedName context.currentModule ident
+    let name = Names.qualified context.currentModule ident
     in case Map.lookup name context.moduleEnv.arities of
       Just arity -> generateConstructorCall context.moduleEnv name arity []
-      Nothing -> Boxed.reference (Context.qualifiedName Nothing ident)
+      Nothing -> Boxed.reference (Names.qualified Nothing ident)
 
 translateApplication :: Context -> { fn :: Expr Ann, args :: Array (Expr Ann) } -> FsExpr
 translateApplication context call =
@@ -328,14 +321,14 @@ translateApplication context call =
     fallback = FsApp (translateExpr context call.fn) args
   in case call.fn of
     ExprConstructor _ _ ident _ ->
-      let name = Context.qualifiedName context.currentModule (Qualified Nothing ident)
+      let name = Names.qualified context.currentModule (Qualified Nothing ident)
       in case Map.lookup name context.moduleEnv.arities of
         Just arity -> generateConstructorCall context.moduleEnv name arity args
         Nothing -> FsCtorApp (name <> "usd_Ctor") args
     ExprVar _ ident -> case Context.recursiveCall context ident of
       Just entry -> translateRecursiveCall entry args fallback
       Nothing ->
-        let name = Context.qualifiedName context.currentModule ident
+        let name = Names.qualified context.currentModule ident
         in case Map.lookup name context.moduleEnv.arities of
           Just arity -> generateConstructorCall context.moduleEnv name arity args
           Nothing -> fallback
