@@ -11,19 +11,19 @@ import Data.Set (Set)
 import Data.Set as Set
 import Data.String as String
 import Data.String.Pattern (Pattern(..), Replacement(..))
-import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import PureScript.Backend.Optimizer.Convert (BackendModule)
-import PureScript.Backend.Optimizer.CoreFn (Module(..), Bind(..), Binding(..), Expr(..), Ident(..), Literal(..), CaseAlternative(..), CaseGuard(..), Guard(..), Binder(..), Ann, DataDecl, DataConstructor, ExprType(..), Prop(..), Qualified(..))
+import PureScript.Backend.Optimizer.CoreFn (Module(..), Bind(..), Binding(..), Expr(..), Ident(..), Literal(..), Ann, DataDecl, DataConstructor, ExprType(..), Prop(..), Qualified(..))
 import PureScript.Backend.Optimizer.Syntax (BackendOperatorOrd(..), BackendOperatorNum(..))
 import Sharpurs.AdtKernel (UnaryModule)
 import Sharpurs.AdtLayout as AdtLayout
 import Sharpurs.CodeGen.Boxed as Boxed
+import Sharpurs.CodeGen.Case as Case
 import Sharpurs.CodeGen.Context (Context, ModuleEnv, RecursiveFunction, RecursiveScope(..))
 import Sharpurs.CodeGen.Context as Context
 import Sharpurs.ConstructorCall as ConstructorCall
 import Sharpurs.DirectCall as DirectCall
-import Sharpurs.FsAst (FsDecl(..), FsExpr(..), FsModule(..), FsType(..), FsDUCase(..), FsMatchCase(..), FsPattern(..), FsDataCtor(..), sanitizeName)
+import Sharpurs.FsAst (FsDecl(..), FsExpr(..), FsModule(..), FsType(..), FsDUCase(..), FsDataCtor(..), sanitizeName)
 import Sharpurs.IntArithmetic as IntArithmetic
 import Sharpurs.IntComparison as IntComparison
 import Sharpurs.IntKernel (IntKernel, fromBinding)
@@ -302,16 +302,9 @@ translateExprGeneric context expr = case expr of
       Nothing -> Boxed.reference (sanitizeName name)
   ExprVar _ qi -> translateVariable context qi
   ExprApp _ _ _ -> translateApplication context (flattenApp expr)
-  -- A case over an uninhabited type has no alternatives at all. The branch is
-  -- unreachable, so it keeps the ordinary pattern-match failure.
-  ExprCase _ _ alts | Array.null alts -> Boxed.patternFailure
-  ExprCase _ exprs alts -> 
-    let 
-      matchExpr = Boxed.matchValue (map (translateExpr context) exprs)
-      plainMatch = FsMatch matchExpr (Array.concatMap (translateCaseAlternative context) alts)
-    in if Array.length exprs == 1 then
-         fromMaybe plainMatch (translateCaseTrie context matchExpr alts)
-       else plainMatch
+  ExprCase _ exprs alts -> Case.translate
+    { arities: context.moduleEnv.arities, currentModule: context.currentModule }
+    (translateExpr context) exprs alts
   ExprAbs _ (Ident arg) body -> Boxed.lambda (sanitizeName arg) (translateExpr context body)
   ExprAccessor _ obj prop -> Boxed.accessRecord prop (translateExpr context obj)
   ExprTypeApp _ inner _ -> translateExpr context inner
@@ -377,176 +370,3 @@ translateLet context binds body =
         , body: translateExpr localContext extracted.body
         }
   in Boxed.letIn (map translateLocal binds) (translateExpr localContext body)
-
--- | Patterns made only of nullary/var leaves and unary constructor chains.
--- | They can be compiled to nested matches instead of nested patterns: a
--- | nested pattern becomes `Unbox(...)` in F#, and F# compiles deeply nested
--- | active patterns extremely slowly (the derived `Generic` dictionaries of
--- | big sum types make it allocate gigabytes), while the equivalent chain of
--- | small matches is cheap.
-data SimpleBinder
-  = SimpleNull
-  | SimpleVar String
-  | SimpleCtor String (Maybe SimpleBinder)
-  | SimpleRaw FsPattern
-
-simpleBinderDepth :: SimpleBinder -> Int
-simpleBinderDepth = case _ of
-  SimpleCtor _ (Just inner) -> 1 + simpleBinderDepth inner
-  _ -> 1
-
--- | Nesting depth of the pattern as emitted (newtype layers are erased).
-binderNestingDepth :: Context -> Binder Ann -> Int
-binderNestingDepth context = case _ of
-  BinderConstructor _ _ qi binders ->
-    case Map.lookup (Context.qualifiedName context.currentModule qi) context.moduleEnv.arities of
-      Just arity | arity == Array.length binders ->
-        if Array.null binders then 1
-        else 1 + Array.foldl (\acc child -> max acc (binderNestingDepth context child)) 0 binders
-      _ -> case binders of
-        [ inner ] -> binderNestingDepth context inner
-        _ -> 1 + Array.foldl (\acc child -> max acc (binderNestingDepth context child)) 0 binders
-  BinderNamed _ _ inner -> binderNestingDepth context inner
-  _ -> 0
-
-normalizeSimpleBinder :: Context -> Binder Ann -> Maybe SimpleBinder
-normalizeSimpleBinder context binder = case binder of
-  BinderNull _ -> Just SimpleNull
-  BinderVar _ (Ident name) -> Just (SimpleVar (sanitizeName name))
-  BinderConstructor _ _ qi binders ->
-    let name = Context.qualifiedName context.currentModule qi
-    in case Map.lookup name context.moduleEnv.arities of
-      Just arity | arity == Array.length binders ->
-        case binders of
-          [] -> Just (SimpleCtor (name <> "usd_Ctor") Nothing)
-          [ inner ] -> map (\simple -> SimpleCtor (name <> "usd_Ctor") (Just simple)) (normalizeSimpleBinder context inner)
-          _ -> simpleRawBinder context binder
-      _ -> case binders of
-        [ inner ] -> normalizeSimpleBinder context inner
-        _ -> simpleRawBinder context binder
-  _ -> simpleRawBinder context binder
-
--- | Keep a small subtree with its existing nested pattern instead of failing
--- | the whole case; nested patterns only become expensive when they are deep.
-simpleRawBinder :: Context -> Binder Ann -> Maybe SimpleBinder
-simpleRawBinder context binder =
-  if binderNestingDepth context binder <= 2 then
-    Just (SimpleRaw (translateBinder context binder))
-  else Nothing
-
-simpleCaseShape :: Context -> CaseAlternative Ann -> Maybe SimpleBinder
-simpleCaseShape context = case _ of
-  CaseAlternative binders (Unconditional _) | Array.length binders == 1 -> do
-    binder <- Array.head binders
-    normalizeSimpleBinder context binder
-  _ -> Nothing
-
-type SimpleCaseEntry = Tuple SimpleBinder FsExpr
-
-type SimpleCaseGroup = Tuple String (Array (Tuple (Maybe SimpleBinder) FsExpr))
-
-type SimpleCaseGroups = { groups :: Array SimpleCaseGroup, raws :: Array (Tuple FsPattern FsExpr), default :: Maybe SimpleCaseEntry }
-
-scanSimpleCaseEntries :: SimpleCaseGroups -> Array SimpleCaseEntry -> SimpleCaseGroups
-scanSimpleCaseEntries acc remaining = case Array.uncons remaining of
-  Nothing -> acc
-  Just { head: Tuple simple body, tail } -> case simple of
-    SimpleNull -> acc { default = Just (Tuple SimpleNull body) }
-    SimpleVar name -> acc { default = Just (Tuple (SimpleVar name) body) }
-    SimpleRaw pattern -> scanSimpleCaseEntries acc { raws = Array.snoc acc.raws (Tuple pattern body) } tail
-    SimpleCtor name inner ->
-      let
-        entry = Tuple inner body
-        groups = case Array.findIndex (\(Tuple groupName _) -> groupName == name) acc.groups of
-          Just index -> fromMaybe acc.groups (Array.modifyAt index (\(Tuple groupName groupEntries) -> Tuple groupName (Array.snoc groupEntries entry)) acc.groups)
-          Nothing -> Array.snoc acc.groups (Tuple name [ entry ])
-      in scanSimpleCaseEntries acc { groups = groups } tail
-
--- | Compile the alternatives of a single-scrutinee `Case` into nested matches
--- | when their binders form deep unary constructor chains.
-translateCaseTrie :: Context -> FsExpr -> Array (CaseAlternative Ann) -> Maybe FsExpr
-translateCaseTrie context matchExpr alts = do
-  shape <- traverse (simpleCaseShape context) alts
-  let maxDepth = Array.foldl (\acc simple -> max acc (simpleBinderDepth simple)) 0 shape
-  if maxDepth < 4 then Nothing
-  else do
-    bodies <- traverse (case _ of
-      CaseAlternative _ (Unconditional expr) -> Just (translateExpr context expr)
-      _ -> Nothing) alts
-    pure (compileSimpleCaseLevel 0 matchExpr matchExpr (Array.zipWith Tuple shape bodies) Boxed.patternFailure)
-
-compileSimpleCaseLevel :: Int -> FsExpr -> FsExpr -> Array SimpleCaseEntry -> FsExpr -> FsExpr
-compileSimpleCaseLevel depth boxedValue scrutinee entries fallback =
-  let
-    scanned = scanSimpleCaseEntries { groups: [], raws: [], default: Nothing } entries
-    fallbackBody = case scanned.default of
-      Just (Tuple _ body) -> body
-      Nothing -> fallback
-    cases = Array.mapWithIndex (compileSimpleCaseGroup depth fallbackBody) scanned.groups
-    rawCases = map (\(Tuple pattern body) -> FsMatchCase pattern Nothing body) scanned.raws
-    defaultCases = case scanned.default of
-      Just (Tuple SimpleNull body) -> [ FsMatchCase FsPatWildcard Nothing body ]
-      Just (Tuple (SimpleVar name) body) ->
-        if depth == 0 then
-          [ FsMatchCase (FsPatIdent name) Nothing body ]
-        else
-          [ FsMatchCase FsPatWildcard Nothing (Boxed.letIn [ Boxed.LocalValue name boxedValue ] body) ]
-      Just _ -> []
-      Nothing -> [ FsMatchCase FsPatWildcard Nothing fallback ]
-  in FsMatch scrutinee (cases <> rawCases <> defaultCases)
-
-compileSimpleCaseGroup :: Int -> FsExpr -> Int -> SimpleCaseGroup -> FsMatchCase
-compileSimpleCaseGroup depth fallbackBody index (Tuple name groupEntries) = case Array.head groupEntries of
-  Just (Tuple Nothing body) -> FsMatchCase (FsPatCtor name []) Nothing body
-  Just (Tuple (Just SimpleNull) body) -> FsMatchCase (FsPatCtor name [ FsPatWildcard ]) Nothing body
-  Just (Tuple (Just (SimpleVar boundName)) body) -> FsMatchCase (FsPatCtor name [ FsPatIdent boundName ]) Nothing body
-  _ ->
-    let
-      variable = "usd_case_" <> show depth <> "_" <> show index
-      innerEntries = map (\(Tuple inner body) -> Tuple (fromMaybe SimpleNull inner) body) groupEntries
-    in FsMatchCase (FsPatCtor name [ FsPatIdent variable ]) Nothing
-         (compileSimpleCaseLevel (depth + 1) (FsIdent variable) (Boxed.unbox (FsIdent variable)) innerEntries fallbackBody)
-
-translateCaseAlternative :: Context -> CaseAlternative Ann -> Array FsMatchCase
-translateCaseAlternative context (CaseAlternative binders guards) =
-  let
-    fsPatterns = map (translateBinder context) binders
-    combinedPat = case Array.length fsPatterns of
-      0 -> FsPatWildcard
-      1 -> fromMaybe FsPatWildcard (Array.head fsPatterns)
-      _ -> FsPatTuple fsPatterns
-  in
-    case guards of
-      Unconditional expr -> [FsMatchCase combinedPat Nothing (Boxed.parenthesize (translateExpr context expr))]
-      Guarded array ->
-        map (\(Guard guard expr) -> FsMatchCase combinedPat (Just (translateExpr context guard)) (Boxed.parenthesize (translateExpr context expr))) array
-
-translateBinder :: Context -> Binder Ann -> FsPattern
-translateBinder context = case _ of
-  BinderNull _ -> FsPatWildcard
-  BinderVar _ (Ident name) -> FsPatIdent (sanitizeName name)
-  BinderLit _ lit -> translateLitBinder context lit
-  BinderConstructor _ _ qi binders ->
-    let name = Context.qualifiedName context.currentModule qi
-    in if Map.member name context.moduleEnv.arities then
-      FsPatCtor (name <> "usd_Ctor") (map (translateBinder context) binders)
-    else
-      case Array.index binders 0 of
-        Just inner -> translateBinder context inner
-        Nothing -> FsPatWildcard
-  BinderNamed _ (Ident name) inner ->
-    FsPatNamed (sanitizeName name) (translateBinder context inner)
-
-translateLitBinder :: Context -> Literal (Binder Ann) -> FsPattern
-translateLitBinder context = case _ of
-    LitBoolean b -> FsPatLitBool b
-    LitInt i -> FsPatLitInt i
-    LitNumber n -> FsPatLitNumber n
-    LitString s -> FsPatLitString s
-    LitChar c -> FsPatLitChar c
-    LitArray items -> FsPatArray (map (translateBinder context) items)
-    LitRecord props ->
-      if Array.length props == 0 then
-        FsPatWildcard
-      else
-        FsPatRecord (map (\(Prop key value) -> { key, pattern: translateBinder context value }) props)

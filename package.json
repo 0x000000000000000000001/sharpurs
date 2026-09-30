@@ -11,6 +11,7 @@
     "test:runtime": "node tests/runtime-apply.mjs",
     "test:printer": "node tests/printer.mjs",
     "test:recursion": "node tests/recursion.mjs",
+    "test:case-patterns": "node tests/case-patterns.mjs",
     "test:kernel": "node tests/int-kernel.mjs",
     "test:local-kernel": "node tests/local-int-kernel.mjs",
     "test:adt-kernel": "node tests/adt-kernel.mjs",
