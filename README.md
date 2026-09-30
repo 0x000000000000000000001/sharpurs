@@ -273,6 +273,7 @@ Focused regression commands are defined in [package.json](package.json):
 | --- | --- |
 | `npm run test:runtime` | Generic function application, FFI wrappers and exception boundaries. |
 | `npm run test:printer` | Direct-call rendering conventions, structured patterns and nested recursive layout. |
+| `npm run test:recursion` | Boxed recursive workers, partial/value uses, mixed arities and nested scopes against the JavaScript backend. |
 | `npm run test:kernel`, `npm run test:local-kernel` | Native integer loops and locally nested kernels. |
 | `npm run test:adt-kernel`, `npm run test:adt-interop` | Typed ADT generation and boxed/native boundaries. |
 | `npm run test:adt-unary`, `npm run test:adt-multi` | Native recursive ADT workers and multiple arguments. |

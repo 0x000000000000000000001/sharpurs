@@ -21,6 +21,7 @@ The input is the enriched typed CoreFn produced by the compiler fork. `Module An
 | Generated file paths, write-if-changed behavior, MSBuild items and templates | [`Sharpurs/Project.purs`](../src/Sharpurs/Project.purs) |
 | F# runtime helpers, event-loop bookkeeping, process entrypoint | [`Sharpurs/Runtime.purs`](../src/Sharpurs/Runtime.purs) |
 | General expression/binding translation and native-path selection | [`Sharpurs/CodeGen.purs`](../src/Sharpurs/CodeGen.purs) |
+| Translation contexts, recursive worker registration and name lookup | [`Sharpurs/CodeGen/Context.purs`](../src/Sharpurs/CodeGen/Context.purs) |
 | Boxed-ABI templates: closures, records, adapters, recursive groups | [`Sharpurs/CodeGen/Boxed.purs`](../src/Sharpurs/CodeGen/Boxed.purs) |
 | F# AST and identifier/literal escaping | [`Sharpurs/FsAst.purs`](../src/Sharpurs/FsAst.purs), [`Sharpurs/FsAst.js`](../src/Sharpurs/FsAst.js) |
 | Declaration and expression rendering | [`Sharpurs/Printer.purs`](../src/Sharpurs/Printer.purs) |
@@ -31,11 +32,13 @@ The input is the enriched typed CoreFn produced by the compiler fork. `Module An
 
 `CodeGen` inspects the source AST and chooses implementations; `CodeGen.Boxed` accepts already translated `FsExpr` values and escaped target identifiers. It owns the F# fragments for the object ABI. Literal expressions and compound patterns are represented structurally in `FsAst` and rendered by `Printer`. `FsIdent` denotes an identifier; `FsRawExpr` explicitly marks an already-rendered expression supplied by a template or native kernel.
 
+`CodeGen.Context.ModuleEnv` holds module-wide constructor information and native selections. Expression translation receives a `Context` combining that environment, the current module prefix and the visible recursive workers. Entering a recursive group extends this context; leaving it restores the enclosing context. Variable references, applications and local bindings have separate translation helpers in `CodeGen`, sharing name resolution through `Context.qualifiedName`.
+
 ## Conventions that affect correctness
 
 - **The general ABI is boxed.** Values cross the generic path as F# `obj`; functions are curried, records use `Map<string, obj>`, and effects defer work in a thunk. Typed workers need the appropriate public wrappers at these boundaries.
 - **Constructor arities and native wrappers are different facts.** All source constructor arities are collected up front. A constructor enters the native-wrapper set only after its producer's complete native layout and wrappers have been validated. Consumers can then choose native factories without losing the boxed public ABI.
-- **Recursive arities currently encode scope.** The recursive-call environment uses positive arities for top-level workers with a public curried alias, and negative arities for local workers without that alias. Unsaturated local calls and function-valued references therefore need an adapter. This table is distinct from the constructor-arity table.
+- **Recursive scope is explicit.** Each recursive function records a positive arity, its escaped worker name and a `TopLevel` or `Local` scope. Top-level workers have a public curried alias; local workers need an adapter for partial calls and function-valued references. Saturated calls target the worker directly; extra arguments apply to its result. Zero-argument recursive values have no worker. This registry is distinct from constructor arities and relies on CoreFn's lexical binder renaming.
 - **Dependency order is observable.** The sequential builder makes validated producers available to consumers; the F# project lists their files in that same order. The current skip hook always returns `Nothing`.
 - **F# owns wrappers when both native files exist.** The C# source is still copied and compiled for explicit use by F# helpers. If neither implementation exists, a curried failing stub delays the error until invocation at the known arity; unknown/non-function types retain the thunk fallback.
 - **Direct-call rendering has two conventions.** `Printer.printExpr` unboxes `FsDirectApp` arguments and boxes the result at the declaration boundary. `Printer.printExprInline`, used by the boxed templates, passes arguments directly. Both share one renderer, with the convention propagated through applications, constructors, matches and guards. Choosing the wrong entrypoint can change F# type inference and boxing behavior.
