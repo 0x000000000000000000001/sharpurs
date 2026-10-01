@@ -1,25 +1,20 @@
 // Run after npm run build with the typed compiler fork selected by PURS.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
+import { compileFixtures, copyFixtures, packageSource, runFsharp } from "./support/fixtures.mjs";
+import { optimizeCoreFn } from "./support/corefn.mjs";
 import { helpers as preludeFs } from "../output/Sharpurs.Runtime/index.js";
 import * as C from "../output/PureScript.Backend.Optimizer.CoreFn/index.js";
 import * as S from "../output/PureScript.Backend.Optimizer.Syntax/index.js";
-import * as Aff from "../output/Effect.Aff/index.js";
-import * as Applicative from "../output/Control.Applicative/index.js";
-import { Left } from "../output/Data.Either/index.js";
 import { Just, Nothing } from "../output/Data.Maybe/index.js";
 import { Tuple } from "../output/Data.Tuple/index.js";
 import * as Map from "../output/Data.Map.Internal/index.js";
 import * as Set from "../output/Data.Set/index.js";
 import * as Ord from "../output/Data.Ord/index.js";
-import * as App from "../output/PureScript.Backend.Optimizer.App/index.js";
-import * as Builder from "../output/PureScript.Backend.Optimizer.Builder/index.js";
-import * as Foreign from "../output/PureScript.Backend.Optimizer.Semantics.Foreign/index.js";
 import { prepareModule } from "../output/Sharpurs.AdtKernel/index.js";
 import { translateModule, translateModuleWithConstructorWrappers, translateOptimizedModuleWithAdts } from "../output/Sharpurs.CodeGen/index.js";
 import { printModule } from "../output/Sharpurs.Printer/index.js";
@@ -27,17 +22,6 @@ import { printModule } from "../output/Sharpurs.Printer/index.js";
 const backend = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const artifacts = process.env.ADT_MULTI_ARTIFACTS && resolve(process.env.ADT_MULTI_ARTIFACTS);
 const transcript = [];
-const pure = Applicative.pure(Aff.applicativeAff);
-const runAff = action => new Promise((resolve, reject) => {
-  Aff.runAff(result => () => result instanceof Left ? reject(result.value0) : resolve(result.value0))(action)();
-});
-function command(program, args, cwd) {
-  const result = spawnSync(program, args, { cwd, encoding: "utf8", timeout: 60_000 });
-  transcript.push(`$ ${program} ${args.join(" ")}\n${result.stdout || ""}${result.stderr || ""}`);
-  if (result.error) throw result.error;
-  assert.equal(result.status, 0, `${program}: ${result.stdout}\n${result.stderr}`);
-  return result;
-}
 function clone(value) {
   if (Array.isArray(value)) return value.map(clone);
   if (!value || typeof value !== "object") return value;
@@ -58,37 +42,14 @@ function sourceBinding(state, name) {
 }
 
 const directory = await mkdtemp(join(tmpdir(), "sharpurs-adt-multi-"));
-const previousCwd = process.cwd();
 try {
-  const packages = join(backend, ".spago/p");
-  const names = await readdir(packages);
-  const prelude = process.env.PRELUDE_SRC || join(packages, names.find(name => /^prelude-/.test(name)), "src");
-  const partial = join(packages, names.find(name => /^partial-/.test(name)), "src");
+  const prelude = await packageSource(backend, "prelude");
+  const partial = await packageSource(backend, "partial");
   const fixtureFiles = ["AdtMulti.purs", "AdtMultiConsumer.purs", "AdtMultiConsumer.js", "AdtMultiExternal.purs"];
-  for (const file of fixtureFiles) {
-    await writeFile(join(directory, file), await readFile(join(backend, "tests/fixtures/adt-multi", file)));
-  }
-  const compiled = command(process.env.PURS || "purs", ["compile", join(directory, "*.purs"),
-    join(prelude, "**/*.purs"), join(partial, "**/*.purs"), "--output", join(directory, "output"),
-    "--codegen", "corefn,js"], directory);
+  await copyFixtures(join(backend, "tests/fixtures/adt-multi"), directory, fixtureFiles, { javascript: false });
+  const compiled = compileFixtures(directory, [join(directory, "*.purs"), join(prelude, "**/*.purs"), join(partial, "**/*.purs")], { transcript });
   assert.doesNotMatch(compiled.stdout + compiled.stderr, /Warning \d+ of/, "fixture has no PureScript warnings");
-  process.chdir(directory);
-  const captured = new globalThis.Map();
-  await runAff(Builder.buildModules(Aff.monadEffectAff)({
-    directives: await runAff(App.loadDirectives), rewriteLimit: 10000,
-    analyzeCustom: _ => _ => Nothing.value,
-    foreignSemantics: Map.filterKeys(C.ordQualified(C.ordIdent))(qualified => {
-      const name = qualified.value0 instanceof Just ? qualified.value0.value0 : "";
-      return !name.includes("Effect") && !name.includes("Control.Monad.ST");
-    })(Foreign.coreForeignSemantics),
-    traceIdents: Set.empty,
-    onPrepareModule: _ => module => pure(module),
-    onSkipModule: _ => _ => pure(Nothing.value),
-    onCodegenModule: _ => core => module => _ => {
-      if (["AdtMulti", "AdtMultiConsumer", "AdtMultiExternal"].includes(module.name)) captured.set(module.name, { core, backend: module });
-      return pure(undefined);
-    },
-  })(await runAff(App.coreFnModulesFromOutput(join(directory, "output")))));
+  const captured = await optimizeCoreFn(directory, ["AdtMulti", "AdtMultiConsumer", "AdtMultiExternal"]);
   assert.equal(captured.size, 3, "real fork compiler and PBO prepared producer, consumer and external dependency");
   const producer = captured.get("AdtMulti");
   const selected = prepareModule(producer.core)(producer.backend);
@@ -396,7 +357,7 @@ printfn "adt-multi runtime: %d checks passed" checks
     await writeFile(join(artifacts, "corefn.json"), await readFile(join(directory, "output/AdtMulti/corefn.json")));
     await writeFile(join(artifacts, "AdtMultiExternal.corefn.json"), await readFile(join(directory, "output/AdtMultiExternal/corefn.json")));
   }
-  const result = command(process.env.DOTNET || "dotnet", ["fsi", "--nologo", "--optimize+", "--exec", "adt-multi.fsx"], directory);
+  const result = runFsharp(directory, "adt-multi.fsx", { optimize: true, transcript });
   // Existing generic object recursion and deliberately partial source matches
   // emit FS0040/FS0025. Native replacements must not add warnings.
   const scriptLines = script.split("\n");
@@ -413,6 +374,7 @@ printfn "adt-multi runtime: %d checks passed" checks
   if (artifacts) {
     const hashes = {};
     for (const file of ["src/Sharpurs/AdtKernel.purs", "src/Sharpurs/AdtLayout.purs", "src/Sharpurs/CodeGen.purs", "tests/adt-multi.mjs",
+      "tests/support/fixtures.mjs", "tests/support/corefn.mjs",
       ...["Analysis", "Lower", "Emit"].map(name => `src/Sharpurs/AdtKernel/${name}.purs`),
       ...fixtureFiles.map(file => `tests/fixtures/adt-multi/${file}`)]) hashes[file] = createHash("sha256").update(await readFile(join(backend, file))).digest("hex");
     await writeFile(join(artifacts, "metadata.json"), JSON.stringify({ sourceHashes: hashes, selected: [...chosen] }, null, 2) + "\n");
@@ -425,6 +387,5 @@ printfn "adt-multi runtime: %d checks passed" checks
     await mkdir(artifacts, { recursive: true });
     await writeFile(join(artifacts, "validation.log"), transcript.join("\n") + "\n");
   }
-  process.chdir(previousCwd);
   await rm(directory, { recursive: true, force: true });
 }

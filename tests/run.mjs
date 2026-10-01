@@ -10,7 +10,7 @@ export async function runChecks({ directory = root, artifacts, suites = [], fixt
   build = true, assertions = true, env = process.env, signal, report = console.log } = {}) {
   const scripts = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8')).scripts;
   const available = Object.keys(scripts).filter(name => name.startsWith('test:'));
-  const selected = suites.length ? suites.map(name => name.startsWith('test:') ? name : `test:${name}`) : available;
+  const selected = [...new Set(suites.length ? suites.map(name => name.startsWith('test:') ? name : `test:${name}`) : available)];
   for (const name of selected) if (!available.includes(name)) throw new Error(`Unknown suite ${name}; choose ${available.join(', ')}`);
   const tasks = selected.map(name => {
     const args = scripts[name].split(/\s+/);
@@ -25,7 +25,8 @@ export async function runChecks({ directory = root, artifacts, suites = [], fixt
   if (allFixtures || fixtures.length) tasks.push({ name: 'cli-fixtures', program: join(directory, 'bin/test'), args: fixtures });
   const destination = await artifactDirectory(artifacts, 'sharpurs-check-');
   const results = [];
-  const summary = { artifacts: destination, requested: tasks.map(task => task.name), results, success: false };
+  const summary = { artifacts: destination, node: { version: process.version, executable: process.execPath },
+    requested: tasks.map(task => task.name), results, success: false };
   report(`Artifacts: ${destination}`);
   try {
     for (const task of tasks) {
@@ -41,6 +42,7 @@ export async function runChecks({ directory = root, artifacts, suites = [], fixt
     summary.success = results.length === tasks.length && results.every(result => result.ok);
   } catch (error) { summary.error = error.message; }
   await writeJson(join(destination, 'results.json'), summary);
+  if (summary.error) report(`FAIL ${summary.error}`);
   report(`Summary: ${results.filter(result => result.ok).length} passed, ${results.filter(result => !result.ok).length} failed, ${tasks.length - results.length} not run.`);
   return summary;
 }

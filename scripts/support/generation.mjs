@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { copyFile, cp, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { artifactDirectory, runLogged, writeJson } from './process.mjs';
 
@@ -22,14 +22,14 @@ export async function fileManifest(directory, excluded = new Set()) {
   return entries;
 }
 
-export function compareManifests(before, after) {
+export function compareManifests(before, after, { timestamps = true } = {}) {
   const common = Object.keys(before).filter(name => name in after).sort();
   return {
     filesBefore: Object.keys(before).length, filesAfter: Object.keys(after).length,
     added: Object.keys(after).filter(name => !(name in before)).sort(),
     removed: Object.keys(before).filter(name => !(name in after)).sort(),
     changed: common.filter(name => before[name].sha256 !== after[name].sha256),
-    rewrittenUnchanged: common.filter(name => before[name].sha256 === after[name].sha256 && before[name].mtimeNs !== after[name].mtimeNs),
+    ...(timestamps ? { rewrittenUnchanged: common.filter(name => before[name].sha256 === after[name].sha256 && before[name].mtimeNs !== after[name].mtimeNs) } : {}),
   };
 }
 
@@ -72,10 +72,11 @@ async function stageWorkspace(source, destination, ffiDirectory) {
     const localDirectory = join(destination, 'sources', String(count++));
     await mkdir(localDirectory, { recursive: true });
     directories.add(localDirectory);
-    core.modulePath = join(localDirectory, basename(originalPath));
+    const modulePath = join(localDirectory, basename(originalPath));
+    core.modulePath = relative(workspace, modulePath);
     for (const extension of ['.purs', '.fs', '.cs']) {
       const original = originalPath.replace(/\.purs$/, extension);
-      if (await exists(original)) await snapshot(original, core.modulePath.replace(/\.purs$/, extension));
+      if (await exists(original)) await snapshot(original, modulePath.replace(/\.purs$/, extension));
     }
     const to = join(workspace, 'output', name, 'corefn.json');
     await mkdir(dirname(to), { recursive: true });
@@ -106,7 +107,8 @@ async function inputManifest(staged, destination) {
 export async function compareGeneration({ before, after, workspace, main = 'Main', ffiDirectory, artifacts,
   env = process.env, signal, report = console.log } = {}) {
   const destination = await artifactDirectory(artifacts, 'sharpurs-generation-');
-  const result = { artifacts: destination, sourceWorkspace: resolve(workspace), main, runs: [], success: false };
+  const result = { artifacts: destination, sourceWorkspace: resolve(workspace), main, ffiDirectory,
+    node: { version: process.version, executable: process.execPath }, runs: [], success: false };
   report(`Artifacts: ${destination}`);
   try {
     for (const [phase, source] of [['before', before], ['after', after]]) {
@@ -139,16 +141,17 @@ export async function compareGeneration({ before, after, workspace, main = 'Main
       manifests[phase] = await fileManifest(output, staged.files);
       if (!Object.keys(manifests[phase]).length) throw new Error(`${phase} emitted no files`);
       await writeJson(join(destination, phase + '.json'), manifests[phase]);
-      if (phase !== 'after-incremental') await cp(output, join(destination, phase === 'before' ? 'generated-before' : 'generated-after'), { recursive: true, preserveTimestamps: true });
+      await cp(output, join(destination, phase === 'after-clean' ? 'generated-after' : 'generated-' + phase), { recursive: true, preserveTimestamps: true });
       report(`PASS ${phase}: ${Object.keys(manifests[phase]).length} files`);
     }
     result.incremental = compareManifests(manifests.before, manifests['after-incremental']);
-    result.clean = compareManifests(manifests.before, manifests['after-clean']);
+    result.clean = compareManifests(manifests.before, manifests['after-clean'], { timestamps: false });
     const sameContent = diff => !diff.added.length && !diff.removed.length && !diff.changed.length;
     result.success = sameContent(result.incremental) && !result.incremental.rewrittenUnchanged.length && sameContent(result.clean);
     result.inputsUnchanged = true;
   } catch (error) { result.error = error.message; }
   await writeJson(join(destination, 'comparison.json'), result);
+  if (result.error) report(`FAIL ${result.error}`);
   report(`${result.success ? 'PASS' : 'FAIL'} generation comparison — ${join(destination, 'comparison.json')}`);
   return result;
 }

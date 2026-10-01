@@ -1,23 +1,18 @@
 // Real fork TAST and PBO, checked against a generic F# oracle and generated JS.
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { compileFixtures, copyFixtures, packageSource, runFsharp } from './support/fixtures.mjs';
+import { optimizeCoreFn } from './support/corefn.mjs';
 import { createHash } from 'node:crypto';
 import { helpers as preludeFs } from '../output/Sharpurs.Runtime/index.js';
 import * as C from '../output/PureScript.Backend.Optimizer.CoreFn/index.js';
 import * as S from '../output/PureScript.Backend.Optimizer.Syntax/index.js';
-import * as Aff from '../output/Effect.Aff/index.js';
-import * as Applicative from '../output/Control.Applicative/index.js';
-import { Left } from '../output/Data.Either/index.js';
 import { Just, Nothing } from '../output/Data.Maybe/index.js';
 import * as Map from '../output/Data.Map.Internal/index.js';
 import * as Set from '../output/Data.Set/index.js';
-import * as App from '../output/PureScript.Backend.Optimizer.App/index.js';
-import * as Builder from '../output/PureScript.Backend.Optimizer.Builder/index.js';
-import * as Foreign from '../output/PureScript.Backend.Optimizer.Semantics.Foreign/index.js';
 import { prepareModule, fromExpr } from '../output/Sharpurs.ThunkKernel/index.js';
 import { translateModule, translateOptimizedModuleWithThunks } from '../output/Sharpurs.CodeGen/index.js';
 import { printModule } from '../output/Sharpurs.Printer/index.js';
@@ -25,17 +20,6 @@ import { printModule } from '../output/Sharpurs.Printer/index.js';
 const backend = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const artifacts = process.env.THUNK_KERNEL_ARTIFACTS && resolve(process.env.THUNK_KERNEL_ARTIFACTS);
 const transcript = [];
-const pure = Applicative.pure(Aff.applicativeAff);
-const runAff = action => new Promise((resolve, reject) => {
-  Aff.runAff(result => () => result instanceof Left ? reject(result.value0) : resolve(result.value0))(action)();
-});
-function command(program, args, cwd) {
-  const result = spawnSync(program, args, { cwd, encoding: 'utf8', timeout: 60_000 });
-  transcript.push(`$ ${program} ${args.join(' ')}\n${result.stdout || ''}${result.stderr || ''}`);
-  if (result.error) throw result.error;
-  assert.equal(result.status, 0, `${program}: ${result.stdout}\n${result.stderr}`);
-  return result;
-}
 function clone(value) {
   if (Array.isArray(value)) return value.map(clone);
   if (!value || typeof value !== 'object') return value;
@@ -52,35 +36,14 @@ function selections(plan, tree, found = []) {
   return found;
 }
 const directory = await mkdtemp(join(tmpdir(), 'sharpurs-thunk-kernel-'));
-const previousCwd = process.cwd();
 try {
-  const packages = join(backend, '.spago/p');
-  const names = await readdir(packages);
-  const prelude = process.env.PRELUDE_SRC || join(packages, names.find(name => /^prelude-/.test(name)), 'src');
-  const partial = join(packages, names.find(name => /^partial-/.test(name)), 'src');
+  const prelude = await packageSource(backend, 'prelude');
+  const partial = await packageSource(backend, 'partial');
   const fixtureFiles = ['TypedThunks.purs', 'ThunkExternal.purs', 'ThunkExternal.js'];
-  for (const file of fixtureFiles) await writeFile(join(directory, file), await readFile(join(backend, 'tests/fixtures/thunk-kernel', file)));
-  await writeFile(join(directory, 'package.json'), '{"type":"module"}\n');
-  const compiled = command(process.env.PURS || 'purs', ['compile', join(directory, '*.purs'),
-    join(prelude, '**/*.purs'), join(partial, '**/*.purs'), '--output', join(directory, 'output'), '--codegen', 'corefn,js'], directory);
+  await copyFixtures(join(backend, 'tests/fixtures/thunk-kernel'), directory, fixtureFiles);
+  const compiled = compileFixtures(directory, [join(directory, '*.purs'), join(prelude, '**/*.purs'), join(partial, '**/*.purs')], { transcript });
   assert.doesNotMatch(compiled.stdout + compiled.stderr, /Warning \d+ of/, 'fixture has no PureScript warning');
-  process.chdir(directory);
-  const captured = new globalThis.Map();
-  await runAff(Builder.buildModules(Aff.monadEffectAff)({
-    directives: await runAff(App.loadDirectives), rewriteLimit: 10000,
-    analyzeCustom: _ => _ => Nothing.value,
-    foreignSemantics: Map.filterKeys(C.ordQualified(C.ordIdent))(qualified => {
-      const name = qualified.value0 instanceof Just ? qualified.value0.value0 : '';
-      return !name.includes('Effect') && !name.includes('Control.Monad.ST');
-    })(Foreign.coreForeignSemantics),
-    traceIdents: Set.empty,
-    onPrepareModule: _ => module => pure(module),
-    onSkipModule: _ => _ => pure(Nothing.value),
-    onCodegenModule: _ => core => module => _ => {
-      if (['TypedThunks', 'ThunkExternal'].includes(module.name)) captured.set(module.name, { core, backend: module });
-      return pure(undefined);
-    },
-  })(await runAff(App.coreFnModulesFromOutput(join(directory, 'output')))));
+  const captured = await optimizeCoreFn(directory, ['TypedThunks', 'ThunkExternal']);
   const state = captured.get('TypedThunks');
   assert.ok(state && captured.size === 2, 'real source modules parsed and optimized');
   const selected = prepareModule(state.core)(state.backend);
@@ -271,7 +234,7 @@ printfn "thunk-kernel runtime: %d checks passed" checks
     for (const [file, text] of [['generated.fs', generated], ['oracle.fs', oracle], ['thunk-kernel.fsx', script]]) await writeFile(join(artifacts, file), text);
     await writeFile(join(artifacts, 'corefn.json'), await readFile(join(directory, 'output/TypedThunks/corefn.json')));
   }
-  const result = command(process.env.DOTNET || 'dotnet', ['fsi', '--nologo', '--optimize+', '--exec', 'thunk-kernel.fsx'], directory);
+  const result = runFsharp(directory, 'thunk-kernel.fsx', { optimize: true, transcript });
   for (const warning of result.stderr.matchAll(/\((\d+),\d+\): warning (FS\d+):/g)) {
     yes(['FS0025', 'FS0040'].includes(warning[2]), 'only known generic partial/recursive fixture warnings');
     yes(!script.split('\n')[Number(warning[1])-1].includes('_thunk_native'), 'no native worker warnings');
@@ -280,6 +243,7 @@ printfn "thunk-kernel runtime: %d checks passed" checks
   if (artifacts) {
     const sourceHashes = {};
     for (const file of ['src/Sharpurs/ThunkKernel.purs', 'tests/thunk-kernel.mjs',
+      'tests/support/fixtures.mjs', 'tests/support/corefn.mjs',
       ...['Analysis', 'Helpers', 'Lower', 'Call', 'Emit'].map(name => `src/Sharpurs/ThunkKernel/${name}.purs`),
       ...fixtureFiles.map(name => `tests/fixtures/thunk-kernel/${name}`)]) {
       sourceHashes[file] = createHash('sha256').update(await readFile(join(backend, file))).digest('hex');
@@ -292,6 +256,5 @@ printfn "thunk-kernel runtime: %d checks passed" checks
   transcript.push(error.stack || String(error)); throw error;
 } finally {
   if (artifacts) { await mkdir(artifacts, { recursive: true }); await writeFile(join(artifacts, 'validation.log'), transcript.join('\n')); }
-  process.chdir(previousCwd);
   await rm(directory, { recursive: true, force: true });
 }

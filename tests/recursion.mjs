@@ -1,7 +1,7 @@
 // Run after building the compiler. Compare boxed recursive code generation
 // with the JavaScript backend on the same real PureScript source.
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";

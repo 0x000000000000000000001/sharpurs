@@ -4,7 +4,15 @@ import { tmpdir, homedir } from 'node:os';
 import { delimiter, dirname, join, resolve } from 'node:path';
 
 export function toolEnvironment(root, env = process.env) {
-  return { ...env, PATH: [join(root, 'node_modules/.bin'), join(homedir(), '.dotnet'), env.PATH || ''].join(delimiter) };
+  // npm injects ancestor package bins as well. An unrelated legacy Spago there
+  // must not shadow the toolchain chosen on PATH for this spago.yaml project.
+  const ancestors = new Set();
+  for (let parent = dirname(root); ; parent = dirname(parent)) {
+    ancestors.add(join(parent, 'node_modules/.bin'));
+    if (parent === dirname(parent)) break;
+  }
+  const path = (env.PATH || '').split(delimiter).filter(entry => !ancestors.has(resolve(entry)));
+  return { ...env, PATH: [join(root, 'node_modules/.bin'), join(homedir(), '.dotnet'), ...path].join(delimiter) };
 }
 
 export async function artifactDirectory(requested, prefix) {
@@ -46,6 +54,9 @@ export async function runLogged(program, args, { cwd, env, log, timeout = 0, sig
       child.on('close', (code, childSignal) => resolve({ code, signal: childSignal }));
     });
     signal?.removeEventListener('abort', stop);
+    // The direct child may exit before its descendants. Finish cancellation
+    // before closing the log and cancelling the escalation timer.
+    if (timedOut || signal?.aborted) kill('SIGKILL');
     if (error) await file.write(error + '\n');
     return { command: [program, ...args], ...result, error, timedOut, cancelled: !!signal?.aborted,
       ok: result.code === 0 && !error && !timedOut && !signal?.aborted, durationMs: Date.now() - started, log };

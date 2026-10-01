@@ -1,7 +1,7 @@
 // Run after building. Exercise ordinary and nested case lowering on real
 // PureScript input, with JavaScript results as the oracle and F# evaluation logs.
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";

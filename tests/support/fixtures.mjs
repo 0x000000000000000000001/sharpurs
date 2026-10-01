@@ -4,11 +4,11 @@ import { cp, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-export function command(program, args, cwd, { transcript, timeout = 60_000, check = true } = {}) {
+export function command(program, args, cwd, { transcript, timeout = 60_000 } = {}) {
   const result = spawnSync(program, args, { cwd, encoding: 'utf8', timeout });
   transcript?.push(`$ ${program} ${args.join(' ')}\n${result.stdout || ''}${result.stderr || ''}`);
   if (result.error) throw result.error;
-  if (check) assert.equal(result.status, 0, `${program} failed (${result.signal || result.status}):\n${result.stdout}\n${result.stderr}`);
+  assert.equal(result.status, 0, `${program} failed (${result.signal || result.status}):\n${result.stdout}\n${result.stderr}`);
   return result;
 }
 
