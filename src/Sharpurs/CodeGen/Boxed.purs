@@ -1,6 +1,6 @@
 -- | F# source templates for the generic object ABI.
 -- | Inputs are already translated expressions and escaped target identifiers;
--- | source-AST inspection and native-path selection belong to CodeGen.
+-- | source translation belongs to CodeGen, implementation policy to Selection.
 module Sharpurs.CodeGen.Boxed
   ( Binding
   , LocalBinding(..)

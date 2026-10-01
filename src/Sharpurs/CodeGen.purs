@@ -1,4 +1,16 @@
-module Sharpurs.CodeGen where
+module Sharpurs.CodeGen
+  ( translateModule
+  , translateModuleWithConstructorWrappers
+  , translateOptimizedModule
+  , translateOptimizedModuleWithAdts
+  , translateOptimizedModuleWithThunks
+  , translateModuleWithKernels
+  , translateModuleWithOptimizations
+  , translateModuleUsing
+  , translateBind
+  , translateBindWithKernels
+  , translateBindWithOptimizations
+  ) where
 
 import Prelude
 
@@ -9,10 +21,8 @@ import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (unwrap)
 import Data.Set (Set)
 import Data.Set as Set
-import Data.Tuple (Tuple(..))
 import PureScript.Backend.Optimizer.Convert (BackendModule)
-import PureScript.Backend.Optimizer.CoreFn (Module(..), Bind(..), Binding(..), Expr(..), Ident(..), Literal(..), Ann, DataDecl, DataConstructor, ExprType(..), Prop(..), Qualified(..))
-import PureScript.Backend.Optimizer.Syntax (BackendOperatorOrd(..), BackendOperatorNum(..))
+import PureScript.Backend.Optimizer.CoreFn (Module(..), Bind(..), Binding(..), Expr(..), Ident(..), Literal(..), Ann, Prop(..), Qualified(..))
 import Sharpurs.AdtKernel (UnaryModule)
 import Sharpurs.AdtLayout as AdtLayout
 import Sharpurs.Analysis.Source as Source
@@ -20,20 +30,17 @@ import Sharpurs.CodeGen.Boxed as Boxed
 import Sharpurs.CodeGen.Case as Case
 import Sharpurs.CodeGen.Context (Context, ModuleEnv, RecursiveFunction, RecursiveScope(..))
 import Sharpurs.CodeGen.Context as Context
-import Sharpurs.ConstructorCall as ConstructorCall
+import Sharpurs.CodeGen.Selection as Selection
 import Sharpurs.DirectCall as DirectCall
-import Sharpurs.FsAst (FsDecl(..), FsExpr(..), FsModule(..), FsType(..), FsDUCase(..), FsDataCtor(..), modulePrefix, sanitizeName)
-import Sharpurs.IntArithmetic as IntArithmetic
-import Sharpurs.IntComparison as IntComparison
-import Sharpurs.IntKernel (IntKernel, fromBinding)
+import Sharpurs.FsAst (FsDecl(..), FsExpr(..), FsModule(..), FsDataCtor(..), modulePrefix, sanitizeName)
+import Sharpurs.IntKernel (IntKernel)
 import Sharpurs.IntKernel.CodeGen (printKernel)
 import Sharpurs.Names as Names
-import Sharpurs.Optimized as Optimized
 import Sharpurs.ThunkKernel as ThunkKernel
 
 translateModuleWithConstructorWrappers :: Set String -> Map String Int -> Module Ann -> FsModule
 translateModuleWithConstructorWrappers wrappers arities =
-  translateModuleUsing { arities, wrappers, native: Nothing, direct: Map.empty, thunks: Nothing } Map.empty Map.empty
+  translateModuleUsing { arities, wrappers, native: Nothing, direct: Map.empty, thunks: Nothing } Selection.emptyCandidates
 
 translateModule :: Map String Int -> Module Ann -> FsModule
 translateModule adtCtors = translateModuleWithKernels adtCtors Map.empty
@@ -46,25 +53,20 @@ translateOptimizedModuleWithAdts wrappers native = translateOptimizedModuleWithT
 
 translateOptimizedModuleWithThunks :: Set String -> Maybe UnaryModule -> Maybe ThunkKernel.ThunkModule -> Map String Int -> BackendModule -> Module Ann -> FsModule
 translateOptimizedModuleWithThunks wrappers native thunks arities backendMod =
-  translateModuleUsing { arities, wrappers, native, direct: Map.empty, thunks } kernels expressions
-  where
-  kernels = Map.fromFoldable $ Array.mapMaybe
-    (\(Tuple name expr) -> Tuple name <$> fromBinding (Qualified (Just backendMod.name) name) expr)
-    (Array.concatMap _.bindings backendMod.bindings)
-  expressions = Map.fromFoldable $ Array.mapMaybe
-    (\(Tuple name expr) -> Tuple name <$> Optimized.fromBinding expr)
-    (Array.concatMap _.bindings backendMod.bindings)
+  translateModuleUsing { arities, wrappers, native, direct: Map.empty, thunks } (Selection.fromBackend backendMod)
 
 translateModuleWithKernels :: Map String Int -> Map Ident IntKernel -> Module Ann -> FsModule
 translateModuleWithKernels adtCtors kernels = translateModuleWithOptimizations adtCtors kernels Map.empty
 
 translateModuleWithOptimizations :: Map String Int -> Map Ident IntKernel -> Map Ident FsExpr -> Module Ann -> FsModule
 translateModuleWithOptimizations arities kernels expressions =
-  translateModuleUsing (Context.boxedModule arities) kernels expressions
+  translateModuleUsing (Context.boxedModule arities) { kernels, expressions }
 
-translateModuleUsing :: ModuleEnv -> Map Ident IntKernel -> Map Ident FsExpr -> Module Ann -> FsModule
-translateModuleUsing env kernels expressions (Module m) =
+-- Explicit candidate injection uses the same selection policy as the CLI.
+translateModuleUsing :: ModuleEnv -> Selection.BindingCandidates -> Module Ann -> FsModule
+translateModuleUsing env candidates source@(Module m) =
   let
+    plan = Selection.prepareModule env candidates source
     modNameStr = unwrap m.name
     modPrefix = modulePrefix modNameStr
     translateDataCtor c = FsDataCtor (modPrefix <> "_" <> sanitizeName c.name <> "usd_Ctor") (Array.length c.fields)
@@ -73,29 +75,7 @@ translateModuleUsing env kernels expressions (Module m) =
     dataDecls = case env.native of
       Just selected -> [ FsRaw (AdtLayout.printDeclarations selected.layout) ]
       Nothing -> map translateBoxedDataDecl m.dataDecls
-    -- Register only entries that will actually be emitted by the generic path.
-    -- Qualified keys keep local binders and imported functions out of this table.
-    bindingNames = Array.concatMap (case _ of
-      NonRec (Binding _ name _) -> [ name ]
-      Rec bindings -> map (\(Binding _ name _) -> name) bindings) m.decls
-    emittedName name = sanitizeName (modPrefix <> "_" <> unwrap name)
-    sourceNames = Set.fromFoldable (map emittedName
-      (bindingNames <> Array.fromFoldable (Map.keys m.foreign)))
-    select binding = do
-      entry <- DirectCall.fromBinding (map _.layout env.native) binding
-      let
-        name = emittedName entry.name
-        replaced = Map.member entry.name kernels || Map.member entry.name expressions
-          || fromMaybe false (map (Map.member entry.name <<< _.bindings) env.native)
-        collision = Set.member (name <> "_direct") sourceNames
-          || Set.member (name <> "_direct_apply") sourceNames
-          || Array.elem (name <> "_direct") entry.args
-          || Array.elem (name <> "_direct_apply") entry.args
-      if replaced || collision then Nothing
-      else Just (Tuple (Qualified (Just m.name) entry.name) entry)
-    direct = Map.fromFoldable (Array.mapMaybe select m.decls)
-    selectedEnv = env { direct = direct }
-    decls = Array.concatMap (translateBindUsingOptimizations selectedEnv kernels expressions modPrefix) m.decls
+    decls = Array.concatMap (translateBindingPlan plan.env modPrefix) plan.bindings
   in
     FsModule nameStr (dataDecls <> fromMaybe [] (map _.declarations env.thunks) <> decls)
 
@@ -104,30 +84,19 @@ translateBindWithKernels adtCtors kernels = translateBindWithOptimizations adtCt
 
 translateBindWithOptimizations :: Map String Int -> Map Ident IntKernel -> Map Ident FsExpr -> String -> Bind Ann -> Array FsDecl
 translateBindWithOptimizations arities kernels expressions =
-  translateBindUsingOptimizations (Context.boxedModule arities) kernels expressions
+  translateBindUsingOptimizations (Context.boxedModule arities) { kernels, expressions }
 
-translateBindUsingOptimizations :: ModuleEnv -> Map Ident IntKernel -> Map Ident FsExpr -> String -> Bind Ann -> Array FsDecl
-translateBindUsingOptimizations env kernels expressions modPrefix binding =
-  case candidate >>= (\name -> env.native >>= \selected -> Map.lookup name selected.bindings) of
-    Just declaration -> [ declaration ]
-    Nothing ->
-      case candidate >>= (\name -> Tuple name <$> Map.lookup name kernels) of
-        Just (Tuple (Ident name) kernel) -> [ printKernel (sanitizeName (modPrefix <> "_" <> name)) kernel ]
-        Nothing -> case binding of
-          NonRec (Binding _ ident@(Ident name) _) | Just expr <- Map.lookup ident expressions ->
-            [ FsLet (sanitizeName (modPrefix <> "_" <> name)) [] expr ]
-          NonRec (Binding _ name _) ->
-            case Array.find (\entry -> entry.name == name) (Array.fromFoldable (Map.values env.direct)) of
-              Just entry -> translateDirectBinding env modPrefix entry
-              Nothing -> translateBindUsing env (Just modPrefix) binding
-          _ -> translateBindUsing env (Just modPrefix) binding
-  where
-  -- Keep mutual groups intact: their fallback bodies may call each other's
-  -- generated _tco entry points. A singleton has no such external dependency.
-  candidate = case binding of
-    NonRec (Binding _ name _) -> Just name
-    Rec [ Binding _ name _ ] -> Just name
-    _ -> Nothing
+translateBindUsingOptimizations :: ModuleEnv -> Selection.BindingCandidates -> String -> Bind Ann -> Array FsDecl
+translateBindUsingOptimizations env candidates modPrefix =
+  translateBindingPlan env modPrefix <<< Selection.forBinding env candidates
+
+translateBindingPlan :: ModuleEnv -> String -> Selection.BindingPlan -> Array FsDecl
+translateBindingPlan env modPrefix = case _ of
+  Selection.NativeAdt declaration -> [ declaration ]
+  Selection.NativeInt { name, kernel } -> [ printKernel (sanitizeName (modPrefix <> "_" <> unwrap name)) kernel ]
+  Selection.OptimizedExpression { name, expression } -> [ FsLet (sanitizeName (modPrefix <> "_" <> unwrap name)) [] expression ]
+  Selection.DirectFunction entry -> translateDirectBinding env modPrefix entry
+  Selection.GenericBinding binding -> translateBindUsing env (Just modPrefix) binding
 
 translateDirectBinding :: ModuleEnv -> String -> DirectCall.Candidate -> Array FsDecl
 translateDirectBinding env modPrefix entry =
@@ -167,21 +136,6 @@ translateBindUsing env currentMod = case _ of
             Just m -> m <> "_"
             Nothing -> ""
       in [FsLet (sanitizeName (prefix <> name)) [] (translateExpr context val)]
-
-translateDataDecl :: DataDecl -> FsDecl
-translateDataDecl decl =
-  FsDU (sanitizeName decl.name) (map translateConstructor decl.constructors)
-
-translateType :: ExprType -> FsType
-translateType = case _ of
-  String -> FsTString
-  Boolean -> FsTBool
-  Int -> FsTInt
-  _ -> FsTCustom "obj"
-
-translateConstructor :: DataConstructor -> FsDUCase
-translateConstructor ctor =
-  FsDUCase (sanitizeName ctor.name <> "usd_Ctor") (map translateType ctor.fields)
 
 translateLit :: Context -> Literal (Expr Ann) -> FsExpr
 translateLit context lit = case lit of
@@ -235,55 +189,18 @@ registerRecursiveBindings scope bindingName bindings context =
   ) context bindings
 
 translateExpr :: Context -> Expr Ann -> FsExpr
-translateExpr context expr =
-  case context.moduleEnv.thunks >>= \selected -> ThunkKernel.fromExpr selected expr of
-    Just native -> native
-    Nothing -> translateDirectCall context expr
-
-translateDirectCall :: Context -> Expr Ann -> FsExpr
-translateDirectCall context expr =
-  case DirectCall.fromCall context.moduleEnv.direct expr of
-    Just call ->
-      let
-        name = sanitizeName (fromMaybe "" context.currentModule <> "_" <> unwrap call.candidate.name)
-        argument value = Boxed.box (translateExpr context value)
-      in FsDirectApp (name <> "_direct_apply") (map argument call.args)
-    Nothing -> translateIntComparison context expr
-
-translateIntComparison :: Context -> Expr Ann -> FsExpr
-translateIntComparison context expr =
-  case IntComparison.fromExpr expr of
-    Just comparison ->
-      let
-        emit operator = Boxed.intBinary operator
-          (translateExpr context comparison.left)
-          (translateExpr context comparison.right)
-      in case comparison.operator of
-        OpLt -> emit Boxed.LessThan
-        OpGt -> emit Boxed.GreaterThan
-        _ -> translateExprFallback context expr
-    Nothing -> translateIntArithmetic context expr
-
-translateIntArithmetic :: Context -> Expr Ann -> FsExpr
-translateIntArithmetic context expr =
-  case IntArithmetic.fromExpr expr of
-    Just arithmetic ->
-      let
-        emit operator = Boxed.intBinary operator
-          (translateExpr context arithmetic.left)
-          (translateExpr context arithmetic.right)
-      in case arithmetic.operator of
-        OpAdd -> emit Boxed.Add
-        OpSubtract -> emit Boxed.Subtract
-        _ -> translateExprFallback context expr
-    Nothing -> translateExprFallback context expr
-
-translateExprFallback :: Context -> Expr Ann -> FsExpr
-translateExprFallback context expr =
-  case ConstructorCall.fromExpr context.moduleEnv.arities context.currentModule expr of
-    Just call -> generateConstructorCall context.moduleEnv call.name call.arity
-      (map (translateExpr context) call.args)
-    Nothing -> translateExprGeneric context expr
+translateExpr context expr = case Selection.forExpression context.moduleEnv context.currentModule expr of
+  Selection.NativeThunk native -> native
+  Selection.DirectInvocation call ->
+    let
+      name = sanitizeName (fromMaybe "" context.currentModule <> "_" <> unwrap call.name)
+      argument value = Boxed.box (translateExpr context value)
+    in FsDirectApp (name <> "_direct_apply") (map argument call.args)
+  Selection.IntBinary call -> Boxed.intBinary call.operator
+    (translateExpr context call.left) (translateExpr context call.right)
+  Selection.ConstructorInvocation call -> generateConstructorCall context.moduleEnv call.name call.arity
+    (map (translateExpr context) call.args)
+  Selection.GenericExpression source -> translateExprGeneric context source
 
 translateExprGeneric :: Context -> Expr Ann -> FsExpr
 translateExprGeneric context expr = case expr of

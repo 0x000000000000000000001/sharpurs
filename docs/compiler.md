@@ -6,7 +6,7 @@ Start in [`src/Main.purs`](../src/Main.purs). Its measured phases follow the act
 
 1. **Load TAST + sort:** the optimizer reader loads `output/*/corefn.json` and sorts modules by dependency.
 2. **Prepare:** write the runtime prelude, load optimization directives, collect constructor arities, and initialize the set of native constructor wrappers.
-3. **Optimize + emit:** the optimizer's sequential builder calls `emitModule` for each module. It validates native ADT/thunk selections, registers constructor wrappers, translates declarations, loads foreign sources, and writes the module.
+3. **Optimize + emit:** the optimizer's sequential builder calls `emitModule` for each module. It validates native ADT/thunk selections and registers constructor wrappers. `CodeGen.Selection` collects the remaining candidates and plans binding/expression routes; `CodeGen` translates the selected plans. The callback then loads foreign sources and writes the module.
 4. **Finalize:** write the entrypoint and .NET projects, preserving dependency order in F# compile items.
 
 The input is the enriched typed CoreFn produced by the compiler fork. `Module Ann` is the source representation; `BackendModule` is the optimizer's representation. Code generation needs both: the source retains declarations and layout information, while optimized bindings can offer supported native implementations.
@@ -20,7 +20,8 @@ The input is the enriched typed CoreFn produced by the compiler fork. `Module An
 | Recognition of native declarations and wrapper text | [`Sharpurs/FfiSupport.js`](../src/Sharpurs/FfiSupport.js) |
 | Generated file paths, write-if-changed behavior, MSBuild items and templates | [`Sharpurs/Project.purs`](../src/Sharpurs/Project.purs) |
 | F# runtime helpers, event-loop bookkeeping, process entrypoint | [`Sharpurs/Runtime.purs`](../src/Sharpurs/Runtime.purs) |
-| General expression/binding translation and native-path selection | [`Sharpurs/CodeGen.purs`](../src/Sharpurs/CodeGen.purs) |
+| General expression/binding translation and emission of selected plans | [`Sharpurs/CodeGen.purs`](../src/Sharpurs/CodeGen.purs) |
+| Candidate registration, direct-helper collisions and implementation priority | [`Sharpurs/CodeGen/Selection.purs`](../src/Sharpurs/CodeGen/Selection.purs) |
 | Translation contexts, recursive worker registration and lookup | [`Sharpurs/CodeGen/Context.purs`](../src/Sharpurs/CodeGen/Context.purs) |
 | Source TAST annotations, lambda/application spines and expression traversal | [`Sharpurs/Analysis/Source.purs`](../src/Sharpurs/Analysis/Source.purs) |
 | Qualified F# value names | [`Sharpurs/Names.purs`](../src/Sharpurs/Names.purs) |
@@ -34,11 +35,39 @@ The input is the enriched typed CoreFn produced by the compiler fork. `Module An
 
 `Ffi.loadModule` returns wrapper text and optional C# source. `Project.writeModule` owns the writes. This keeps foreign-source selection independent of output paths. Runtime templates are pure strings, also imported by the focused tests through the compiled `Sharpurs.Runtime` module.
 
-`CodeGen` inspects the source AST and chooses implementations; `CodeGen.Boxed` accepts already translated `FsExpr` values and escaped target identifiers. It owns the F# fragments for the object ABI. Literal expressions and compound patterns are represented structurally in `FsAst` and rendered by `Printer`. `FsIdent` denotes an identifier; `FsRawExpr` explicitly marks an already-rendered expression supplied by a template or native kernel.
+`CodeGen.Selection` chooses implementations and `CodeGen` translates their plans and the remaining source AST. `CodeGen.Boxed` accepts already translated `FsExpr` values and escaped target identifiers. It owns the F# fragments for the object ABI. Literal expressions and compound patterns are represented structurally in `FsAst` and rendered by `Printer`. `FsIdent` denotes an identifier; `FsRawExpr` explicitly marks an already-rendered expression supplied by a template or native kernel.
 
 `CodeGen.Context.ModuleEnv` holds module-wide constructor information and native selections. Expression translation receives a `Context` combining that environment, the current module prefix and the visible recursive workers. Entering a recursive group extends this context; leaving it restores the enclosing context. Variable references, applications and local bindings have separate translation helpers in `CodeGen`, sharing name qualification through `Names.qualified`.
 
 For `ExprCase`, `CodeGen` supplies `Case.translate` with the pattern environment and an expression-translation callback. `Pattern` needs only constructor arities and the current module; it translates ordinary binders and recognizes unary chains with shallow leaves. `Case` selects the matching strategy before translating branch bodies. Its nested path uses named records for branches, constructor groups, catch-alls and match targets, including the distinction between an unboxed scrutinee and the boxed field captured by a variable.
+
+## Selecting implementations
+
+Start in `CodeGen.Selection` when changing precedence or deciding whether a recognized candidate may replace source code:
+
+1. `fromBackend` collects `BindingCandidates`: native Int kernels and complete optimized expressions containing local kernels. The ADT/thunk recognizers supply their validated selections through `ModuleEnv`.
+2. `prepareModule` reserves direct-call entries and returns a `ModulePlan` containing the selected environment and one `BindingPlan` per source group. Its registration checks use the same `replacement` decision as `forBinding`, so a suppressed direct helper cannot remain callable.
+3. `CodeGen.translateBindingPlan` emits the chosen implementation. Each recognizer remains responsible for type/layout/body eligibility; this policy handles precedence and source group boundaries.
+
+Binding routes are tried in this order:
+
+| Priority | Route | `NonRec` | Singleton `Rec` | Mutual `Rec` |
+| --- | --- | --- | --- | --- |
+| 1 | Validated native ADT declaration | Eligible | Eligible | Whole-group fallback |
+| 2 | Native Int kernel | Eligible | Eligible | Whole-group fallback |
+| 3 | Complete optimized expression | Eligible | Fallback | Whole-group fallback |
+| 4 | Registered direct function | Eligible | Fallback | Whole-group fallback |
+| 5 | Generic source translation | Fallback | Fallback | Original group retained |
+
+A recognized member never splits a mutual source group: its generic peers can depend on the group's `_tco` entry points. An optimization map entry without a corresponding source binding emits nothing.
+
+Direct registration considers the escaped names of **all** source bindings and foreign declarations. Either generated suffix, `_direct` or `_direct_apply`, colliding with those names or with the candidate's own parameters keeps the generic function. Keys retain the source module qualifier, so local shadows and imported homonyms cannot use the module's helper. ADT/thunk-specific collision and dependency validation remains in those recognizers.
+
+Expression selection has its own entry point, `forExpression`, with this priority: **native thunk → registered direct invocation → Int comparison → Int arithmetic → instantiated constructor → generic expression**. `ExpressionPlan` keeps source operands until `CodeGen` translates the chosen route. An unsupported recognized integer operator falls through to constructor/generic handling, preserving the existing fallback boundary. Native thunk declarations supplement the original public bindings; they are not another whole-binding replacement tier.
+
+`CodeGen` explicitly exports the module and standalone-binding entry points used by the CLI, interop and tests. `translateModuleUsing env { kernels, expressions } source` accepts named candidate maps and applies the complete module policy; the convenience entry points delegate to it. Standalone binding translation does not invent a module-wide direct-call registry.
+
+`npm run test:selection` checks competing candidate sets through production registration and emission, including singleton/mutual groups, helper suppression, escaped-name/foreign/parameter collisions and qualified call-site lookup. Recognizer suites additionally execute the emitted implementations.
 
 ## Conventions that affect correctness
 
@@ -89,7 +118,7 @@ spago bundle --module Main --platform node --outfile bin/sharpurs.js --bundle-ty
 spago test
 ```
 
-Use the focused commands listed in the [README](../README.md#development-and-testing) for the affected representation or runtime boundary. These scripts compile and execute F# and require `dotnet` on `PATH` (or `DOTNET` pointing to it). Their runtime helpers come from the rebuilt compiler output, so rebuild before running them.
+Use the focused commands listed in the [README](../README.md#development-and-testing) for the affected representation or runtime boundary. Runtime suites compile and execute F# and require `dotnet` on `PATH` (or `DOTNET` pointing to it); `test:selection` checks the generated declarations directly in Node.js. All use the rebuilt compiler output, so rebuild before running them.
 
 `bin/test` exercises the complete CLI on vendored PureScript fixtures. Its `tests/runner` directory is shared: run fixture selections sequentially. The focused scripts use their own temporary directories.
 

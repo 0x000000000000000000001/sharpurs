@@ -276,6 +276,7 @@ Focused regression commands are defined in [package.json](package.json):
 | `npm run test:recursion` | Boxed recursive workers, partial/value uses, mixed arities and nested scopes against the JavaScript backend. |
 | `npm run test:case-patterns` | Ordinary and deep nested matches, bound fields, newtypes, guards and scrutinee evaluation order. |
 | `npm run test:kernel`, `npm run test:local-kernel` | Native integer loops and locally nested kernels. |
+| `npm run test:selection` | Implementation priorities, whole-group fallback, direct-helper registration and name collisions. |
 | `npm run test:adt-kernel`, `npm run test:adt-interop` | Typed ADT generation and boxed/native boundaries. |
 | `npm run test:adt-unary`, `npm run test:adt-multi` | Native recursive ADT workers and multiple arguments. |
 | `npm run test:int-comparison`, `npm run test:int-arithmetic` | Integer comparison, overflow, division and modulo behavior. |
@@ -291,7 +292,7 @@ The main parts of the compilation pipeline are:
 
 1. **Typed input:** the custom `purs` compiler emits enriched `corefn.json` files. The TAST-aware optimizer reader decodes them and sorts modules by dependencies.
 2. **Optimization and selection:** the optimizer prepares `BackendModule` values. `Sharpurs.IntKernel`, `Sharpurs.AdtKernel` and `Sharpurs.ThunkKernel` select supported typed transformations while retaining access to the source AST.
-3. **Code generation:** [Sharpurs.CodeGen](src/Sharpurs/CodeGen.purs) combines those selections with the general generator and produces [Sharpurs.FsAst](src/Sharpurs/FsAst.purs) values. [Sharpurs.CodeGen.Boxed](src/Sharpurs/CodeGen/Boxed.purs) owns the generic object-ABI source templates. Separate helpers recognize direct calls, instantiated constructors and integer operations.
+3. **Code generation:** [Sharpurs.CodeGen.Selection](src/Sharpurs/CodeGen/Selection.purs) registers candidates and chooses binding/expression routes with explicit priorities and collision checks. [Sharpurs.CodeGen](src/Sharpurs/CodeGen.purs) translates these plans into [Sharpurs.FsAst](src/Sharpurs/FsAst.purs) values. [Sharpurs.CodeGen.Boxed](src/Sharpurs/CodeGen/Boxed.purs) owns the generic object-ABI source templates. Separate helpers recognize direct calls, instantiated constructors and integer operations.
 4. **FFI and printing:** [Sharpurs.Ffi](src/Sharpurs/Ffi.purs) resolves foreign sources, chooses wrappers or missing-implementation stubs, and delegates source recognition to [Sharpurs.FfiSupport](src/Sharpurs/FfiSupport.js). [Sharpurs.Printer](src/Sharpurs/Printer.purs) prints F# declarations.
 5. **Project generation:** [Sharpurs.Project](src/Sharpurs/Project.purs) writes the sources and ordered .NET projects into `output/Main/`. [Sharpurs.Runtime](src/Sharpurs/Runtime.purs) owns the shared F# prelude and entrypoint templates.
 
