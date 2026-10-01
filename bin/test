@@ -30,6 +30,7 @@ BLACKLIST=(
 if [ -d "$HOME/.dotnet" ]; then
   export PATH="$HOME/.dotnet:$PATH"
 fi
+export PATH="$ROOT_DIR/node_modules/.bin:$PATH"
 
 source "$(dirname "$0")/pkg"
 
@@ -73,11 +74,35 @@ if [ $# -gt 0 ]; then
       elif [ -f "$PASSING_DIR/$arg.purs" ]; then
         TEST_FILES+=("$PASSING_DIR/$arg.purs")
       else
-        echo "Test file $arg not found."
+        echo "Test file $arg not found." >&2
+        exit 1
       fi
     fi
   done
 fi
+
+# One invocation owns the shared runner. Preserve its pre-existing compiler
+# metadata, including untracked cache entries, even when a fixture fails.
+LOCK_DIR="$RUNNER_DIR/.sharpurs-test.lock"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  echo "Fixture runner is already in use: $LOCK_DIR" >&2
+  exit 1
+fi
+echo "$$" > "$LOCK_DIR/pid"
+CACHE_SNAPSHOT=$(mktemp -d "${TMPDIR:-/tmp}/sharpurs-runner-cache.XXXXXX") || { rmdir "$LOCK_DIR"; exit 1; }
+cleanup_runner() {
+  rm -rf "$RUNNER_DIR/.purmeta"
+  if [ -d "$CACHE_SNAPSHOT/.purmeta" ]; then
+    cp -pR "$CACHE_SNAPSHOT/.purmeta" "$RUNNER_DIR/.purmeta"
+  fi
+  rm -rf "$CACHE_SNAPSHOT" "$LOCK_DIR"
+}
+if [ -d "$RUNNER_DIR/.purmeta" ]; then
+  cp -pR "$RUNNER_DIR/.purmeta" "$CACHE_SNAPSHOT/.purmeta" || { rm -rf "$CACHE_SNAPSHOT" "$LOCK_DIR"; exit 1; }
+fi
+trap cleanup_runner EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 if [ $CLEAN_CACHE -eq 1 ]; then
   echo "Building sharpurs compiler..."
@@ -179,10 +204,16 @@ for test_file in "${TEST_FILES[@]}"; do
   if out=$(spago build -q 2>&1); then
     # 2. Generate F# / C# code via sharpurs
     if [ -f "../../bin/sharpurs.js" ]; then
-      backend_out=$(../../bin/sharpurs --main Main 2>&1) || true
+      if ! backend_out=$(../../bin/sharpurs --main Main 2>&1); then
+        echo "   [FAILED] sharpurs generation failed"
+        echo "$backend_out"
+        failed=$((failed+1))
+        break
+      fi
     else
-      echo "   [TODO] bin/sharpurs.js is not yet implemented"
-      continue
+      echo "   [FAILED] bin/sharpurs.js is missing; build sharpurs first"
+      failed=$((failed+1))
+      break
     fi
     
     # 3. Compile and run via dotnet

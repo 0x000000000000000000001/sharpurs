@@ -1,34 +1,22 @@
 // Run after npm run build. PURS must select the compiler with TAST annotations.
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
+import { compileFixtures, copyFixtures, packageSource, runFsharp } from "./support/fixtures.mjs";
+import { readCoreFn } from "./support/corefn.mjs";
 import { helpers as preludeFs } from "../output/Sharpurs.Runtime/index.js";
 import * as C from "../output/PureScript.Backend.Optimizer.CoreFn/index.js";
-import * as Aff from "../output/Effect.Aff/index.js";
-import { Left } from "../output/Data.Either/index.js";
-import { Cons } from "../output/Data.List.Types/index.js";
 import { Just, Nothing } from "../output/Data.Maybe/index.js";
 import * as Map from "../output/Data.Map.Internal/index.js";
 import * as Ord from "../output/Data.Ord/index.js";
-import * as App from "../output/PureScript.Backend.Optimizer.App/index.js";
 import { fromBinding, fromCall } from "../output/Sharpurs.DirectCall/index.js";
 import { fromModule } from "../output/Sharpurs.AdtLayout/index.js";
 import { translateModule } from "../output/Sharpurs.CodeGen/index.js";
 import { printModule } from "../output/Sharpurs.Printer/index.js";
 
 const backend = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const runAff = action => new Promise((resolve, reject) => {
-  Aff.runAff(result => () => result instanceof Left ? reject(result.value0) : resolve(result.value0))(action)();
-});
-function command(program, args, cwd) {
-  const result = spawnSync(program, args, { cwd, encoding: "utf8", timeout: 60_000 });
-  if (result.error) throw result.error;
-  assert.equal(result.status, 0, `${program}: ${result.stdout}\n${result.stderr}`);
-  return result;
-}
 function clone(value, rename = false) {
   if (typeof value === "string") return rename ? value.replaceAll("DirectCall", "DirectFallback") : value;
   if (Array.isArray(value)) return value.map(child => clone(child, rename));
@@ -56,20 +44,10 @@ function generate(core) {
 }
 const directory = await mkdtemp(join(tmpdir(), "sharpurs-direct-call-"));
 try {
-  const preludeRoot = join(backend, ".spago/p");
-  const prelude = process.env.PRELUDE_SRC || join(preludeRoot,
-    (await readdir(preludeRoot)).find(name => /^prelude-/.test(name)), "src");
-  for (const file of ["DirectCall.purs", "DirectCall.js", "DirectRemote.purs"]) {
-    await writeFile(join(directory, file), await readFile(join(backend, "tests/fixtures/direct-call", file)));
-  }
-  await writeFile(join(directory, "package.json"), '{"type":"module"}\n');
-  command(process.env.PURS || "purs", ["compile", join(directory, "*.purs"), join(prelude, "**/*.purs"),
-    "--output", join(directory, "output"), "--codegen", "corefn,js"], directory);
-  const modules = await runAff(App.coreFnModulesFromOutput(join(directory, "output")));
-  let core;
-  for (let cursor = modules; cursor instanceof Cons; cursor = cursor.value1) {
-    if (cursor.value0.name === "DirectCall") core = cursor.value0;
-  }
+  const prelude = await packageSource(backend, "prelude");
+  await copyFixtures(join(backend, "tests/fixtures/direct-call"), directory, ["DirectCall.purs", "DirectCall.js", "DirectRemote.purs"]);
+  compileFixtures(directory, [join(directory, "*.purs"), join(prelude, "**/*.purs")]);
+  const core = (await readCoreFn(directory)).get("DirectCall");
   assert.ok(core, "real compiler TAST parsed by PBO");
   const binding = name => core.decls.find(group => group instanceof C.NonRec && group.value0.value1 === name);
   let checks = 0;
@@ -250,7 +228,7 @@ printfn "direct-call runtime: %d checks passed" checks
     await writeFile(join(destination, "DirectFallback.fs"), fallback);
     await writeFile(join(destination, "direct-call.fsx"), source);
   }
-  const result = command(process.env.DOTNET || "dotnet", ["fsi", "--nologo", "--optimize+", "--exec", "direct-call.fsx"], directory);
+  const result = runFsharp(directory, "direct-call.fsx", { optimize: true });
   assert.doesNotMatch(result.stderr, /warning FS\d+/, "direct-call fixtures compile without warnings");
   console.log(result.stdout.trim());
   console.log(`direct-call converter: ${checks} checks passed`);

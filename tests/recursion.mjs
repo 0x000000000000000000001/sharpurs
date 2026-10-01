@@ -5,13 +5,10 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { spawnSync } from "node:child_process";
-import * as Aff from "../output/Effect.Aff/index.js";
-import { Left } from "../output/Data.Either/index.js";
-import { Cons } from "../output/Data.List.Types/index.js";
+import { compileFixtures, copyFixtures, runFsharp } from "./support/fixtures.mjs";
+import { readCoreFn } from "./support/corefn.mjs";
 import * as Map from "../output/Data.Map/index.js";
 import { ordString } from "../output/Data.Ord/index.js";
-import { coreFnModulesFromOutput } from "../output/PureScript.Backend.Optimizer.App/index.js";
 import { translateModule } from "../output/Sharpurs.CodeGen/index.js";
 import { sanitizeName } from "../output/Sharpurs.FsAst/index.js";
 import { printModule } from "../output/Sharpurs.Printer/index.js";
@@ -19,29 +16,12 @@ import { normalizeRecIndent } from "../output/Sharpurs.Printer.Layout/index.js";
 import { prelude } from "../output/Sharpurs.Runtime/index.js";
 
 const backend = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const runAff = action => new Promise((resolve, reject) => {
-  Aff.runAff(result => () => result instanceof Left ? reject(result.value0) : resolve(result.value0))(action)();
-});
-function command(program, args, cwd) {
-  const result = spawnSync(program, args, { cwd, encoding: "utf8", timeout: 60_000 });
-  if (result.error) throw result.error;
-  assert.equal(result.status, 0, `${program}: ${result.stdout}\n${result.stderr}`);
-  return result;
-}
 
 const directory = await mkdtemp(join(tmpdir(), "sharpurs-recursion-"));
 try {
-  for (const file of ["Recursion.purs", "Recursion.js"]) {
-    await writeFile(join(directory, file), await readFile(join(backend, "tests/fixtures/recursion", file)));
-  }
-  await writeFile(join(directory, "package.json"), '{"type":"module"}\n');
-  command(process.env.PURS || "purs", ["compile", join(directory, "Recursion.purs"),
-    "--output", join(directory, "output"), "--codegen", "corefn,js"], directory);
-  const modules = await runAff(coreFnModulesFromOutput(join(directory, "output")));
-  let core;
-  for (let cursor = modules; cursor instanceof Cons; cursor = cursor.value1) {
-    if (cursor.value0.name === "Recursion.Context") core = cursor.value0;
-  }
+  await copyFixtures(join(backend, "tests/fixtures/recursion"), directory, ["Recursion.purs", "Recursion.js"]);
+  compileFixtures(directory, [join(directory, "Recursion.purs")]);
+  const core = (await readCoreFn(directory)).get("Recursion.Context");
   assert.ok(core, "real compiler CoreFn parsed by PBO");
   let constructors = Map.empty;
   for (const declaration of core.dataDecls) for (const ctor of declaration.constructors) {
@@ -85,7 +65,7 @@ let call2 fn first second = sharpurs_apply (sharpurs_apply fn (box first)) (box 
 ${assertions.join("\n")}
 printfn "recursion: %d runtime checks passed against JavaScript" checks
 `));
-  const result = command(process.env.DOTNET || "dotnet", ["fsi", "--nologo", "--exec", "recursion.fsx"], directory);
+  const result = runFsharp(directory, "recursion.fsx");
   process.stdout.write(result.stdout);
 } finally {
   await rm(directory, { recursive: true, force: true });

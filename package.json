@@ -8,6 +8,8 @@
   },
   "scripts": {
     "build": "spago build && spago bundle --module Main --platform node --outfile bin/sharpurs.js --bundle-type app",
+    "test": "node tests/run.mjs",
+    "compare:generation": "node scripts/compare-generation.mjs",
     "test:runtime": "node tests/runtime-apply.mjs",
     "test:ffi-support": "node tests/ffi-support.mjs",
     "test:printer": "node tests/printer.mjs",

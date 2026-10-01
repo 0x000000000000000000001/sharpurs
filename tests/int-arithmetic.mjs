@@ -1,19 +1,16 @@
 // Real fork-Purs TAST -> PBO -> F#, checked against generated JS and a generic
 // F# oracle. Run after the backend build; no compiler rebuild occurs here.
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { spawnSync } from "node:child_process";
+import { compileFixtures, copyFixtures, packageSource, runFsharp } from "./support/fixtures.mjs";
+import { readCoreFn } from "./support/corefn.mjs";
 import { helpers as preludeFs } from "../output/Sharpurs.Runtime/index.js";
 import * as C from "../output/PureScript.Backend.Optimizer.CoreFn/index.js";
-import * as Aff from "../output/Effect.Aff/index.js";
-import { Left } from "../output/Data.Either/index.js";
-import { Cons } from "../output/Data.List.Types/index.js";
 import { Just, Nothing } from "../output/Data.Maybe/index.js";
 import * as Map from "../output/Data.Map.Internal/index.js";
-import * as App from "../output/PureScript.Backend.Optimizer.App/index.js";
 import { fromExpr } from "../output/Sharpurs.IntArithmetic/index.js";
 import { translateModule } from "../output/Sharpurs.CodeGen/index.js";
 import { printModule } from "../output/Sharpurs.Printer/index.js";
@@ -21,16 +18,6 @@ import { printModule } from "../output/Sharpurs.Printer/index.js";
 const backend = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const artifacts = process.env.INT_ARITHMETIC_ARTIFACTS && resolve(process.env.INT_ARITHMETIC_ARTIFACTS);
 const transcript = [];
-const runAff = action => new Promise((resolve, reject) => {
-  Aff.runAff(result => () => result instanceof Left ? reject(result.value0) : resolve(result.value0))(action)();
-});
-function command(program, args, cwd) {
-  const result = spawnSync(program, args, { cwd, encoding: "utf8", timeout: 60_000 });
-  transcript.push(`$ ${program} ${args.join(" ")}\n${result.stdout || ""}${result.stderr || ""}`);
-  if (result.error) throw result.error;
-  assert.equal(result.status, 0, `${program}: ${result.stdout}\n${result.stderr}`);
-  return result;
-}
 function clone(value, rename = false) {
   if (typeof value === "string") return rename ? value.replaceAll("IntArithmetic", "ArithmeticFallback") : value;
   if (Array.isArray(value)) return value.map(child => clone(child, rename));
@@ -51,20 +38,10 @@ function parts(expr) {
 const generate = core => printModule(translateModule(Map.empty)(core));
 const directory = await mkdtemp(join(tmpdir(), "sharpurs-int-arithmetic-"));
 try {
-  const preludeRoot = join(backend, ".spago/p");
-  const prelude = process.env.PRELUDE_SRC || join(preludeRoot,
-    (await readdir(preludeRoot)).find(name => /^prelude-/.test(name)), "src");
-  for (const file of ["IntArithmetic.purs", "IntArithmetic.js"]) {
-    await writeFile(join(directory, file), await readFile(join(backend, "tests/fixtures/int-arithmetic", file)));
-  }
-  await writeFile(join(directory, "package.json"), '{"type":"module"}\n');
-  command(process.env.PURS || "purs", ["compile", join(directory, "IntArithmetic.purs"),
-    join(prelude, "**/*.purs"), "--output", join(directory, "output"), "--codegen", "corefn,js"], directory);
-  const modules = await runAff(App.coreFnModulesFromOutput(join(directory, "output")));
-  let core;
-  for (let cursor = modules; cursor instanceof Cons; cursor = cursor.value1) {
-    if (cursor.value0.name === "IntArithmetic") core = cursor.value0;
-  }
+  const prelude = await packageSource(backend, "prelude");
+  await copyFixtures(join(backend, "tests/fixtures/int-arithmetic"), directory, ["IntArithmetic.purs", "IntArithmetic.js"]);
+  compileFixtures(directory, [join(directory, "IntArithmetic.purs"), join(prelude, "**/*.purs")], { transcript });
+  const core = (await readCoreFn(directory)).get("IntArithmetic");
   assert.ok(core, "real fork-Purs fixture parsed by PBO's TAST reader");
   if (artifacts) {
     await mkdir(artifacts, { recursive: true });
@@ -289,7 +266,7 @@ printfn "int-arithmetic runtime: %d checks passed" checks
       await writeFile(join(artifacts, name), contents);
     }
   }
-  const result = command(process.env.DOTNET || "dotnet", ["fsi", "--nologo", "--optimize+", "--exec", "arithmetic.fsx"], directory);
+  const result = runFsharp(directory, "arithmetic.fsx", { optimize: true, transcript });
   assert.doesNotMatch(result.stderr, /warning FS\d+/, "arithmetic fixture compiles without warnings");
   console.log(result.stdout.trim());
   const summary = `int-arithmetic converter: ${checks} checks passed`;
