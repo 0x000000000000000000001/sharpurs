@@ -258,6 +258,12 @@ The checked-in [bin/pkg](bin/pkg) is the authoritative list of sibling packages 
 From the compiler root:
 
 ```bash
+# Build, bundle, PureScript assertions and every focused suite, with retained logs.
+npm test
+
+# Include a sequential selection of complete CLI fixtures.
+npm test -- --fixture PartialFunction --fixture NewtypeEff
+
 # Run the vendored passing-test suite using the current backend bundle.
 ./bin/test
 
@@ -265,12 +271,15 @@ From the compiler root:
 ./bin/test TCO -c
 ```
 
-The runner skips seven fixtures: five require newer compiler features, `4179` relies on JavaScript-specific behavior, and `TCOMutRec` expects a stack overflow that this backend's tail-call optimization avoids. The reasons live beside the blacklist in `bin/test`. The runner stops at the first failure. Its result applies to this vendored suite and the selected toolchain; it is not a claim that every current upstream PureScript test or library is supported. The `-c` / `--clean` option clears the runner's `.spago`, `output` and `output-es` contents.
+`npm test` prints a per-step PASS/FAIL summary and the location of its logs and `results.json`; it returns nonzero if any requested check fails. Use `--suite NAME` to select focused suites, `--skip-build` to reuse the current build, and `--artifacts NEW_DIRECTORY` to retain the report at a chosen location. `npm test -- --all-fixtures` includes the full CLI replay. See [Replaying compiler checks](docs/testing.md) for prerequisites, options, failure locations and the before/after generation comparison command.
+
+The runner skips seven fixtures: five require newer compiler features, `4179` relies on JavaScript-specific behavior, and `TCOMutRec` expects a stack overflow that this backend's tail-call optimization avoids. The reasons live beside the blacklist in `bin/test`. The runner stops at the first failure, locks its shared workspace and restores the pre-existing `.purmeta` cache on exit. Its result applies to this vendored suite and the selected toolchain; it is not a claim that every current upstream PureScript test or library is supported. The `-c` / `--clean` option clears the runner's `.spago`, `output` and `output-es` contents.
 
 Focused regression commands are defined in [package.json](package.json):
 
 | Commands | Coverage |
 | --- | --- |
+| `npm run test:tools` | Check-runner failures/cancellation, CLI locking/cache restoration and before/after manifest comparisons. |
 | `npm run test:runtime` | Generic function application, FFI wrappers and exception boundaries. |
 | `npm run test:ffi-support` | F#/C# declaration forms, values/functions, partials, effects, native-file precedence and missing implementations in a generated .NET project. |
 | `npm run test:printer` | Direct-call rendering conventions, structured patterns and nested recursive layout. |

@@ -205,17 +205,31 @@ The direct-call, integer-operation, constructor and ADT/thunk suites exercise th
 
 ## Checks for a change
 
-Rebuild from the compiler root with the repository's tools first on `PATH`:
+From the compiler root, run the aggregate checks with the repository's tools first
+on `PATH`:
 
 ```bash
-export PATH="$PWD/node_modules/.bin:$PATH"
-spago build
-spago bundle --module Main --platform node --outfile bin/sharpurs.js --bundle-type app
-spago test
+export PATH="$PWD/node_modules/.bin:$HOME/.dotnet:$PATH"
+npm test
 ```
 
-Use the focused commands listed in the [README](../README.md#development-and-testing) for the affected representation or runtime boundary. Runtime suites compile and execute F# and require `dotnet` on `PATH` (or `DOTNET` pointing to it); `test:selection` checks the generated declarations directly in Node.js. All use the rebuilt compiler output, so rebuild before running them.
+This builds/bundles the compiler, runs its PureScript assertions and executes all
+focused suites in separate processes. The final summary links complete logs and
+`results.json`, with a nonzero exit code on any failed or incomplete check.
 
-`bin/test` exercises the complete CLI on vendored PureScript fixtures. Its `tests/runner` directory is shared: run fixture selections sequentially. The focused scripts use their own temporary directories.
+Use the focused commands listed in the [README](../README.md#development-and-testing) for the affected representation or runtime boundary. Runtime suites compile and execute F# and require `dotnet` on `PATH` (or `DOTNET` pointing to it); `test:selection` checks the generated declarations directly in Node.js. All compiler suites use the rebuilt output, so rebuild before running them individually.
 
-For orchestration or template refactors, compare generated sources and project files against the previous compiler on the same typed input and FFI sources. This checks module order, wrapper selection, filenames and project references together. Content comparisons also distinguish a formatting-only change from a change to emitted code. Existing benchmark baselines require their own separate-process performance comparisons if optimization or runtime behavior changes.
+`bin/test` exercises the complete CLI on vendored PureScript fixtures. Its
+`tests/runner` directory is shared and locked per invocation; the pre-existing
+`.purmeta` cache is restored on exit. `npm test -- --fixture NAME --fixture OTHER`
+runs one sequential selection after the focused suites. The focused scripts use
+their own temporary directories.
+
+For orchestration or template refactors, use `npm run compare:generation` with
+self-contained before/after bundles and a prepared typed application workspace.
+It snapshots the inputs and native sources, compares complete file/project
+manifests and incremental timestamps, then performs a clean regeneration to detect
+obsolete outputs. The [replay guide](testing.md) documents the exact commands,
+required checkouts, shared test-support contracts and retained failure evidence.
+Existing benchmark baselines require their own separate-process performance
+comparisons if optimization or runtime behavior changes.
