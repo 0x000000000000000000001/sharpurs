@@ -18,7 +18,7 @@ import * as Ord from "../output/Data.Ord/index.js";
 import * as App from "../output/PureScript.Backend.Optimizer.App/index.js";
 import * as Builder from "../output/PureScript.Backend.Optimizer.Builder/index.js";
 import * as Foreign from "../output/PureScript.Backend.Optimizer.Semantics.Foreign/index.js";
-import { prepareUnary } from "../output/Sharpurs.AdtKernel/index.js";
+import { prepareModule } from "../output/Sharpurs.AdtKernel/index.js";
 import * as S from "../output/PureScript.Backend.Optimizer.Syntax/index.js";
 import { translateModule, translateModuleWithConstructorWrappers, translateOptimizedModuleWithAdts } from "../output/Sharpurs.CodeGen/index.js";
 import { printModule } from "../output/Sharpurs.Printer/index.js";
@@ -87,7 +87,7 @@ try {
   })(await runAff(App.coreFnModulesFromOutput(join(directory, "output")))));
   assert.equal(captured.size, 2, "real compiler and PBO produced both modules");
   const producer = captured.get("AdtUnary");
-  const selected = prepareUnary(producer.core)(producer.backend);
+  const selected = prepareModule(producer.core)(producer.backend);
   assert.ok(selected instanceof Just, "mixed producer has a closed native layout");
   assert.deepEqual([...selected.value0.nativeNames].sort(), ["depth", "leftChild", "rootColor", "rootValue"],
     "only unary functions on a recursive ADT are selected");
@@ -109,7 +109,7 @@ try {
   converterChecks += 2;
   const reject = (label, edit) => {
     const state = clone(producer); edit(state);
-    assert.ok(prepareUnary(state.core)(state.backend) instanceof Nothing, label);
+    assert.ok(prepareModule(state.core)(state.backend) instanceof Nothing, label);
     converterChecks++;
   };
   reject("polymorphic layout", s => { s.core.dataDecls[1].vars = ["a"]; s.backend.dataDecls = clone(s.core.dataDecls); });
@@ -118,7 +118,7 @@ try {
   reject("foreign declarations remain conservative", s => { s.backend.foreign = Map.singleton("unknown")(new Just(C.Int.value)); });
   const retain = (label, edit) => {
     const state = clone(producer); edit(state);
-    const candidate = prepareUnary(state.core)(state.backend);
+    const candidate = prepareModule(state.core)(state.backend);
     assert.ok(candidate instanceof Just && !candidate.value0.nativeNames.includes("depth") && candidate.value0.nativeNames.includes("rootValue"),label);
     converterChecks++;
   };
@@ -216,6 +216,7 @@ printfn "adt-unary runtime: %d checks passed" checks
     await writeFile(join(destination, "fsi.log"), result.stdout + result.stderr);
     const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
     const sourceFiles = ["src/Sharpurs/AdtKernel.purs", "src/Sharpurs/AdtLayout.purs", "src/Sharpurs/CodeGen.purs",
+      ...["Analysis", "Lower", "Emit"].map(name => `src/Sharpurs/AdtKernel/${name}.purs`),
       "tests/adt-unary.mjs", ...fixtures.map((name) => `tests/fixtures/${name}.purs`)];
     const hashes = {};
     for (const file of sourceFiles) hashes[file] = hash(await readFile(join(backend, file)));

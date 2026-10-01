@@ -26,6 +26,10 @@ runTwo :: Int -> Int -> Int -> Int
 runTwo depth left right =
   force (chain depth (delay \_ -> left)) + force (chain depth (delay \_ -> right))
 
+runCaptureCollision :: Int -> Int -> Int -> Int
+runCaptureCollision depth left sharpurs_thunk_capture_0 =
+  force (chain depth (delay \_ -> left + sharpurs_thunk_capture_0))
+
 chainBy :: Int -> Int -> Susp Int -> Susp Int
 chainBy _ 0 acc = acc
 chainBy step n acc = chainBy step (n - 1) (delay \_ -> force acc + step)

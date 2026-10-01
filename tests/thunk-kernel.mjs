@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { helpers as preludeFs } from '../output/Sharpurs.Runtime/index.js';
 import * as C from '../output/PureScript.Backend.Optimizer.CoreFn/index.js';
 import * as S from '../output/PureScript.Backend.Optimizer.Syntax/index.js';
@@ -90,7 +91,7 @@ try {
   const generated = generate(selected), oracle = generate(Nothing.value);
   let checks = 0;
   const yes = (condition, label) => { assert.ok(condition, label); checks++; };
-  for (const name of ['run', 'runLiteral', 'runTwo', 'runBy']) {
+  for (const name of ['run', 'runLiteral', 'runTwo', 'runBy', 'runCaptureCollision']) {
     yes(selections(plan, binding(name)).length > 0, `${name}: proven closed seed selects native route`);
   }
   for (const name of ['escaped', 'unknown', 'unknownCallback', 'partialChain', 'partialRun', 'importedRun', 'opaqueRun', 'numberRun']) {
@@ -139,6 +140,19 @@ try {
     extra.value1 = workerName.replace(/^TypedThunks_/, '');
     st.core.decls.push(new C.NonRec(extra));
   });
+  rejectWorker('native worker cannot shadow a source-local binder', st => {
+    bindings(st.core).find(b => b.value1 === 'run').value2.value1 = 'TypedThunks_chain_thunk_native';
+  });
+  const forceSource = st => bindings(st.core).find(b => b.value1 === 'force').value2;
+  rejectWorker('helper needs source type evidence', st => { forceSource(st).value0.type = Nothing.value; });
+  rejectWorker('helper checks nested optimized annotations', st => {
+    const expr = st.backend.bindings.flatMap(g => g.bindings).find(b => b.value0 === 'force').value1;
+    expr.value1 = new S.Typed(C.Int.value, expr.value1);
+  });
+  rejectWorker('optimized helper shape cannot erase an opaque source dependency', st => {
+    const fn = forceSource(st);
+    fn.value2 = new C.ExprVar(clone(fn.value2.value0), new C.Qualified(new Just('ThunkExternal'), 'track'));
+  });
 
   const js = await import(pathToFileURL(join(directory, 'output/TypedThunks/index.js')));
   const cases = [];
@@ -147,6 +161,14 @@ try {
     yes(js.run(depth)(seed) === expected, 'JS result agrees with Int32 oracle');
     cases.push([depth, seed, expected]);
   }
+  const captureCases = [[0, 7, 23], [3, -5, 11], [37, 2147483647, 5]].map(([depth, left, right]) => {
+    const wrap = value => Number(BigInt.asIntN(32, value));
+    const two = wrap(2n * BigInt(depth) + BigInt(left) + BigInt(right));
+    const captured = wrap(BigInt(depth) + BigInt(left) + BigInt(right));
+    yes(js.runTwo(depth)(left)(right) === two, 'JS independent seeds agree with Int32 oracle');
+    yes(js.runCaptureCollision(depth)(left)(right) === captured, 'JS multiple captures agree with Int32 oracle');
+    return [depth, left, right, two, captured];
+  });
   const support = `
 open System
 let (|LitInt|_|) (expected: int) (value: obj) = if value :? int && unbox<int> value = expected then Some() else None
@@ -186,6 +208,17 @@ for depth, seed, expected in cases do
 for step, depth, seed in [(2, 5, 7); (-3, 10, 29); (System.Int32.MaxValue, 3, 7)] do
     let callBy fn = apply (apply (apply fn (box step)) (box depth)) (box seed) |> unbox<int>
     check "additional captured step" (callBy Native.TypedThunks_runBy = callBy Oracle.TypedThunks_runBy)
+for depth, left, right, two, captured in [${captureCases.map(row => `(${row.join(', ')})`).join('; ')}] do
+    let callTwo fn = apply (apply (apply fn (box depth)) (box left)) (box right) |> unbox<int>
+    check "independent native seeds" (callTwo Native.TypedThunks_runTwo = two)
+    check "independent generic seeds" (callTwo Oracle.TypedThunks_runTwo = two)
+    check "capture names cannot shadow later capture values" (callTwo Native.TypedThunks_runCaptureCollision = captured)
+    check "generic multiple capture oracle" (callTwo Oracle.TypedThunks_runCaptureCollision = captured)
+    let partial = apply Native.TypedThunks_runCaptureCollision (box depth)
+    let withLeft = apply partial (box left)
+    check "reused multiple capture partial" (apply withLeft (box right) |> unbox<int> = captured)
+    check "reused partial gets a fresh right capture" (apply withLeft (box -7) |> unbox<int> = depth + left - 7)
+    check "reused partial gets a fresh left capture" (apply (apply partial (box 19)) (box right) |> unbox<int> = depth + 19 + right)
 for depth in [0; 1; 3; 1000] do
     let seed : obj = box (fun (_: obj) -> events.Add(31); box 11)
     events.Clear()
@@ -244,6 +277,15 @@ printfn "thunk-kernel runtime: %d checks passed" checks
     yes(!script.split('\n')[Number(warning[1])-1].includes('_thunk_native'), 'no native worker warnings');
   }
   assert.match(result.stdout, /thunk-kernel runtime: \d+ checks passed/);
+  if (artifacts) {
+    const sourceHashes = {};
+    for (const file of ['src/Sharpurs/ThunkKernel.purs', 'tests/thunk-kernel.mjs',
+      ...['Analysis', 'Helpers', 'Lower', 'Call', 'Emit'].map(name => `src/Sharpurs/ThunkKernel/${name}.purs`),
+      ...fixtureFiles.map(name => `tests/fixtures/thunk-kernel/${name}`)]) {
+      sourceHashes[file] = createHash('sha256').update(await readFile(join(backend, file))).digest('hex');
+    }
+    await writeFile(join(artifacts, 'metadata.json'), JSON.stringify({ sourceHashes, selected: plan.nativeNames, converterChecks: checks }, null, 2) + '\n');
+  }
   console.log(result.stdout.trim());
   console.log(`thunk-kernel converter/JS: ${checks} checks passed`);
 } catch (error) {

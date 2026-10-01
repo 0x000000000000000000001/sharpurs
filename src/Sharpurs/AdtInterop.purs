@@ -25,6 +25,8 @@ import Sharpurs.Names as Names
 
 -- The constructor is private: a layout cannot be registered without the whole
 -- producer having passed the native emitter, including its public wrappers.
+-- This uses AdtKernel.fromModule's all-or-nothing path. The CLI's mixed modules
+-- register their validated constructor wrappers through AdtKernel.prepareModule.
 data NativeProducer = NativeProducer FsModule Layout.Layout
 
 prepareProducer :: Module Ann -> BackendModule -> Maybe NativeProducer

@@ -20,7 +20,7 @@ import Data.Newtype (unwrap)
 import Data.Set (Set)
 import Data.Set as Set
 import PureScript.Backend.Optimizer.CoreFn (Ident, Qualified, unQualified)
-import Sharpurs.AdtKernel (UnaryModule)
+import Sharpurs.AdtKernel (AdtModule)
 import Sharpurs.DirectCall as DirectCall
 import Sharpurs.FsAst (sanitizeName)
 import Sharpurs.Names as Names
@@ -31,7 +31,7 @@ import Sharpurs.ThunkKernel as ThunkKernel
 type ModuleEnv =
   { arities :: Map String Int
   , wrappers :: Set String
-  , native :: Maybe UnaryModule
+  , native :: Maybe AdtModule
   , direct :: Map (Qualified Ident) DirectCall.Candidate
   , thunks :: Maybe ThunkKernel.ThunkModule
   }

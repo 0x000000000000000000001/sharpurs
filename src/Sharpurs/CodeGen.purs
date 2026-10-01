@@ -23,7 +23,7 @@ import Data.Set (Set)
 import Data.Set as Set
 import PureScript.Backend.Optimizer.Convert (BackendModule)
 import PureScript.Backend.Optimizer.CoreFn (Module(..), Bind(..), Binding(..), Expr(..), Ident(..), Literal(..), Ann, Prop(..), Qualified(..))
-import Sharpurs.AdtKernel (UnaryModule)
+import Sharpurs.AdtKernel (AdtModule)
 import Sharpurs.AdtLayout as AdtLayout
 import Sharpurs.Analysis.Source as Source
 import Sharpurs.CodeGen.Boxed as Boxed
@@ -48,10 +48,10 @@ translateModule adtCtors = translateModuleWithKernels adtCtors Map.empty
 translateOptimizedModule :: Map String Int -> BackendModule -> Module Ann -> FsModule
 translateOptimizedModule = translateOptimizedModuleWithAdts Set.empty Nothing
 
-translateOptimizedModuleWithAdts :: Set String -> Maybe UnaryModule -> Map String Int -> BackendModule -> Module Ann -> FsModule
+translateOptimizedModuleWithAdts :: Set String -> Maybe AdtModule -> Map String Int -> BackendModule -> Module Ann -> FsModule
 translateOptimizedModuleWithAdts wrappers native = translateOptimizedModuleWithThunks wrappers native Nothing
 
-translateOptimizedModuleWithThunks :: Set String -> Maybe UnaryModule -> Maybe ThunkKernel.ThunkModule -> Map String Int -> BackendModule -> Module Ann -> FsModule
+translateOptimizedModuleWithThunks :: Set String -> Maybe AdtModule -> Maybe ThunkKernel.ThunkModule -> Map String Int -> BackendModule -> Module Ann -> FsModule
 translateOptimizedModuleWithThunks wrappers native thunks arities backendMod =
   translateModuleUsing { arities, wrappers, native, direct: Map.empty, thunks } (Selection.fromBackend backendMod)
 

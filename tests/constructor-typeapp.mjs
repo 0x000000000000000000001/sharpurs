@@ -94,8 +94,8 @@ async function collect(compiler, directory, builderDictionary = compiler.Aff.mon
   assert.equal(captured.size, moduleNames.length, 'real fork/PBO prepared all fixture modules');
   return captured;
 }
-function configuration(compiler, captured) {
-  const { Map, Set, Ord, Maybe, Adt } = compiler;
+function configuration(compiler, captured, prepareAdts = compiler.Adt.prepareModule) {
+  const { Map, Set, Ord, Maybe } = compiler;
   let constructors = Map.empty, wrappers = Set.empty;
   for (const { core } of captured.values()) for (const decl of core.dataDecls) for (const ctor of decl.constructors) {
     const name = `${core.name.replaceAll('.', '_')}_${ctor.name}`;
@@ -103,7 +103,7 @@ function configuration(compiler, captured) {
     if (core.name === 'ConstructorNative') wrappers = Set.insert(Ord.ordString)(name)(wrappers);
   }
   const producer = captured.get('ConstructorNative');
-  const native = Adt.prepareUnary(producer.core)(producer.backend);
+  const native = prepareAdts(producer.core)(producer.backend);
   assert.ok(native instanceof Maybe.Just, 'native constructor producer is admitted');
   return { constructors, wrappers, native, producer };
 }
@@ -211,7 +211,7 @@ try {
   if (process.env.CONSTRUCTOR_TYPEAPP_ORACLE_OUTPUT) {
     const old=await oldCompiler(resolve(process.env.CONSTRUCTOR_TYPEAPP_ORACLE_OUTPUT));
     // The historical constructor-call baseline predates Builder's MonadEffect constraint.
-    const oldState=await collect(old,directory,old.Aff.monadAff), oldConfig=configuration(old,oldState);
+    const oldState=await collect(old,directory,old.Aff.monadAff), oldConfig=configuration(old,oldState,old.Adt.prepareUnary);
     const actualOld=old.Printer.printModule(old.CodeGen.translateModuleWithConstructorWrappers(oldConfig.wrappers)(oldConfig.constructors)(oldState.get('ConstructorTypeApp').core));
     yes(actualOld===oracle, 'metadata-disabled oracle is byte-identical to actual pre-change generator');
     if (artifacts) { await mkdir(artifacts,{recursive:true}); await writeFile(join(artifacts,'actual-before.fs'),actualOld); }

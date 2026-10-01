@@ -20,7 +20,7 @@ import * as Ord from "../output/Data.Ord/index.js";
 import * as App from "../output/PureScript.Backend.Optimizer.App/index.js";
 import * as Builder from "../output/PureScript.Backend.Optimizer.Builder/index.js";
 import * as Foreign from "../output/PureScript.Backend.Optimizer.Semantics.Foreign/index.js";
-import { prepareUnary } from "../output/Sharpurs.AdtKernel/index.js";
+import { prepareModule } from "../output/Sharpurs.AdtKernel/index.js";
 import { translateModule, translateModuleWithConstructorWrappers, translateOptimizedModuleWithAdts } from "../output/Sharpurs.CodeGen/index.js";
 import { printModule } from "../output/Sharpurs.Printer/index.js";
 
@@ -91,7 +91,7 @@ try {
   })(await runAff(App.coreFnModulesFromOutput(join(directory, "output")))));
   assert.equal(captured.size, 3, "real fork compiler and PBO prepared producer, consumer and external dependency");
   const producer = captured.get("AdtMulti");
-  const selected = prepareUnary(producer.core)(producer.backend);
+  const selected = prepareModule(producer.core)(producer.backend);
   assert.ok(selected instanceof Just, "closed ADT module has native candidates");
   let checks = 0;
   const yes = (condition, label) => { assert.ok(condition, label); checks++; };
@@ -150,11 +150,11 @@ try {
     "oracle retains generated generic recursion and dispatch");
   const rejectModule = (label, edit) => {
     const state = clone(producer); edit(state);
-    yes(prepareUnary(state.core)(state.backend) instanceof Nothing, label);
+    yes(prepareModule(state.core)(state.backend) instanceof Nothing, label);
   };
   const rejectFunction = (name, label, edit) => {
     const state = clone(producer); edit(state);
-    const candidate = prepareUnary(state.core)(state.backend);
+    const candidate = prepareModule(state.core)(state.backend);
     yes(candidate instanceof Just && !candidate.value0.nativeNames.includes(name), label);
   };
   rejectModule("polymorphic layout rejected", state => {
@@ -217,7 +217,7 @@ try {
   });
   const failedDependency = clone(producer);
   sourceBinding(failedDependency, "assemble").value2.value0.type = Nothing.value;
-  const reduced = prepareUnary(failedDependency.core)(failedDependency.backend);
+  const reduced = prepareModule(failedDependency.core)(failedDependency.backend);
   yes(reduced instanceof Just && !reduced.value0.nativeNames.includes("insert") && reduced.value0.nativeNames.includes("depth"),
     "unsupported native dependency keeps dependent function generic without dropping independent functions");
 
@@ -413,6 +413,7 @@ printfn "adt-multi runtime: %d checks passed" checks
   if (artifacts) {
     const hashes = {};
     for (const file of ["src/Sharpurs/AdtKernel.purs", "src/Sharpurs/AdtLayout.purs", "src/Sharpurs/CodeGen.purs", "tests/adt-multi.mjs",
+      ...["Analysis", "Lower", "Emit"].map(name => `src/Sharpurs/AdtKernel/${name}.purs`),
       ...fixtureFiles.map(file => `tests/fixtures/adt-multi/${file}`)]) hashes[file] = createHash("sha256").update(await readFile(join(backend, file))).digest("hex");
     await writeFile(join(artifacts, "metadata.json"), JSON.stringify({ sourceHashes: hashes, selected: [...chosen] }, null, 2) + "\n");
   }

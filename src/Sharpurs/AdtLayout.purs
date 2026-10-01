@@ -44,9 +44,10 @@ type Layout =
   , declarations :: Array NativeDecl
   }
 
--- This closed pilot takes layouts exclusively from TAST dataDecls. A module
--- containing polymorphic, external or unsupported fields is rejected as a
--- whole. Production needs a separate policy for shared module boundaries.
+-- Closed native representation comes exclusively from TAST dataDecls. A module
+-- containing polymorphic, external or unsupported fields is rejected as a whole.
+-- AdtKernel separately validates implementations and their public wrappers;
+-- AdtInterop handles the boundary between validated producers and consumers.
 fromModule :: forall a. Module a -> Maybe Layout
 fromModule (Module mod) = do
   let

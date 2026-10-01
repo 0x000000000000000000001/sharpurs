@@ -80,7 +80,7 @@ emitModule :: EmitContext -> Module Ann -> BackendModule -> Aff Unit
 emitModule context source optimized = do
   let
     name = unwrap optimized.name
-    native = AdtKernel.prepareUnary source optimized
+    native = AdtKernel.prepareModule source optimized
     thunks = ThunkKernel.prepareModule source optimized
   -- The builder visits dependencies first. Register a producer only after its
   -- layout and constructor wrappers pass validation, before its mixed bindings.
@@ -99,7 +99,7 @@ collectConstructorArities = Array.foldl collect Map.empty
         source.dataDecls
     in Map.union arities (Map.fromFoldable constructors)
 
-nativeConstructorNames :: Maybe AdtKernel.UnaryModule -> Set String
+nativeConstructorNames :: Maybe AdtKernel.AdtModule -> Set String
 nativeConstructorNames = case _ of
   Nothing -> Set.empty
   Just selected -> Set.fromFoldable (Array.concatMap (map publicName <<< _.constructors) selected.layout.declarations)

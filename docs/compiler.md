@@ -31,7 +31,13 @@ The input is the enriched typed CoreFn produced by the compiler fork. `Module An
 | F# AST and identifier/literal escaping | [`Sharpurs/FsAst.purs`](../src/Sharpurs/FsAst.purs), [`Sharpurs/FsAst.js`](../src/Sharpurs/FsAst.js) |
 | Declaration and expression rendering | [`Sharpurs/Printer.purs`](../src/Sharpurs/Printer.purs) |
 | Deferred recursive-group indentation and its marker definitions | [`Sharpurs/Printer/Layout.purs`](../src/Sharpurs/Printer/Layout.purs), [`Layout.js`](../src/Sharpurs/Printer/Layout.js) |
-| Typed integer, ADT, direct-call, constructor and thunk subsets | The corresponding `Sharpurs/*Kernel`, `AdtLayout`, `DirectCall`, `ConstructorCall` and integer-operation modules |
+| Closed ADT layouts, constructor metadata and native type names | [`Sharpurs/AdtLayout.purs`](../src/Sharpurs/AdtLayout.purs) |
+| ADT module admission, binding selection/order and generated-name collisions | [`Sharpurs/AdtKernel.purs`](../src/Sharpurs/AdtKernel.purs) |
+| ADT signatures, source dependencies and type/constructor evidence | [`Sharpurs/AdtKernel/Analysis.purs`](../src/Sharpurs/AdtKernel/Analysis.purs) |
+| Optimized ADT bodies, nested type checks and native call targets | [`Sharpurs/AdtKernel/Lower.purs`](../src/Sharpurs/AdtKernel/Lower.purs) |
+| ADT definition headers, public wrappers, guarded calls and recursive bridges | [`Sharpurs/AdtKernel/Emit.purs`](../src/Sharpurs/AdtKernel/Emit.purs) |
+| Whole-native ADT producers and cross-module consumer checks | [`Sharpurs/AdtInterop.purs`](../src/Sharpurs/AdtInterop.purs) |
+| Typed integer, direct-call, constructor and thunk subsets | `IntKernel`, `Optimized`, `DirectCall`, `ConstructorCall`, integer-operation modules and `ThunkKernel` |
 
 `Ffi.loadModule` returns wrapper text and optional C# source. `Project.writeModule` owns the writes. This keeps foreign-source selection independent of output paths. Runtime templates are pure strings, also imported by the focused tests through the compiled `Sharpurs.Runtime` module.
 
@@ -68,6 +74,29 @@ Expression selection has its own entry point, `forExpression`, with this priorit
 `CodeGen` explicitly exports the module and standalone-binding entry points used by the CLI, interop and tests. `translateModuleUsing env { kernels, expressions } source` accepts named candidate maps and applies the complete module policy; the convenience entry points delegate to it. Standalone binding translation does not invent a module-wide direct-call registry.
 
 `npm run test:selection` checks competing candidate sets through production registration and emission, including singleton/mutual groups, helper suppression, escaped-name/foreign/parameter collisions and qualified call-site lookup. Recognizer suites additionally execute the emitted implementations.
+
+## Inside the ADT kernel
+
+`AdtKernel.prepareModule` returns an `AdtModule` for selective native generation. Both names cover functions with multiple arguments. Its preparation sequence is:
+
+1. **Admit the layout and constructors.** `AdtLayout.fromModule` validates a closed representation using source `dataDecls`: native Int/Boolean fields and local monomorphic ADTs. `AdtKernel` checks source/optimized module agreement, excludes foreign/class declarations, and validates every constructor implementation and public wrapper.
+2. **Preserve source dependencies.** `Analysis.unsupportedBindings` finds noncanonical imports and propagates that exclusion through local dependants. This evidence survives optimizer inlining, including inlined partial helpers whose invocation boundary is observable. Constructor signatures become callable when their binding is visited in source order.
+3. **Select functions in source order.** Source and optimized recursion groups must agree and each selected function must be a singleton. Its complete source lambda spine must match the optimized signature, with at least one argument whose ADT has a constructor containing that same ADT. Calls can use previously admitted definitions and the current recursive function. A rejected function does not enter that registry.
+4. **Lower a supported body.** `Lower.binding` collects parameters and translates the optimized expression, checking nested annotations, distinct/nonnegative lexical levels, exact application saturation, constructor metadata and primitive operand types. `Analysis.typeOf` supplies an expected type for a let RHS; lowering still validates the complete RHS. Unsupported forms, including unresolved type applications, reject the binding.
+5. **Emit and register.** `Emit` receives a lowered definition with named `parameters` and `body` fields. It produces the native header and object-ABI boundaries. Module admission also checks generated names and requires at least one selected function. `AdtModule.bindings` contains constructors and selected functions; `nativeNames` lists functions only.
+
+The emitted boundaries have distinct roles:
+
+| Entry | Purpose |
+| --- | --- |
+| `name_adt_native` | Typed constructor/function definition. Values and ADT fields pass directly, preserving sharing. |
+| Public `name` | Curried object wrapper; partially applied closures retain their arguments. The final invocation unboxes arguments and boxes the result. |
+| `name_adt_native_apply` | Guarded call between native functions in a mixed module, preserving one `TargetInvocationException` boundary. Arguments evaluate before entry; constructors and self-recursion use the unguarded definition. |
+| `name_tco` | Object-argument bridge for generic callers of a selected recursive function. |
+
+`AdtKernel.fromModule` is the separate all-or-nothing path used by `AdtInterop.prepareProducer`. It requires every optimized binding to have a supported native signature and body, supports whole mutually recursive function groups, and emits unguarded internal calls plus public wrappers. `AdtInterop` then checks producer completeness, module/name collisions and constructor arities before exposing factories to a boxed consumer. The CLI's `prepareModule` path supplies its constructor registry through `Main` and can retain generic source bindings alongside native functions.
+
+The ADT kernel, interop, unary and multi-argument suites cover layout/type rejection, public and partial applications, sharing, short-circuiting, source dependencies and exception boundaries. The constructor-type-application suite covers factories consumed through instantiated constructors.
 
 ## Conventions that affect correctness
 

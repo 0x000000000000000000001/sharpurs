@@ -232,6 +232,7 @@ printfn "adt-interop runtime: %d checks passed" checks
     await writeFile(join(destination, "fsi.log"), result.stdout + result.stderr);
     const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
     const sourceFiles = ["src/Sharpurs/AdtKernel.purs", "src/Sharpurs/AdtLayout.purs", "src/Sharpurs/AdtInterop.purs", "src/Sharpurs/CodeGen.purs",
+      ...["Analysis", "Lower", "Emit"].map(name => `src/Sharpurs/AdtKernel/${name}.purs`),
       "tests/adt-interop.mjs", ...fixtures.map((name) => `tests/fixtures/${name}.purs`)];
     const hashes = {};
     for (const file of sourceFiles) hashes[file] = hash(await readFile(join(backend, file)));
