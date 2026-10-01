@@ -37,7 +37,13 @@ The input is the enriched typed CoreFn produced by the compiler fork. `Module An
 | Optimized ADT bodies, nested type checks and native call targets | [`Sharpurs/AdtKernel/Lower.purs`](../src/Sharpurs/AdtKernel/Lower.purs) |
 | ADT definition headers, public wrappers, guarded calls and recursive bridges | [`Sharpurs/AdtKernel/Emit.purs`](../src/Sharpurs/AdtKernel/Emit.purs) |
 | Whole-native ADT producers and cross-module consumer checks | [`Sharpurs/AdtInterop.purs`](../src/Sharpurs/AdtInterop.purs) |
-| Typed integer, direct-call, constructor and thunk subsets | `IntKernel`, `Optimized`, `DirectCall`, `ConstructorCall`, integer-operation modules and `ThunkKernel` |
+| Thunk worker selection, recursion-group agreement and name collisions | [`Sharpurs/ThunkKernel.purs`](../src/Sharpurs/ThunkKernel.purs) |
+| Thunk signatures, parameter evidence, capture plans and reserved names | [`Sharpurs/ThunkKernel/Analysis.purs`](../src/Sharpurs/ThunkKernel/Analysis.purs) |
+| Identity/force helper implementations, aliases and typed references | [`Sharpurs/ThunkKernel/Helpers.purs`](../src/Sharpurs/ThunkKernel/Helpers.purs) |
+| Optimized thunk worker bodies and lexical-level checks | [`Sharpurs/ThunkKernel/Lower.purs`](../src/Sharpurs/ThunkKernel/Lower.purs) |
+| Source force-call eligibility, closed seeds and capture-value resolution | [`Sharpurs/ThunkKernel/Call.purs`](../src/Sharpurs/ThunkKernel/Call.purs) |
+| Native thunk definitions, closures, captures and boxed force results | [`Sharpurs/ThunkKernel/Emit.purs`](../src/Sharpurs/ThunkKernel/Emit.purs) |
+| Typed integer, direct-call and constructor subsets | `IntKernel`, `Optimized`, `DirectCall`, `ConstructorCall` and integer-operation modules |
 
 `Ffi.loadModule` returns wrapper text and optional C# source. `Project.writeModule` owns the writes. This keeps foreign-source selection independent of output paths. Runtime templates are pure strings, also imported by the focused tests through the compiled `Sharpurs.Runtime` module.
 
@@ -97,6 +103,31 @@ The emitted boundaries have distinct roles:
 `AdtKernel.fromModule` is the separate all-or-nothing path used by `AdtInterop.prepareProducer`. It requires every optimized binding to have a supported native signature and body, supports whole mutually recursive function groups, and emits unguarded internal calls plus public wrappers. `AdtInterop` then checks producer completeness, module/name collisions and constructor arities before exposing factories to a boxed consumer. The CLI's `prepareModule` path supplies its constructor registry through `Main` and can retain generic source bindings alongside native functions.
 
 The ADT kernel, interop, unary and multi-argument suites cover layout/type rejection, public and partial applications, sharing, short-circuiting, source dependencies and exception boundaries. The constructor-type-application suite covers factories consumed through instantiated constructors.
+
+## Inside the thunk kernel
+
+Thunk selection has two proof boundaries: admitting a private worker and admitting a source call to that worker. `ThunkKernel.prepareModule` returns a `ThunkModule` containing declarations, worker names and helper/worker registries. `ThunkKernel.fromExpr` delegates source-call selection to `Call` using those registries. The production path is:
+
+1. **Recognize helpers in source order.** `Helpers.select` checks nonrecursive singleton bindings for identity/delay and force implementations. Source and optimized signatures must each have the helper shape. The optimized body must return its callback unchanged or apply it exactly once to `Data.Unit.unit`; nested annotations are checked. Source references may use lexical locals, unit and previously recognized helpers. An alias requires the same variable reference in both representations. The erased newtype identity has one explicit exception for its unannotated source body.
+2. **Prove worker signatures and dependencies.** Source/optimized recursion groups must agree; workers are singletons, with optional self-recursion. `Analysis.worker` uses the actual source lambda spine as arity, requires the remaining flattened signature to return `Unit -> Int`, and requires at least one thunk parameter. Native parameter types are Int, Boolean, Unit and `Unit -> Int`. Source references are limited to lexical locals, self, recognized helpers, unit and the supported canonical integer operations. Source evidence prevents optimizer inlining from hiding an opaque or partial helper.
+3. **Lower optimized bodies.** `Lower.binding` receives a `Worker`, collects a named `Parameters` result and returns an `Emit.Definition` with `parameters` and `body`. It validates nested annotations, distinct/nonnegative parameter levels, lexical scope, exact saturation and each supported operation. Local callbacks, self-calls and recognized helpers are the only callable targets. A returned Unit lambda stays delayed; failures, foreign calls and unsupported callback shapes reject the worker.
+4. **Emit private workers.** `Emit.worker` renders `let private` or `let rec private` declarations. Selection protects generated names against public/foreign names and source-local binders. `CodeGen` adds these declarations before the ordinary source bindings; the thunk kernel does not replace their public curried ABI.
+5. **Prove the source force call.** `Call.fromExpr` requires a recognized force helper returning Int. Its thunk must come from a supported lambda, a recognized identity helper, or an exactly saturated selected worker. Every application suffix is type-checked. Source worker arguments are restricted further to Int expressions and proven thunks; a callback variable with type `Unit -> Int` is not provenance evidence. Helper references alone may use explicit `TypeApp Int` with a matching one-variable polymorphic signature.
+
+`Analysis.planCaptures` returns a named `CapturePlan`: Int captures in first-reference order, fresh native names and the extended local-name map. It reserves source reference names, local binders and existing native locals. `Call` resolves capture values in the original environment before translating the body with the new aliases; this prevents an early capture from shadowing a later one. `Emit.capturedThunk` evaluates those Int captures when constructing the closure, then delays its body. The accepted source Int subset consists of literals, lexical Int values and canonical addition/subtraction.
+
+The boundaries that preserve behavior are:
+
+| Boundary | Contract |
+| --- | --- |
+| Public value and partial application | The boxed curried ABI remains available, including escaping thunks and reused partial closures. Native declarations are supplementary. |
+| Closure construction | Captures are resolved once per constructed closure; separate seeds and reused partial applications receive their own values. |
+| Force | The body executes on every force. No memoization or eager evaluation of an opaque callback is introduced. |
+| Exception behavior | Native routing requires both worker and seed proofs. Unknown callbacks, partial helpers and foreign effects retain the generic application path and its invocation wrappers. |
+
+`Analysis.strip` and optimized `Lower.typeOf` inspect shapes/types only; validation still occurs when lowering those nodes. Capture traversal similarly does not authorize unsupported body syntax. These distinctions keep the source TAST's provenance evidence separate from the optimized IR's implementation evidence.
+
+`npm run test:thunk-kernel` compares generated F# with the generic compiler path and JavaScript. It covers independent seeds, multiple captures with generated-name collisions, reusable partials, delayed/opaque/throwing callbacks, source/optimized helper contradictions and the million-thunk result. Set `THUNK_KERNEL_ARTIFACTS` to retain generated code, typed input, source hashes and execution logs.
 
 ## Conventions that affect correctness
 

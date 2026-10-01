@@ -281,7 +281,7 @@ Focused regression commands are defined in [package.json](package.json):
 | `npm run test:adt-unary`, `npm run test:adt-multi` | Native recursive ADT workers and multiple arguments. |
 | `npm run test:int-comparison`, `npm run test:int-arithmetic` | Integer comparison, overflow, division and modulo behavior. |
 | `npm run test:direct-call` | Saturated calls and preservation of the generic fallback. |
-| `npm run test:thunk-kernel` | Selected typed thunk fusion and its exclusion cases. |
+| `npm run test:thunk-kernel` | Typed thunk selection, independent/multiple captures, reused partials, delay and exception boundaries. |
 | `npm run test:constructor-typeapp` | Constructor calls with explicit and inferred type applications. |
 
 Build the compiler first: the focused tests import its `output/` modules, including the runtime source exported by `Sharpurs.Runtime`. The runtime test additionally needs `sharpurs-exceptions`. Tests that compile fixtures use the TAST `purs` and run generated F# through `dotnet fsi`; `PURS=/path/to/purs` and `DOTNET=/path/to/dotnet` select those executables in the focused scripts. The shell runner instead uses `purs` and `dotnet` through `PATH`.
@@ -297,6 +297,8 @@ The main parts of the compilation pipeline are:
 5. **Project generation:** [Sharpurs.Project](src/Sharpurs/Project.purs) writes the sources and ordered .NET projects into `output/Main/`. [Sharpurs.Runtime](src/Sharpurs/Runtime.purs) owns the shared F# prelude and entrypoint templates.
 
 [Main](src/Main.purs) coordinates these phases and tracks the validated native constructor wrappers available to subsequent modules. See the [compiler maintenance guide](docs/compiler.md) for responsibilities, representation conventions and relevant checks.
+
+The thunk kernel separates helper recognition (`Helpers`), signature/capture evidence (`Analysis`), optimized worker lowering (`Lower`), source-call proofs (`Call`) and F# templates (`Emit`). A selected worker is callable natively only when the source site also proves its seeds; opaque callbacks retain the public boxed path.
 
 The CLI compares generated text with existing files before writing, preserving timestamps when contents are unchanged. It currently returns no cached modules from the optimizer's skip hook and does not read or write an optimization cache.
 
