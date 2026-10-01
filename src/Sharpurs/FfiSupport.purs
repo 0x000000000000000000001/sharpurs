@@ -1,3 +1,5 @@
+-- | Pure native-source adapters: recognize declarations, determine their call
+-- | shapes and render boxed wrappers. File precedence and stubs live in Ffi.
 module Sharpurs.FfiSupport
   ( appendFfiWrappers
   , appendCsFfiWrappers

@@ -39,6 +39,9 @@ loadModule ffiDirectory (Module source) = do
 
   fsPath <- find ".fs"
   csPath <- find ".cs"
+  -- Source adapters preserve each language's value/call convention. A file
+  -- without a recognized declaration keeps that adapter's zero-arity fallback;
+  -- only the absence of both native files selects the typed missing-FFI stubs.
   fsWrappers <- case fsPath of
     Just path -> do
       content <- FS.readTextFile UTF8 path

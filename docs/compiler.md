@@ -17,7 +17,7 @@ The input is the enriched typed CoreFn produced by the compiler fork. `Module An
 | --- | --- |
 | CLI arguments, phase order, optimizer callbacks, cross-module constructor state | [`Main.purs`](../src/Main.purs) |
 | Foreign source lookup, F#/C# precedence, missing-implementation stubs | [`Sharpurs/Ffi.purs`](../src/Sharpurs/Ffi.purs) |
-| Recognition of native declarations and wrapper text | [`Sharpurs/FfiSupport.js`](../src/Sharpurs/FfiSupport.js) |
+| Native declaration recognition, call shapes and boxed-wrapper templates | [`Sharpurs/FfiSupport.js`](../src/Sharpurs/FfiSupport.js), [`FfiSupport.purs`](../src/Sharpurs/FfiSupport.purs) |
 | Generated file paths, write-if-changed behavior, MSBuild items and templates | [`Sharpurs/Project.purs`](../src/Sharpurs/Project.purs) |
 | F# runtime helpers, event-loop bookkeeping, process entrypoint | [`Sharpurs/Runtime.purs`](../src/Sharpurs/Runtime.purs) |
 | General expression/binding translation and emission of selected plans | [`Sharpurs/CodeGen.purs`](../src/Sharpurs/CodeGen.purs) |
@@ -128,6 +128,42 @@ The boundaries that preserve behavior are:
 `Analysis.strip` and optimized `Lower.typeOf` inspect shapes/types only; validation still occurs when lowering those nodes. Capture traversal similarly does not authorize unsupported body syntax. These distinctions keep the source TAST's provenance evidence separate from the optimized IR's implementation evidence.
 
 `npm run test:thunk-kernel` compares generated F# with the generic compiler path and JavaScript. It covers independent seeds, multiple captures with generated-name collisions, reusable partials, delayed/opaque/throwing callbacks, source/optimized helper contradictions and the million-thunk result. Set `THUNK_KERNEL_ARTIFACTS` to retain generated code, typed input, source hashes and execution logs.
+
+## Inside the FFI adapters
+
+`Ffi.loadModule` resolves implementations and returns a `ModuleFfi` containing F# wrapper text and optional C# source. It asks the optimizer's `findFfiFile` for `.fs` and `.cs` independently: a file beside the source `.purs` takes precedence, followed by dependency/override directories, the configured FFI directory and the local directory. `FfiSupport.purs` exposes two pure text adapters; `Project` owns the generated files and project references.
+
+The adapter pipeline in `FfiSupport.js` has three explicit stages:
+
+1. **Recognize a declaration.** `recognizeFsharp` and `recognizeCsharp` return a `Declaration` with `nativeName` and `parameterText`, or no match. F# source first passes through `prepareFsharpSource`, which removes a simple `module Name` header and nests the indented implementation under `Module_Name_FFI`.
+2. **Determine the call shape.** `fsharpArity`/`csharpArity` interpret the parameter text. `fsharpCall`/`csharpCall` produce a named `CallShape` with the public export name, native target, arity and `curried`/`method` convention. Public names flatten module dots to underscores and retain the requested foreign name.
+3. **Render the wrapper.** `renderWrapper` uses only that call shape. Each argument introduces a boxed `obj -> obj` closure. The final application unboxes the arguments and boxes the native result. F# applications use separate curried arguments; C# methods use one comma-separated argument list. Requested export order and generated whitespace are preserved.
+
+The text recognizers retain these contracts:
+
+| Source form | Recognition and call shape |
+| --- | --- |
+| F# `let name ... =` | Case-sensitive, line-start match, with optional `rec` and double-backtick name. A name boundary prevents matching a longer identifier. The first matching declaration supplies the parameter text. |
+| F# parameters | Parenthesized groups count as one argument, including a tuple or typed parameter; `()` is also one argument. Remaining whitespace-separated parameters are counted until a type annotation. Multiline parameter text is supported. |
+| F# value or function-valued binding | `let value = ...` and `let value : ... = ...` have arity zero. The wrapper boxes the named value directly, including a function stored in a value binding. |
+| C# `public static ... Name(...)` | Case-insensitive method-name match; the captured native casing is used in the call. The return-type pattern supports a single token with identifier, array/generic delimiters and optional nullable suffix. The implementation is expected under `Module.Name.FFI`. |
+| C# parameters | A single-line parameter list is counted by commas. Empty parentheses mean arity zero, and the wrapper invokes the method during initialization. |
+
+These are restricted textual forms: F# modifiers such as `private`/`inline`, C# multiline parameter lists, nested comma-containing parameter types and other richer syntax have no full-language parsing contract. When a required declaration is not recognized, the adapter retains its zero-arity behavior: F# references the requested value; C# invokes the requested method name. This is distinct from the missing-file policy.
+
+File selection and missing implementations belong to `Ffi.purs`:
+
+| Files found | Result |
+| --- | --- |
+| F# only | Nest the F# source and emit its public wrappers. |
+| C# only | Emit C# method wrappers and return the original C# source for `Project`. |
+| Both | F# owns the public wrappers. C# is still copied and compiled, allowing explicit calls from F# helpers. |
+| Neither, with required foreigns | Emit failing placeholders. Function types determine their curried arity after peeling `ForAll`, constraints and type applications; unknown/non-function types retain a one-argument failing thunk. |
+| Neither, without foreigns | Emit no FFI text. |
+
+Partial application constructs closures until the final native argument arrives. A returned effect thunk remains delayed and reusable; native code determines its body. `sharpurs_apply` supplies the generic invocation exception boundary. Missing function placeholders also wait for saturation, so creating an unused partial does not fail at module initialization.
+
+`npm run test:ffi-support` runs declaration checks, calls the production `Ffi.loadModule` and `Project` entry points, and compiles the generated mixed F#/C# project. It checks values, casing, tuple/Unit arguments, reusable partials, returned functions/delegates, effects, exception causes, file precedence and typed missing stubs. `FFI_SUPPORT_ARTIFACTS` retains the generated project, source hashes and log. `FFI_SUPPORT_ORACLE=/path/to/FfiSupport-before.mjs` additionally compares complete emitted text across declaration fixtures, arities, line endings and module names.
 
 ## Conventions that affect correctness
 

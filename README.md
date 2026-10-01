@@ -272,6 +272,7 @@ Focused regression commands are defined in [package.json](package.json):
 | Commands | Coverage |
 | --- | --- |
 | `npm run test:runtime` | Generic function application, FFI wrappers and exception boundaries. |
+| `npm run test:ffi-support` | F#/C# declaration forms, values/functions, partials, effects, native-file precedence and missing implementations in a generated .NET project. |
 | `npm run test:printer` | Direct-call rendering conventions, structured patterns and nested recursive layout. |
 | `npm run test:recursion` | Boxed recursive workers, partial/value uses, mixed arities and nested scopes against the JavaScript backend. |
 | `npm run test:case-patterns` | Ordinary and deep nested matches, bound fields, newtypes, guards and scrutinee evaluation order. |
@@ -284,7 +285,7 @@ Focused regression commands are defined in [package.json](package.json):
 | `npm run test:thunk-kernel` | Typed thunk selection, independent/multiple captures, reused partials, delay and exception boundaries. |
 | `npm run test:constructor-typeapp` | Constructor calls with explicit and inferred type applications. |
 
-Build the compiler first: the focused tests import its `output/` modules, including the runtime source exported by `Sharpurs.Runtime`. The runtime test additionally needs `sharpurs-exceptions`. Tests that compile fixtures use the TAST `purs` and run generated F# through `dotnet fsi`; `PURS=/path/to/purs` and `DOTNET=/path/to/dotnet` select those executables in the focused scripts. The shell runner instead uses `purs` and `dotnet` through `PATH`.
+Build the compiler first: the focused tests import its `output/` modules, including the runtime source exported by `Sharpurs.Runtime`. The runtime test additionally needs `sharpurs-exceptions`. Suites with PureScript fixtures use the TAST `purs` and run generated F# through `dotnet fsi`; `test:ffi-support` compiles and runs a generated F#/C# project. `PURS=/path/to/purs` and `DOTNET=/path/to/dotnet` select those executables in the focused scripts. The shell runner instead uses `purs` and `dotnet` through `PATH`.
 
 ## Architecture
 
@@ -293,7 +294,7 @@ The main parts of the compilation pipeline are:
 1. **Typed input:** the custom `purs` compiler emits enriched `corefn.json` files. The TAST-aware optimizer reader decodes them and sorts modules by dependencies.
 2. **Optimization and selection:** the optimizer prepares `BackendModule` values. `Sharpurs.IntKernel`, `Sharpurs.AdtKernel` and `Sharpurs.ThunkKernel` select supported typed transformations while retaining access to the source AST. The ADT kernel's `prepareModule` returns an `AdtModule`, delegating evidence checks, body lowering and ABI templates to its `Analysis`, `Lower` and `Emit` modules.
 3. **Code generation:** [Sharpurs.CodeGen.Selection](src/Sharpurs/CodeGen/Selection.purs) registers candidates and chooses binding/expression routes with explicit priorities and collision checks. [Sharpurs.CodeGen](src/Sharpurs/CodeGen.purs) translates these plans into [Sharpurs.FsAst](src/Sharpurs/FsAst.purs) values. [Sharpurs.CodeGen.Boxed](src/Sharpurs/CodeGen/Boxed.purs) owns the generic object-ABI source templates. Separate helpers recognize direct calls, instantiated constructors and integer operations.
-4. **FFI and printing:** [Sharpurs.Ffi](src/Sharpurs/Ffi.purs) resolves foreign sources, chooses wrappers or missing-implementation stubs, and delegates source recognition to [Sharpurs.FfiSupport](src/Sharpurs/FfiSupport.js). [Sharpurs.Printer](src/Sharpurs/Printer.purs) prints F# declarations.
+4. **FFI and printing:** [Sharpurs.Ffi](src/Sharpurs/Ffi.purs) resolves foreign sources and chooses wrappers or missing-implementation stubs. [Sharpurs.FfiSupport](src/Sharpurs/FfiSupport.js) recognizes native declarations, plans their call shapes and renders boxed wrappers. [Sharpurs.Printer](src/Sharpurs/Printer.purs) prints F# declarations.
 5. **Project generation:** [Sharpurs.Project](src/Sharpurs/Project.purs) writes the sources and ordered .NET projects into `output/Main/`. [Sharpurs.Runtime](src/Sharpurs/Runtime.purs) owns the shared F# prelude and entrypoint templates.
 
 [Main](src/Main.purs) coordinates these phases and tracks the validated native constructor wrappers available to subsequent modules. See the [compiler maintenance guide](docs/compiler.md) for responsibilities, representation conventions and relevant checks.
