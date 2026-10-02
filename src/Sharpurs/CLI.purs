@@ -54,7 +54,7 @@ consume options = case _ of
         option <- recognize name
         case value, rest of
           Just supplied, _ -> withValue option supplied rest
-          Nothing, Cons supplied remaining | not (String.startsWith (Pattern "-") supplied) ->
+          Nothing, Cons supplied remaining | not (hasLeadingDash supplied) ->
             withValue option supplied remaining
           _, _ -> Left ("Missing value for " <> optionName option <> ".")
     where
@@ -75,8 +75,11 @@ recognize = case _ of
   name
     | Array.elem name [ "--bundle", "--output", "--rewrite-limit", "--autoload-path" ] ->
         Left ("Option " <> name <> " is not supported by Sharpurs; it was previously ignored.")
-    | String.startsWith (Pattern "-") name -> Left ("Unknown option: " <> show name)
+    | hasLeadingDash name -> Left ("Unknown option: " <> show name)
     | otherwise -> Left ("Unexpected positional argument: " <> show name)
+
+hasLeadingDash :: String -> Boolean
+hasLeadingDash = isJust <<< String.stripPrefix (Pattern "-")
 
 recordOption :: Option -> String -> Options -> Either String Options
 recordOption option value options
