@@ -187,21 +187,51 @@ Run the generated project with `dotnet run`; the backend does not emit a standal
 Invoke the backend from the application root after producing its typed `output/`:
 
 ```bash
-../sharpurs/bin/sharpurs --main App.Main --ffi ffi
+../sharpurs/bin/sharpurs --main App.Main --ffi "ffi with spaces"
+../sharpurs/bin/sharpurs --help
 ```
 
-The equivalent backend arguments can be supplied through Spago:
+The backend receives each argument intact. To supply the same arguments through
+Spago, use an array in the workspace configuration:
+
+```yaml
+workspace:
+  backend:
+    cmd: ../sharpurs/bin/sharpurs
+    args: ["--main", "App.Main", "--ffi", "ffi with spaces"]
+```
+
+Or override the array from the Spago command line, once per argument:
 
 ```bash
-spago build --backend-args "--main App.Main --ffi ffi"
+spago build --backend-args=--main --backend-args=App.Main \
+  --backend-args=--ffi --backend-args="ffi with spaces"
 ```
 
 | Option | Behavior |
 | --- | --- |
 | `--main <Module>` | Selects the module whose `main` is called; defaults to `Main`. It does not select modules for entrypoint-based dead-code elimination. |
 | `--ffi <Directory>` | Adds a directory to the FFI search paths. A companion file beside the original `.purs` source takes precedence. |
+| `--help`, `-h` | Prints usage to stdout and exits 0 before reading TAST or writing generated files. |
 
-The shared argument parser also recognizes `--bundle`, `--output`, `--rewrite-limit` and `--autoload-path`, but this backend does not use them. Input is fixed to `output/`, generated files go to `output/Main/`, and the optimizer rewrite limit is currently `10000`. There is no automatic discovery of every module exporting `main`, nor a dedicated `--help` handler. Argument values containing spaces are unsupported by the shared parser.
+`--main` and `--ffi` also accept `--name=value`. Values must be nonempty and each
+valued option may appear only once. A value beginning with `-` needs the equals
+form, for example `--ffi=-native`. Spaces, Unicode and additional `=` characters
+in a value are preserved. There are no positional arguments; a final `--` is
+accepted as an empty end-of-options marker.
+
+Invalid arguments print a diagnostic to stderr and exit **2 before generation**.
+Every argument is checked, including when `--help` is present. Compilation errors
+exit **1**. The formerly ignored PBO options `--bundle`, `--output`, `--rewrite-limit`
+and `--autoload-path` are now explicitly rejected, as are unknown options. Input
+remains fixed to `output/`, generated files go to `output/Main/`, and the optimizer
+rewrite limit is `10000`; keep Spago's default output directory. There is no
+automatic discovery of every module exporting `main`.
+
+**Migration:** replace a single `--backend-args "--main App.Main --ffi ffi"` string
+with the argument array or repeated options above. Sharpurs no longer re-splits
+arguments on spaces; doing so would corrupt quoted directory names. See the
+[CLI contract](docs/compiler.md#command-line-boundary) for the implementation boundary.
 
 ## Foreign function interface
 
@@ -299,6 +329,7 @@ Focused regression commands are defined in [package.json](package.json):
 | Commands | Coverage |
 | --- | --- |
 | `npm run test:tools` | Check-runner failures/cancellation, CLI locking/cache restoration and before/after manifest comparisons. |
+| `npm run test:cli` | Usage diagnostics/codes, write-free help, exact spaced FFI paths, shell-wrapper and real Spago invocation, plus optional historical comparison. |
 | `npm run test:runtime` | Generic function application, FFI wrappers and exception boundaries. |
 | `npm run test:ffi-support` | F#/C# declaration forms, values/functions, partials, effects, native-file precedence and missing implementations in a generated .NET project. |
 | `npm run test:project` | Real CLI/MSBuild lifecycle: output inventory/order, stale-source exclusion, module/FFI removal, explicit references, incremental/clean generation and filesystem errors. |

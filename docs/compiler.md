@@ -4,6 +4,9 @@
 
 Start in [`src/Main.purs`](../src/Main.purs). Its measured phases follow the actual execution order:
 
+`Main` first parses the user arguments with `Sharpurs.CLI`. Help and usage errors
+finish before these phases; only `Compile Config` enters the measured pipeline.
+
 1. **Load TAST + sort:** the optimizer reader loads `output/*/corefn.json` and sorts modules by dependency.
 2. **Prepare:** write the runtime prelude, load optimization directives, collect constructor arities, and initialize the native-constructor set and invocation-local output inventory.
 3. **Optimize + emit:** the optimizer's sequential builder calls `emitModule` for each module. It validates native ADT/thunk selections and registers constructor wrappers. `CodeGen.Selection` collects the remaining candidates and plans binding/expression routes; `CodeGen` translates the selected plans. The callback then loads foreign sources, writes the module and records its returned `ModuleFiles`.
@@ -15,7 +18,8 @@ The input is the enriched typed CoreFn produced by the compiler fork. `Module An
 
 | Responsibility | Source |
 | --- | --- |
-| CLI arguments, phase order, optimizer callbacks, cross-module constructor state | [`Main.purs`](../src/Main.purs) |
+| Typed CLI configuration, argument validation, usage text | [`Sharpurs/CLI.purs`](../src/Sharpurs/CLI.purs) |
+| CLI process dispatch, phase order, optimizer callbacks, cross-module constructor state | [`Main.purs`](../src/Main.purs) |
 | Foreign source lookup, F#/C# precedence, missing-implementation stubs | [`Sharpurs/Ffi.purs`](../src/Sharpurs/Ffi.purs) |
 | Native declaration recognition, call shapes and boxed-wrapper templates | [`Sharpurs/FfiSupport.js`](../src/Sharpurs/FfiSupport.js), [`FfiSupport.purs`](../src/Sharpurs/FfiSupport.purs) |
 | Generated file inventory, MSBuild items and project templates | [`Sharpurs/Project.purs`](../src/Sharpurs/Project.purs) |
@@ -47,6 +51,35 @@ The input is the enriched typed CoreFn produced by the compiler fork. `Module An
 | Typed integer, direct-call and constructor subsets | `IntKernel`, `Optimized`, `DirectCall`, `ConstructorCall` and integer-operation modules |
 
 `Ffi.loadModule` returns wrapper text and optional C# source. `Project.writeModule` owns the writes. This keeps foreign-source selection independent of output paths. Runtime templates are pure strings, also imported by the focused tests through the compiled `Sharpurs.Runtime` module.
+
+## Command-line boundary
+
+`CLI.parse` is pure and accepts **user arguments only**, after `Main` drops Node's
+executable/script entries. Its result is `Either String Command`: a usage
+diagnostic, `ShowHelp`, or `Compile Config`. `Config` contains only the consumed
+`mainModule :: String` (default `Main`) and `ffiDirectory :: Maybe String`.
+`Main.compile` accepts this configuration directly; PBO still supplies TAST
+loading and optimizer directives, but no longer parses Sharpurs arguments.
+
+The parser walks tokens in order and validates the complete list. It recognizes
+`--main`, `--ffi`, `--help`/`-h`, and an empty final `--`. Valued options accept
+either a separate nonempty value or a value after the first `=`. A separate token
+beginning with `-` denotes another option, so a leading-dash value needs the equals
+form. Repeated valued options, unexpected positional arguments, missing/empty
+values and unknown options are errors. The four previously ignored PBO options
+have a specific unsupported-option diagnostic. Help does not bypass other errors.
+
+Tokenization belongs to the caller: paths retain their spaces, Unicode and `=`
+characters. Spago's `backend.args` is an array; repeated `--backend-args` override
+it one token at a time. The [README](../README.md#compiler-options) shows both
+forms and the migration from a packed argument string.
+
+`Main` prints help to stdout with exit code 0, or the diagnostic and usage hint to
+stderr with exit code 2. Both paths finish before metrics, TAST loading and project
+I/O. Successful compilation exits 0; pipeline failures retain their existing
+nonzero/error propagation (exit 1). A CLI change should be checked through
+[`tests/cli.mjs`](../tests/cli.mjs), including real Spago and the shell wrapper,
+rather than only calling the pure parser with hand-built arrays.
 
 `CodeGen.Selection` chooses implementations and `CodeGen` translates their plans and the remaining source AST. `CodeGen.Boxed` accepts already translated `FsExpr` values and escaped target identifiers. It owns the F# fragments for the object ABI. Literal expressions and compound patterns are represented structurally in `FsAst` and rendered by `Printer`. `FsIdent` denotes an identifier; `FsRawExpr` explicitly marks an already-rendered expression supplied by a template or native kernel.
 

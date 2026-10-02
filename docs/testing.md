@@ -78,6 +78,10 @@ untracked entries, on success, failure and handled interruption. Compilation,
 backend generation and .NET execution each need to succeed; a stale generated
 project cannot turn a generation failure into a passing fixture.
 
+The whole `tests/runner/` directory is generated and ignored by Git, including
+optimizer caches, logs and build outputs. Maintained inputs live in
+`tests/passing/` and `tests/fixtures/`; the runner creates its workspace from them.
+
 The runner stops at the first failing fixture. Its seven exclusions and reasons
 remain in [bin/test](../bin/test). `./bin/test FixtureName -c` rebuilds the backend
 and clears the runner's Spago/output caches. If an unhandled termination leaves a
@@ -107,12 +111,44 @@ THUNK_KERNEL_ARTIFACTS="$HOME/sharpurs-evidence/thunks-001" \
   npm test -- --skip-build --skip-assertions --suite thunk-kernel
 ```
 
-Other supported variables include `PROJECT_ARTIFACTS`, `NAMES_ARTIFACTS`, `FFI_SUPPORT_ARTIFACTS`, `ADT_MULTI_ARTIFACTS`,
+Other supported variables include `CLI_ARTIFACTS`, `PROJECT_ARTIFACTS`, `NAMES_ARTIFACTS`, `FFI_SUPPORT_ARTIFACTS`, `ADT_MULTI_ARTIFACTS`,
 `ADT_INTEROP_ARTIFACTS`, `ADT_LOWERING_ARTIFACTS`, `CONSTRUCTOR_TYPEAPP_ARTIFACTS`, `DIRECT_CALL_ARTIFACTS`,
 `INT_COMPARISON_ARTIFACTS` and `INT_ARITHMETIC_ARTIFACTS`. The unary and interop ADT
 suites both use `ADT_INTEROP_ARTIFACTS`; give them separate destinations in separate
 invocations. Aggregate logs survive failures; each suite defines which additional
 generated files it retains and at what point.
+
+### CLI contract and Spago transport
+
+`npm run test:cli` exercises actual compiler processes. Usage errors must exit 2,
+print one diagnostic/usage hint to stderr, and leave an input-only workspace
+untouched. The cases cover missing/empty values, duplicate valued options,
+unknown/case-mismatched options, unexpected positional arguments, packed argument
+strings, invalid help values and the four formerly ignored PBO options. Four help
+invocations through `bin/sharpurs` must exit 0 with identical stdout and no writes;
+a missing TAST directory separately checks pipeline exit code 1.
+
+The dependency-free fixtures under [`tests/fixtures/cli/`](../tests/fixtures/cli/)
+have default `Main` and Unicode `App.Entrée` entrypoints. The selected native
+implementation exists in a directory containing spaces, `=` and Unicode; a
+different implementation in the truncated directory detects accidental splitting.
+Eight .NET runtime phases exercise defaults, the end marker, ordinary arguments,
+the shell wrapper, equals syntax, a leading-dash directory, Spago's YAML argument
+array and repeated `--backend-args`. The last two invoke real Spago in offline mode
+with package set 77.10.1 already cached by the backend build.
+
+```bash
+CLI_ORACLE=/absolute/path/to/compiler-before.mjs \
+CLI_ARTIFACTS="$HOME/sharpurs-evidence/cli-001" \
+  npm test -- --suite cli --suite project --suite names --suite tools \
+  --fixture PartialFunction
+```
+
+The optional `CLI_ORACLE` checks byte/mtime equality with the historical compiler
+for existing separate `--main`/`--ffi` arguments, then characterizes its truncated
+spaced-path selection. `CLI_ARTIFACTS` retains diagnostics, runtime phase results,
+historical outcomes, workspace and commands on success or failure. Whole-compiler
+generation comparisons complement this focused test on frozen b8x/native inputs.
 
 ### Names, strings and real CLI regression
 
