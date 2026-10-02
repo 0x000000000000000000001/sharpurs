@@ -184,3 +184,76 @@ with identical workloads and no concurrent build.
 `npm run test:tools` exercises orchestration failures, cancellation, CLI locking
 and cache restoration, and comparison failures (content, removed outputs, mtimes,
 input mutation and process errors) using isolated child processes.
+
+## Full integration replay
+
+### Compiler and native libraries
+
+```bash
+# From the compiler root, with the toolchain selected as above.
+npm test -- --all-fixtures --artifacts /absolute/path/to/new-check-report
+./bin/modtest --list
+./bin/modtest --all
+```
+
+`bin/modtest` selects sibling `sharpurs-*` directories containing an executable
+`bin/test` and runs their scripts sequentially. Use an isolated copy of the
+checkout layout for this replay: library scripts clear both their own and their
+siblings' generated outputs and dependency caches. Include all local dependency
+overrides, the compiler wrapper/bundle and `tools/modtest-runner.mjs` in that copy.
+The selected module list, library source hashes and final exit code identify the
+tested scope. `--skip-before NAME` resumes inclusively after a diagnosed failure.
+
+### Application integration: b8x `Test.Main`
+
+Prepare an isolated application workspace with freshly compiled typed input,
+the native dependency/override paths and `sharp.packages.props`. Use the
+application's Sharpurs dependency profile to resolve the source files, then send
+`purs compile --codegen corefn --output /path/to/isolated/output` to the isolated
+destination. The application's active target links remain an independent profile.
+
+From that prepared workspace:
+
+```bash
+/absolute/path/to/sharpurs/bin/sharpurs --main Test.Main
+dotnet build output/Main/Program.fsproj -c Release --nologo -p:NuGetAudit=false
+dotnet output/Main/bin/Release/net8.0/Program.dll
+```
+
+The PostgreSQL integration uses Npgsql **8.0.7** through the application's package
+fragment. Its FFI reads `POSTGRES_HOST`, `POSTGRES_HOST_STORE`,
+`POSTGRES_HOST_STORE_LOCK`, `POSTGRES_HOST_EDGE`, `POSTGRES_PORT`,
+`POSTGRES_DB_STORE`, `POSTGRES_DB_EDGE`, `POSTGRES_USER` and `POSTGRES_PASSWORD`.
+Set these for the test services; the host replay uses the published PostgreSQL
+port and the `store`/`edge` root databases. RabbitMQ configuration uses
+`RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER` and `RABBITMQ_PASS`.
+
+Require both a zero process exit code and the expected **286/286** summary. Run
+each repetition in a fresh process, recording its assembly hash and complete log.
+The fixtures own creation, connection teardown and deletion of their temporary
+databases. Check their database selector before and after execution:
+
+```bash
+docker exec "$POSTGRES_CONTAINER" sh -lc \
+  'exec psql -U "$POSTGRES_USER" -d postgres -Atc "$1"' sh \
+  "SELECT datname FROM pg_database WHERE datname LIKE 'store_test_%' OR datname LIKE 'edge_test_%' ORDER BY datname"
+```
+
+The qualified baseline has an empty result before and after each run. Retain the
+observed names if cleanup fails so they can be attributed to the failing execution.
+
+### Benchmark results
+
+The reference CPU workloads live in `altbak.pub-sharpurs` and run through its real
+`App.main`. Compile that entrypoint's source dependencies with the TAST toolchain,
+generate with `--main App`, build the .NET project, and execute its DLL in fresh
+processes. Keep the existing workload sources, warm-ups, result consumption and
+measurement driver intact.
+
+Compare all **14 output values, names and their order** with the archived reference
+at `scratch/sharpurs-thunk-native-20260909/expected-output.log`. Also check that the
+displayed total agrees with the sum of the individual scores within their printed
+rounding precision. Source, typed-input and assembly hashes identify the executed
+program. A result-validation replay establishes output preservation; a timing
+comparison additionally needs identical workloads, separate processes and all
+builds completed before the measurement series.
