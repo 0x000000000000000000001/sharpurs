@@ -106,12 +106,47 @@ THUNK_KERNEL_ARTIFACTS="$HOME/sharpurs-evidence/thunks-001" \
   npm test -- --skip-build --skip-assertions --suite thunk-kernel
 ```
 
-Other supported variables include `FFI_SUPPORT_ARTIFACTS`, `ADT_MULTI_ARTIFACTS`,
+Other supported variables include `NAMES_ARTIFACTS`, `FFI_SUPPORT_ARTIFACTS`, `ADT_MULTI_ARTIFACTS`,
 `ADT_INTEROP_ARTIFACTS`, `CONSTRUCTOR_TYPEAPP_ARTIFACTS`, `DIRECT_CALL_ARTIFACTS`,
 `INT_COMPARISON_ARTIFACTS` and `INT_ARITHMETIC_ARTIFACTS`. The unary and interop ADT
 suites both use `ADT_INTEROP_ARTIFACTS`; give them separate destinations in separate
 invocations. Aggregate logs survive failures; each suite defines which additional
 generated files it retains and at what point.
+
+### Names, strings and real CLI regression
+
+`npm run test:names` compiles the dependency-free fixtures under
+[`tests/fixtures/names/`](../tests/fixtures/names/) to TAST, invokes the built CLI
+with the Unicode entrypoint `Naming.Entrée`, then compiles/runs its F#/C# project.
+The native checker uses independent .NET strings, including distinct lone UTF-16
+surrogates, to check record creation, update, access and patterns. It also checks
+ordinary/native constructors, direct/recursive worker names, F#/C# foreign names
+and reuse of a partially applied missing FFI.
+
+`NAMES_ARTIFACTS=/new/path` retains the complete workspace and command log on
+success or failure. `NAMES_COMPILER=/absolute/path/to/self-contained.mjs` selects
+another compiler bundle, allowing a regression to be demonstrated on the prior
+compiler with the same fixtures and expected runtime values. This suite needs
+the TAST compiler and .NET SDK, but no native-library sibling checkouts.
+
+The [H01 report](validation/h01-2026-10-02.md) records the before/after regression,
+the qualified generation comparison and the scope of application validation.
+
+### Call conventions
+
+`npm run test:printer` constructs calls with `FsAst.directCall` and
+`FsAst.boxedNativeCall`, then reuses each AST in declarations, lambdas, constructors,
+native factories, guards, branches, boxed branches, generic applications and
+records. Native, object and mixed nested calls must retain their adapters in every
+placement. The suite compiles and executes **67 F# checks**, including named values,
+reusable partials, a returned function, evaluation order and the existing pattern/
+layout checks. `printExprInline` is now an alias of `printExpr`.
+
+For a source-call change, also run `direct-call`, `recursion`, `case-patterns`,
+`selection`, the constructor suite and the affected kernel suites. Their real TAST
+fixtures check eligibility, partial/over-application and exception boundaries.
+The [H02 report](validation/h02-2026-10-02.md) records their replay and strict
+before/after generation comparisons on frozen b8x and native inputs.
 
 ## Compare complete generations before and after a change
 

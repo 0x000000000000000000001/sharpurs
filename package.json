@@ -13,6 +13,7 @@
     "test:tools": "node --test tests/tools.mjs",
     "test:runtime": "node tests/runtime-apply.mjs",
     "test:ffi-support": "node tests/ffi-support.mjs",
+    "test:names": "node tests/names.mjs",
     "test:printer": "node tests/printer.mjs",
     "test:recursion": "node tests/recursion.mjs",
     "test:case-patterns": "node tests/case-patterns.mjs",

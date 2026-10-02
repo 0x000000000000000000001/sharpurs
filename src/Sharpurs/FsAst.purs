@@ -1,4 +1,21 @@
-module Sharpurs.FsAst where
+module Sharpurs.FsAst
+  ( FsModule(..)
+  , FsDataCtor(..)
+  , FsDecl(..)
+  , FsDUCase(..)
+  , FsType(..)
+  , FsExpr(..)
+  , CallConvention(..)
+  , directCall
+  , boxedNativeCall
+  , FsMatchCase(..)
+  , FsPattern(..)
+  , modulePrefix
+  , sanitizeName
+  , escapeString
+  , patternString
+  , escapeChar
+  ) where
 
 import Prelude
 
@@ -55,6 +72,10 @@ sanitizeName s =
 
 foreign import escapeString :: String -> String
 
+-- Literal active-pattern arguments use a UTF-16 matcher when an ordinary F#
+-- string literal cannot preserve the source string's code units.
+foreign import patternString :: String -> { utf16 :: Boolean, code :: String }
+
 hex4 :: Int -> String
 hex4 n =
   let
@@ -107,8 +128,21 @@ data FsExpr
   | FsRawExpr String
   | FsApp FsExpr (Array FsExpr)
   | FsCtorApp String (Array FsExpr)
-  | FsDirectApp String (Array FsExpr)
+  | FsDirectApp CallConvention String (Array FsExpr)
   | FsMatch FsExpr (Array FsMatchCase)
+
+-- The convention belongs to this call only; nested calls keep their own.
+-- PassValues requires arguments matching the target signature (obj for boxed
+-- workers, native values for typed functions), and leaves the result unchanged.
+-- UnboxArgumentsBoxResult crosses from obj arguments to an inferred native
+-- signature and back to obj. With no arguments it boxes the named value.
+data CallConvention = PassValues | UnboxArgumentsBoxResult
+
+directCall :: String -> Array FsExpr -> FsExpr
+directCall = FsDirectApp PassValues
+
+boxedNativeCall :: String -> Array FsExpr -> FsExpr
+boxedNativeCall = FsDirectApp UnboxArgumentsBoxResult
 
 data FsMatchCase = FsMatchCase FsPattern (Maybe FsExpr) FsExpr
 

@@ -65,7 +65,7 @@ signature layout name (NeutralExpr syntax) = do
         result -> { args: [], result }
   _ <- traverse (Layout.nativeType layout) (Array.snoc sig.args sig.result)
   let public = publicName layout name
-  pure { args: sig.args, result: sig.result, nativeName: public <> "_adt_native", publicName: public }
+  pure { args: sig.args, result: sig.result, nativeName: Names.adtNative public, publicName: public }
 
 signatureType :: Signature -> ExprType
 signatureType sig = if Array.null sig.args then sig.result else C.Func sig.args sig.result

@@ -63,7 +63,7 @@ forModule moduleEnv currentModule = { moduleEnv, currentModule, recursive: Map.e
 registerRecursive :: RecursiveScope -> String -> Int -> Context -> Context
 registerRecursive scope name arity context =
   if arity > 0 then
-    context { recursive = Map.insert name { arity, scope, worker: name <> "_tco" } context.recursive }
+    context { recursive = Map.insert name { arity, scope, worker: Names.recursive name } context.recursive }
   else context
 
 localRecursive :: Context -> Qualified Ident -> Maybe RecursiveFunction

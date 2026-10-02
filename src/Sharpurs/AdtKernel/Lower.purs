@@ -23,6 +23,7 @@ import Sharpurs.AdtKernel.Analysis as Analysis
 import Sharpurs.AdtKernel.Emit as Emit
 import Sharpurs.AdtLayout as Layout
 import Sharpurs.FsAst (escapeString)
+import Sharpurs.Names as Names
 
 binding :: Context -> Qualified Ident -> Signature -> NeutralExpr -> Maybe Emit.Definition
 binding ctx name sig expr = do
@@ -63,7 +64,7 @@ expression ctx expected (NeutralExpr syntax) = case syntax of
     guard (expected == sig.result && NEA.length args == Array.length sig.args)
     values <- traverse (\(Tuple ty arg) -> expression ctx ty arg) (Array.zip sig.args (NEA.toArray args))
     let target = if ctx.guardedCalls && ctx.self /= Just name && Layout.lookupCtor ctx.layout name == Nothing
-          then sig.nativeName <> "_apply"
+          then Names.guarded sig.nativeName
           else sig.nativeName
     pure ("(" <> target <> String.joinWith "" (map (\value -> " (" <> value <> ")") values) <> ")")
   S.CtorSaturated name _ typeName ctorName fields -> do

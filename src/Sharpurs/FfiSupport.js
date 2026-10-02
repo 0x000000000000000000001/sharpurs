@@ -5,13 +5,12 @@
 /** @typedef {{ exportName: string, target: string, arity: number,
  *              convention: "curried" | "method" }} CallShape */
 
-const modulePrefix = moduleName => moduleName.replace(/\./g, "_");
+const regexLiteral = name => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // The first matching module header is removed before nesting the source. The
 // recognizer deliberately sees this same indented text as the emitted module.
-function prepareFsharpSource(moduleName, content) {
-    const body = content.replace(/^module\s+[a-zA-Z0-9_.]+[\s\n]*/m, "");
-    const targetModule = modulePrefix(moduleName) + "_FFI";
+function prepareFsharpSource(targetModule, content) {
+    const body = content.replace(/^module\s+[\p{L}\p{M}\p{N}_'.]+\s*/mu, "");
     return {
         targetModule,
         content: "module " + targetModule + " =\n" +
@@ -21,7 +20,7 @@ function prepareFsharpSource(moduleName, content) {
 
 /** @returns {Declaration | null} */
 function recognizeFsharp(content, foreignName) {
-    const pattern = "^\\s*let\\s+(?:rec\\s+)?(?:``)?" + foreignName +
+    const pattern = "^\\s*let\\s+(?:rec\\s+)?(?:``)?" + regexLiteral(foreignName) +
         "(?:``)?(?=$|[\\s(=])([^=]*)=";
     const match = content.match(new RegExp(pattern, "m"));
     return match ? { nativeName: foreignName, parameterText: match[1].trim() } : null;
@@ -29,8 +28,8 @@ function recognizeFsharp(content, foreignName) {
 
 /** @returns {Declaration | null} */
 function recognizeCsharp(content, foreignName) {
-    const pattern = "public\\s+static\\s+(?:[\\w\\[\\]<>]+(?:\\s*\\?)?\\s+)?(" +
-        foreignName + ")\\s*\\((.*?)\\)";
+    const pattern = "public\\s+static\\s+(?:[\\w\\[\\]<>]+(?:\\s*\\?)?\\s+)?@?(" +
+        regexLiteral(foreignName) + ")\\s*\\((.*?)\\)";
     const match = content.match(new RegExp(pattern, "im"));
     // Match case-insensitively, then retain the declaration's actual casing.
     return match ? { nativeName: match[1], parameterText: match[2].trim() } : null;
@@ -52,9 +51,9 @@ function csharpArity(declaration) {
 }
 
 /** @returns {CallShape} */
-function fsharpCall(moduleName, targetModule, foreignName, declaration) {
+function fsharpCall(publicName, targetModule, foreignName, declaration) {
     return {
-        exportName: modulePrefix(moduleName) + "_" + foreignName,
+        exportName: publicName(foreignName),
         target: targetModule + ".``" + foreignName + "``",
         arity: fsharpArity(declaration),
         convention: "curried",
@@ -62,10 +61,10 @@ function fsharpCall(moduleName, targetModule, foreignName, declaration) {
 }
 
 /** @returns {CallShape} */
-function csharpCall(moduleName, foreignName, declaration) {
+function csharpCall(publicName, nativeMember, moduleName, foreignName, declaration) {
     return {
-        exportName: modulePrefix(moduleName) + "_" + foreignName,
-        target: moduleName + ".FFI." + (declaration ? declaration.nativeName : foreignName),
+        exportName: publicName(foreignName),
+        target: moduleName + ".FFI." + nativeMember(declaration ? declaration.nativeName : foreignName),
         arity: csharpArity(declaration),
         convention: "method",
     };
@@ -83,17 +82,17 @@ function renderWrapper(call) {
 
 // With no recognized declaration, preserve the zero-arity convention: F# boxes
 // the named value; C# invokes the named method. Missing files use Ffi's stubs.
-export const appendFfiWrappersImpl = moduleName => requiredForeigns => content => {
-    const source = prepareFsharpSource(moduleName, content);
+export const appendFfiWrappersImpl = publicName => targetModule => requiredForeigns => content => {
+    const source = prepareFsharpSource(targetModule, content);
     const wrappers = requiredForeigns.map(foreignName => renderWrapper(fsharpCall(
-        moduleName, source.targetModule, foreignName, recognizeFsharp(source.content, foreignName),
+        publicName, source.targetModule, foreignName, recognizeFsharp(source.content, foreignName),
     )));
     return source.content + "\n\n" + wrappers.join("\n") + "\n";
 };
 
-export const appendCsFfiWrappersImpl = moduleName => requiredForeigns => content => {
+export const appendCsFfiWrappersImpl = publicName => nativeMember => moduleName => requiredForeigns => content => {
     const wrappers = requiredForeigns.map(foreignName => renderWrapper(csharpCall(
-        moduleName, foreignName, recognizeCsharp(content, foreignName),
+        publicName, nativeMember, moduleName, foreignName, recognizeCsharp(content, foreignName),
     )));
     return wrappers.join("\n") + "\n";
 };

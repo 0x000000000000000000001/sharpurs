@@ -20,6 +20,7 @@ import PureScript.Backend.Optimizer.Syntax (Level(..))
 import Sharpurs.AdtKernel.Analysis (Parameter, Signature)
 import Sharpurs.AdtLayout as Layout
 import Sharpurs.FsAst (FsDecl(..))
+import Sharpurs.Names as Names
 
 type Definition = { parameters :: Array Parameter, body :: String }
 
@@ -75,7 +76,7 @@ bridge layout sig = do
   let args = Array.mapWithIndex (\i ty -> { name: "sharpurs_adt_arg_" <> show i, type: ty }) types
   let parameters = String.joinWith " " (map (\arg -> "(" <> arg.name <> ": obj)") args)
   let call = sig.nativeName <> String.joinWith "" (map (\arg -> " (unbox<" <> arg.type <> "> " <> arg.name <> ")") args)
-  pure ("\nlet " <> sig.publicName <> "_tco " <> parameters <> " : obj = box (" <> call <> ")")
+  pure ("\nlet " <> Names.recursive sig.publicName <> " " <> parameters <> " : obj = box (" <> call <> ")")
 
 -- Arguments evaluate before this guard. Public curried wrappers, constructors
 -- and self-recursion invoke the unguarded definition instead.
@@ -84,7 +85,7 @@ guardedCall layout sig = do
   let args = Array.mapWithIndex (\i ty -> { level: Level i, type: ty }) sig.args
   parameters <- traverse (printParameter layout) args
   result <- Layout.nativeType layout sig.result
-  pure ("let " <> sig.nativeName <> "_apply " <> String.joinWith " " parameters <> " : " <> result <> " =\n"
+  pure ("let " <> Names.guarded sig.nativeName <> " " <> String.joinWith " " parameters <> " : " <> result <> " =\n"
     <> "    try " <> sig.nativeName <> String.joinWith "" (map (\arg -> " " <> localName arg.level) args) <> "\n"
     <> "    with ex -> raise (System.Reflection.TargetInvocationException(ex))")
 

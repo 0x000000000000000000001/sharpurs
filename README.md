@@ -282,6 +282,7 @@ Focused regression commands are defined in [package.json](package.json):
 | `npm run test:tools` | Check-runner failures/cancellation, CLI locking/cache restoration and before/after manifest comparisons. |
 | `npm run test:runtime` | Generic function application, FFI wrappers and exception boundaries. |
 | `npm run test:ffi-support` | F#/C# declaration forms, values/functions, partials, effects, native-file precedence and missing implementations in a generated .NET project. |
+| `npm run test:names` | Real CLI/TAST integration: Unicode modules, primed foreigns/workers, reserved native names and exact UTF-16 record keys across creation/update/access/patterns. |
 | `npm run test:printer` | Direct-call rendering conventions, structured patterns and nested recursive layout. |
 | `npm run test:recursion` | Boxed recursive workers, partial/value uses, mixed arities and nested scopes against the JavaScript backend. |
 | `npm run test:case-patterns` | Ordinary and deep nested matches, bound fields, newtypes, guards and scrutinee evaluation order. |
@@ -294,7 +295,7 @@ Focused regression commands are defined in [package.json](package.json):
 | `npm run test:thunk-kernel` | Typed thunk selection, independent/multiple captures, reused partials, delay and exception boundaries. |
 | `npm run test:constructor-typeapp` | Constructor calls with explicit and inferred type applications. |
 
-Build the compiler first: the focused tests import its `output/` modules, including the runtime source exported by `Sharpurs.Runtime`. The runtime test additionally needs `sharpurs-exceptions`. Suites with PureScript fixtures use the TAST `purs` and run generated F# through `dotnet fsi`; `test:ffi-support` compiles and runs a generated F#/C# project. `PURS=/path/to/purs` and `DOTNET=/path/to/dotnet` select those executables in the focused scripts. The shell runner instead uses `purs` and `dotnet` through `PATH`.
+Build the compiler first: the focused tests import its `output/` modules, including the runtime source exported by `Sharpurs.Runtime`. The runtime test additionally needs `sharpurs-exceptions`. Suites with PureScript fixtures use the TAST `purs` and run generated F# through `dotnet fsi`; `test:ffi-support` and `test:names` compile and run generated F#/C# projects. `PURS=/path/to/purs` and `DOTNET=/path/to/dotnet` select those executables in the focused scripts. The shell runner instead uses `purs` and `dotnet` through `PATH`.
 
 The [2 October 2026 integration replay report](docs/validation/m11-2026-10-02.md)
 records the compiler/tool revisions, fixture and library checks, b8x `Test.Main`

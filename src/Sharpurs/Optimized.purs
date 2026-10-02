@@ -9,19 +9,17 @@ import Data.Foldable (any, foldr)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
-import Data.Newtype (unwrap)
-import Data.String as String
-import Data.String.Pattern (Pattern(..), Replacement(..))
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
-import PureScript.Backend.Optimizer.CoreFn (ExprType, Ident(..), Qualified(..))
+import PureScript.Backend.Optimizer.CoreFn (ExprType, Qualified(..))
 import PureScript.Backend.Optimizer.CoreFn as C
 import PureScript.Backend.Optimizer.Semantics (NeutralExpr(..))
 import PureScript.Backend.Optimizer.Syntax (Level(..))
 import PureScript.Backend.Optimizer.Syntax as S
-import Sharpurs.FsAst (FsExpr(..), sanitizeName)
+import Sharpurs.FsAst (FsExpr(..))
 import Sharpurs.IntKernel (fromLocal)
 import Sharpurs.IntKernel.CodeGen (printLocalKernel)
+import Sharpurs.Names as Names
 import Sharpurs.Printer (printExpr)
 
 type Lowered = { expr :: FsExpr, hasKernel :: Boolean }
@@ -54,8 +52,8 @@ lower locals expected expression@(NeutralExpr syntax) =
       S.TypeApp fn _ -> do
         guard (isGlobalReference fn)
         lower locals expected fn
-      S.Var (Qualified (Just moduleName) (Ident name)) -> pure
-        { expr: FsIdent (sanitizeName (String.replaceAll (Pattern ".") (Replacement "_") (unwrap moduleName) <> "_" <> name))
+      S.Var name@(Qualified (Just _) _) -> pure
+        { expr: FsIdent (Names.qualified Nothing name)
         , hasKernel: false
         }
       S.Local _ level -> do

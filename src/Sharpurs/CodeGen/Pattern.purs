@@ -29,7 +29,7 @@ translate env = case _ of
   BinderConstructor _ _ ident binders ->
     let name = Names.qualified env.currentModule ident
     in if Map.member name env.arities then
-      FsPatCtor (name <> "usd_Ctor") (map (translate env) binders)
+      FsPatCtor (Names.constructor name) (map (translate env) binders)
     else
       case Array.head binders of
         Just inner -> translate env inner
@@ -71,8 +71,8 @@ forChain env binder = case binder of
     in case Map.lookup name env.arities of
       Just arity | arity == Array.length binders ->
         case binders of
-          [] -> Just (ChainConstructor (name <> "usd_Ctor") Nothing)
-          [ inner ] -> map (\chain -> ChainConstructor (name <> "usd_Ctor") (Just chain)) (forChain env inner)
+          [] -> Just (ChainConstructor (Names.constructor name) Nothing)
+          [ inner ] -> map (\chain -> ChainConstructor (Names.constructor name) (Just chain)) (forChain env inner)
           _ -> shallowLeaf env binder
       _ -> case binders of
         [ inner ] -> forChain env inner

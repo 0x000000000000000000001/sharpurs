@@ -17,7 +17,7 @@ import Effect.Aff (Aff, attempt)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff as FS
 import Sharpurs.Ffi (ModuleFfi)
-import Sharpurs.FsAst (modulePrefix)
+import Sharpurs.Names as Names
 import Sharpurs.Printer.Layout (normalizeRecIndent)
 import Sharpurs.Runtime as Runtime
 
@@ -34,7 +34,7 @@ writeModule name ffi declarations = do
   traverse_ (writeOutput (name <> ".cs")) ffi.csharp
   let content = String.joinWith "\n"
         [ "[<AutoOpen>]"
-        , "module PureScript_" <> modulePrefix name
+        , "module " <> Names.generatedModule name
         , ""
         , "open System"
         , "open System.Collections.Generic"

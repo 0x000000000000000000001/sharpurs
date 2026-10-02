@@ -8,7 +8,7 @@ module Sharpurs.Runtime
 import Prelude
 
 import Data.String as String
-import Sharpurs.FsAst (modulePrefix)
+import Sharpurs.Names as Names
 
 prelude :: String
 prelude = """[<AutoOpen>]
@@ -32,6 +32,12 @@ let (|LitNumber|_|) (expected: float) (value: obj) = if value :? float && unbox 
 let (|LitString|_|) (expected: string) (value: obj) = if value :? string && unbox value = expected then Some() else None
 let (|LitChar|_|) (expected: char) (value: obj) = if value :? char && unbox value = expected then Some() else None
 let (|HasProp|_|) (key: string) (value: obj) = if value :? Map<string, obj> then Map.tryFind key (unbox<Map<string, obj>> value) else None
+
+// Hex literal arguments preserve UTF-16 units that F# string literals replace.
+let private stringFromUtf16 (encoded: string) =
+    new System.String(Array.init (encoded.Length / 4) (fun i -> char (System.Convert.ToUInt16(encoded.Substring(i * 4, 4), 16))))
+let (|LitStringUtf16|_|) (expected: string) (value: obj) = (|LitString|_|) (stringFromUtf16 expected) value
+let (|HasPropUtf16|_|) (key: string) (value: obj) = (|HasProp|_|) (stringFromUtf16 key) value
 
 module SharpursRuntime =
     let eventLoopWg = new System.Threading.CountdownEvent(1)
@@ -103,7 +109,7 @@ entryPoint mainModule = String.joinWith "\n"
   , "[<EntryPoint>]"
   , "let main argv ="
   , "    let thread = Thread(ThreadStart(fun () ->"
-  , "        (unbox<obj -> obj> " <> modulePrefix mainModule <> "_main) null |> ignore"
+  , "        (unbox<obj -> obj> " <> Names.inModule mainModule "main" <> ") null |> ignore"
   , "    ), 1024 * 1024 * 1024)"
   , "    thread.Start()"
   , "    thread.Join()"

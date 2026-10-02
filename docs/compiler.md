@@ -24,11 +24,11 @@ The input is the enriched typed CoreFn produced by the compiler fork. `Module An
 | Candidate registration, direct-helper collisions and implementation priority | [`Sharpurs/CodeGen/Selection.purs`](../src/Sharpurs/CodeGen/Selection.purs) |
 | Translation contexts, recursive worker registration and lookup | [`Sharpurs/CodeGen/Context.purs`](../src/Sharpurs/CodeGen/Context.purs) |
 | Source TAST annotations, lambda/application spines and expression traversal | [`Sharpurs/Analysis/Source.purs`](../src/Sharpurs/Analysis/Source.purs) |
-| Qualified F# value names | [`Sharpurs/Names.purs`](../src/Sharpurs/Names.purs) |
+| Public F# names, worker suffixes, generated module names and native-member quoting | [`Sharpurs/Names.purs`](../src/Sharpurs/Names.purs) |
 | Source patterns, newtype erasure and eligible constructor chains | [`Sharpurs/CodeGen/Pattern.purs`](../src/Sharpurs/CodeGen/Pattern.purs) |
 | Case strategy selection, guards, constructor groups and fallback matches | [`Sharpurs/CodeGen/Case.purs`](../src/Sharpurs/CodeGen/Case.purs) |
 | Boxed-ABI templates: closures, records, adapters, recursive groups | [`Sharpurs/CodeGen/Boxed.purs`](../src/Sharpurs/CodeGen/Boxed.purs) |
-| F# AST and identifier/literal escaping | [`Sharpurs/FsAst.purs`](../src/Sharpurs/FsAst.purs), [`Sharpurs/FsAst.js`](../src/Sharpurs/FsAst.js) |
+| F# AST, explicit call adapters and identifier/literal escaping | [`Sharpurs/FsAst.purs`](../src/Sharpurs/FsAst.purs), [`Sharpurs/FsAst.js`](../src/Sharpurs/FsAst.js) |
 | Declaration and expression rendering | [`Sharpurs/Printer.purs`](../src/Sharpurs/Printer.purs) |
 | Deferred recursive-group indentation and its marker definitions | [`Sharpurs/Printer/Layout.purs`](../src/Sharpurs/Printer/Layout.purs), [`Layout.js`](../src/Sharpurs/Printer/Layout.js) |
 | Closed ADT layouts, constructor metadata and native type names | [`Sharpurs/AdtLayout.purs`](../src/Sharpurs/AdtLayout.purs) |
@@ -51,7 +51,7 @@ The input is the enriched typed CoreFn produced by the compiler fork. `Module An
 
 `CodeGen.Context.ModuleEnv` holds module-wide constructor information and native selections. Expression translation receives a `Context` combining that environment, the current module prefix and the visible recursive workers. Entering a recursive group extends this context; leaving it restores the enclosing context. Variable references, applications and local bindings have separate translation helpers in `CodeGen`, sharing name qualification through `Names.qualified`.
 
-For `ExprCase`, `CodeGen` supplies `Case.translate` with the pattern environment and an expression-translation callback. `Pattern` needs only constructor arities and the current module; it translates ordinary binders and recognizes unary chains with shallow leaves. `Case` selects the matching strategy before translating branch bodies. Its nested path uses named records for branches, constructor groups, catch-alls and match targets, including the distinction between an unboxed scrutinee and the boxed field captured by a variable.
+For `ExprCase`, `CodeGen` supplies `Case.translate` with the pattern environment and named `expression`/`object` translation callbacks. Scrutinees and boxed body templates use the object boundary; structural branches and guards use the enclosing expression boundary. `Pattern` needs only constructor arities and the current module; it translates ordinary binders and recognizes unary chains with shallow leaves. `Case` retains source bodies until their placement is known, then constructs their calls with the appropriate adapters. Its nested path uses named records for branches, constructor groups, catch-alls and match targets, including the distinction between an unboxed scrutinee and the boxed field captured by a variable.
 
 ## Selecting implementations
 
@@ -136,7 +136,7 @@ The boundaries that preserve behavior are:
 The adapter pipeline in `FfiSupport.js` has three explicit stages:
 
 1. **Recognize a declaration.** `recognizeFsharp` and `recognizeCsharp` return a `Declaration` with `nativeName` and `parameterText`, or no match. F# source first passes through `prepareFsharpSource`, which removes a simple `module Name` header and nests the indented implementation under `Module_Name_FFI`.
-2. **Determine the call shape.** `fsharpArity`/`csharpArity` interpret the parameter text. `fsharpCall`/`csharpCall` produce a named `CallShape` with the public export name, native target, arity and `curried`/`method` convention. Public names flatten module dots to underscores and retain the requested foreign name.
+2. **Determine the call shape.** `fsharpArity`/`csharpArity` interpret the parameter text. `fsharpCall`/`csharpCall` produce a named `CallShape` with the public export name, native target, arity and `curried`/`method` convention. `FfiSupport.purs` supplies the public-name and native-member functions from `Names`; JavaScript does not duplicate the public escaping policy. The public export uses the requested PureScript name, qualified and escaped exactly like an ordinary binding. The native target keeps its own spelling and casing.
 3. **Render the wrapper.** `renderWrapper` uses only that call shape. Each argument introduces a boxed `obj -> obj` closure. The final application unboxes the arguments and boxes the native result. F# applications use separate curried arguments; C# methods use one comma-separated argument list. Requested export order and generated whitespace are preserved.
 
 The text recognizers retain these contracts:
@@ -146,10 +146,14 @@ The text recognizers retain these contracts:
 | F# `let name ... =` | Case-sensitive, line-start match, with optional `rec` and double-backtick name. A name boundary prevents matching a longer identifier. The first matching declaration supplies the parameter text. |
 | F# parameters | Parenthesized groups count as one argument, including a tuple or typed parameter; `()` is also one argument. Remaining whitespace-separated parameters are counted until a type annotation. Multiline parameter text is supported. |
 | F# value or function-valued binding | `let value = ...` and `let value : ... = ...` have arity zero. The wrapper boxes the named value directly, including a function stored in a value binding. |
-| C# `public static ... Name(...)` | Case-insensitive method-name match; the captured native casing is used in the call. The return-type pattern supports a single token with identifier, array/generic delimiters and optional nullable suffix. The implementation is expected under `Module.Name.FFI`. |
+| C# `public static ... Name(...)` | Case-insensitive method-name match; the captured native casing is used in the call. An optional C# `@` before the method name is recognized and omitted from its F# spelling. Members needing F# quoting use double backticks. The return-type pattern supports a single token with identifier, array/generic delimiters and optional nullable suffix. The implementation is expected under `Module.Name.FFI`. |
 | C# parameters | A single-line parameter list is counted by commas. Empty parentheses mean arity zero, and the wrapper invokes the method during initialization. |
 
 These are restricted textual forms: F# modifiers such as `private`/`inline`, C# multiline parameter lists, nested comma-containing parameter types and other richer syntax have no full-language parsing contract. When a required declaration is not recognized, the adapter retains its zero-arity behavior: F# references the requested value; C# invokes the requested method name. This is distinct from the missing-file policy.
+
+Foreign names are matched literally, including characters with regular-expression
+meaning. Simple F# module headers may contain Unicode identifier characters;
+their generated enclosing module name comes from `Names.ffiModule`.
 
 File selection and missing implementations belong to `Ffi.purs`:
 
@@ -168,12 +172,13 @@ Partial application constructs closures until the final native argument arrives.
 ## Conventions that affect correctness
 
 - **The general ABI is boxed.** Values cross the generic path as F# `obj`; functions are curried, records use `Map<string, obj>`, and effects defer work in a thunk. Typed workers need the appropriate public wrappers at these boundaries.
+- **String keys preserve exact UTF-16.** Record construction, update and access use `FsAst.escapeString`, as do ordinary string values. Patterns use `FsAst.patternString`: F# string literals replace lone-surrogate escapes with `U+FFFD`, and active-pattern arguments cannot contain the `new String` expression used for values. Such arguments become hex code-unit literals consumed by `HasPropUtf16`/`LitStringUtf16` in `Runtime`; ordinary strings retain `HasProp`/`LitString`. Escaped controls cannot be confused with recursive-layout markers.
 - **Constructor arities and native wrappers are different facts.** All source constructor arities are collected up front. A constructor enters the native-wrapper set only after its producer's complete native layout and wrappers have been validated. Consumers can then choose native factories without losing the boxed public ABI.
 - **Recursive scope is explicit.** Each recursive function records a positive arity, its escaped worker name and a `TopLevel` or `Local` scope. Top-level workers have a public curried alias; local workers need an adapter for partial calls and function-valued references. Saturated calls target the worker directly; extra arguments apply to its result. Zero-argument recursive values have no worker. This registry is distinct from constructor arities and relies on CoreFn's lexical binder renaming.
 - **Deep unary patterns use nested matches.** F# compiles deeply nested active patterns very slowly. The nested path requires one scrutinee, unconditional alternatives, eligible patterns and a chain depth of at least four. Shallow non-chain leaves retain their ordinary patterns; their inspected constructor depth is limited to two. Newtype layers do not add depth. Guards, multiple scrutinees and unsupported shapes use the ordinary matcher.
 - **Dependency order is observable.** The sequential builder makes validated producers available to consumers; the F# project lists their files in that same order. The current skip hook always returns `Nothing`.
 - **F# owns wrappers when both native files exist.** The C# source is still copied and compiled for explicit use by F# helpers. If neither implementation exists, a curried failing stub delays the error until invocation at the known arity; unknown/non-function types retain the thunk fallback.
-- **Direct-call rendering has two conventions.** `Printer.printExpr` unboxes `FsDirectApp` arguments and boxes the result at the declaration boundary. `Printer.printExprInline`, used by the boxed templates, passes arguments directly. Both share one renderer, with the convention propagated through applications, constructors, matches and guards. Choosing the wrong entrypoint can change F# type inference and boxing behavior.
+- **Every direct call carries its own adapters.** `FsDirectApp` records `PassValues` or `UnboxArgumentsBoxResult`. The former preserves arguments and result; the latter unboxes each argument to the target's inferred signature and boxes the result. Nested calls retain their own conventions. `Printer.printExpr` is the single renderer; `printExprInline` is a compatibility alias with identical behavior. Declaration, lambda, constructor, guard and branch placement cannot change a constructed call.
 - **Local recursive groups need a final layout pass.** `CodeGen.Boxed` emits markers from `Printer.Layout` for groups whose indentation depends on their enclosing expression. `Project.writeModule` calls `normalizeRecIndent` after assembling the whole source file. Marker definitions and decoding share one source; column accounting uses UTF-16 code units.
 - **Function-call exceptions have a boundary.** `sharpurs_apply` preserves `TargetInvocationException` wrapping for both its fast path and reflection path. Direct-call wrappers must preserve the corresponding behavior.
 - **Project writes are incremental.** Identical text keeps its timestamp. Generation does not delete stale files, and all `.cs` files remaining in `output/Main/` enter the C# project. `sharp.packages.props` supplies raw item elements for the F# project only.
@@ -192,7 +197,7 @@ The shared operations follow these contracts:
 | `Source.applications`, `flattenApp` | Traverse only `ExprApp`, in argument order. The annotated view retains the result annotation of each application for direct-call suffix checks; the value-only view serves generic calls and thunk calls. `TypeApp` remains in the head. |
 | `Source.bindings` | Flatten source binding groups while retaining recursive/singleton status. ADT and thunk selection continue to distinguish a recursive singleton from a mutual group. |
 | `Source.children`, `references` | Traverse all expression children, including guards, let right-hand sides, literals, record updates and `TypeApp`. Variable references retain their order and duplicates. ADT dependency checks and thunk capture/reference checks share this traversal. |
-| `Names.inModule`, `qualified` | Flatten the owner, then escape the complete value name. An explicit qualifier wins over the current module; an unqualified lexical reference can retain no owner. Constructor registries, native producers and consumers use the same value-name convention. |
+| `Names.inModule`, `binding`, `qualified` | Flatten the owner, then escape the complete value name. `binding` accepts an optional owner; `qualified` gives an explicit source qualifier precedence. An ownerless lexical binding is escaped on its own. Bindings, constructors, optimized references, FFI wrappers/stubs and the entrypoint share this policy. |
 
 Some similar-looking walks have different contracts:
 
@@ -202,6 +207,85 @@ Some similar-looking walks have different contracts:
 - **Whole-tree traversal versus call recognition:** dependency/capture analysis descends through a `TypeApp` to inspect its contents; that traversal does not grant permission to recognize a call across the same node.
 
 The direct-call, integer-operation, constructor and ADT/thunk suites exercise these contracts through the production recognizers. They compile real TAST fixtures and also check targeted mutations: missing or contradictory annotations, polymorphic signatures, unresolved type applications, partial/over-applied calls and disagreement between source lambdas and optimized arity. Their F# runtime checks cover argument order, reusable partial applications and exception boundaries.
+
+### Constructing a call
+
+Choose the adapters when constructing the AST, using the explicit exports from
+`FsAst`:
+
+| Form | Input/result contract |
+| --- | --- |
+| `directCall target arguments` | `FsDirectApp PassValues`: arguments already match the target signature and the result is unchanged. Used for `obj` workers and already-native arguments alike. |
+| `boxedNativeCall target arguments` | `FsDirectApp UnboxArgumentsBoxResult`: arguments are `obj`; each is unboxed at the call, and its result is boxed. The target signature supplies the unbox types. |
+| `FsApp function arguments` | Generic curried application through `sharpurs_apply`, one argument at a time, with its invocation exception boundaries. |
+| `FsCtorApp constructor fields` | Box a DU constructed from the supplied fields. Each field expression already carries its own adapters. |
+
+For example, `boxedNativeCall "nativeAdd" [ FsLitInt 20, FsLitInt 22 ]` crosses
+to `int -> int -> int`, whereas
+`directCall "objectAdd" [ FsLitInt 20, FsLitInt 22 ]` calls `obj -> obj -> obj`.
+A `directCall "objectIdentity" [ boxedNativeCall "nativeAdd" arguments ]` keeps
+the inner conversion wherever the outer call is rendered.
+
+An empty direct argument list denotes the **named value**, including a function
+value. `directCall` returns it unchanged; `boxedNativeCall` boxes it. It does not
+invoke a Unit function: that requires an explicit Unit argument. The AST does not
+prove saturation. Source selection and recursive arity handling decide between a
+worker call, a partial adapter/public alias, and generic applications of a returned
+function. `Boxed.etaExpand` constructs a `directCall` inside its curried adapter;
+`Boxed.nativeConstructor` constructs a `boxedNativeCall` for non-nullary factories.
+
+`CodeGen.translateExpr` receives the construction convention. Ordinary value
+declarations preserve their established unbox/box boundary; `translateObjectExpr`
+selects `PassValues` for object-worker bodies and boxed template inputs. Structured
+children inherit that construction choice. Constructor saturation, local partials
+and case placement are resolved before constructing their argument/body ASTs.
+Once constructed, an expression is never retagged by `Boxed` or `Printer`.
+This also preserves the historically redundant adapters on object workers in
+ordinary declarations, keeping existing generated text and F# inference stable.
+
+Adapters do not add a `try` boundary or move argument evaluation. A registered
+direct function still targets `_direct_apply`; its wrapper protects only the
+worker body. Recursion keeps its existing worker/public-alias rules. Raw native
+kernel and FFI templates continue to own their typed calls and wrappers.
+
+`npm run test:printer` reuses the same calls (native, adapted, object and mixed)
+in nine placements and compiles/runs the resulting F#. It also covers named
+values, reusable partials, returned functions, evaluation order and nested layout.
+
+### Naming a generated symbol
+
+Keep source identities as `Qualified Ident` until choosing a target name. For a
+public value or type, use `Names.inModule owner sourceName` (or `binding`/
+`qualified` when the owner is optional). Escape the complete qualified name:
+escaping `System` before adding an owner would incorrectly produce
+`Example_System_var` instead of the `Example_System` used by references.
+
+For example, `Naming.Valéurs.answer'` becomes
+`Naming_Val_u00e9_urs_answer_prime`. Its F# implementation is still named
+``answer'`` and is referenced with F# double backticks. A C# `@base` method is
+referenced as the native member ``base``, not renamed to `base_var`.
+
+Once the public name is escaped, use the suffix functions in `Names`:
+
+| Function | Result suffix | Consumers |
+| --- | --- | --- |
+| `constructor` | `usd_Ctor` | Boxed/native DU declarations, constructor calls and patterns |
+| `recursive` | `_tco` | Recursive registration, workers, adapters and ADT bridges |
+| `direct`, `directApply` | `_direct`, `_direct_apply` | Direct definitions, calls and collision checks |
+| `adtNative` | `_adt_native` | ADT signatures and constructor factories |
+| `guarded` | `_apply`, on an existing worker name | ADT calls, definitions and collision checks |
+| `thunkNative` | `_thunk_native` | Thunk workers and their collision checks |
+
+Generated enclosing modules use `generatedModule`; nested FFI modules use
+`ffiModule`. Native-member quoting is distinct from public-name escaping.
+Existing selection rules still reject worker/helper collisions against escaped
+source, foreign and relevant local names; suffix helpers do not establish
+eligibility or resolve collisions by silently renaming source bindings.
+
+`npm run test:names` compiles real TAST through the production CLI and runs the
+generated mixed F#/C# project. It covers Unicode modules/entrypoints, primed
+foreigns and workers, reserved constructor/member names, native casing, missing
+FFI partials, and all four record operations on twelve exact string keys.
 
 ## Checks for a change
 

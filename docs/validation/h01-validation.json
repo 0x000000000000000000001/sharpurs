@@ -1,0 +1,586 @@
+{
+  "milestone": "H01",
+  "date": "2026-10-02",
+  "milestoneComplete": true,
+  "cyclePoints": 20,
+  "startingRevision": "67029d8fef78d849d032e5320fc73074385359e2",
+  "tools": {
+    "node": {
+      "path": "/opt/homebrew/bin/node",
+      "version": "v24.8.0",
+      "sha256": "fd3aa1222fbb439a59723a0ff62ac9d8fec1b337d2f38a499a8bbca5552cab81"
+    },
+    "spago": {
+      "path": "/opt/homebrew/bin/spago",
+      "version": "1.0.3",
+      "sha256": "af09821f2fd74948f0a4d05694c4eb3390abbabede3838c65686f26906278eeb"
+    },
+    "purs": {
+      "path": "/Users/0x1/.local/bin/purs",
+      "version": "0.15.16 [development build; commit: 3c8fcfd7a3d440bba487fe9fe059284cffc6e908 DIRTY]",
+      "sha256": "758f82437163403272d9537eb934231f17d6efbe147f6107c276d257643a30d2"
+    },
+    "dotnet": {
+      "path": "/Users/0x1/.dotnet/dotnet",
+      "version": "8.0.423",
+      "sha256": "a80d4e75cd0c97d2057521684b362353d454daff0f556b09747c5b79a7b8409e"
+    }
+  },
+  "compilerBeforeSha256": "d68e8adb3b7612fc711b5ce26a88b60fb6f7674d746069fb0126e653142cbd42",
+  "compilerAfterSha256": "212e635463553e7784bbe8d0cd9f634203e22826c11305ff8a1bf9ba8e0afb0a",
+  "sourceHashes": {
+    "package.json": "b871f650858518ab5bb8dd3ec9de4b0e20209defed49cd6ed0ad3fe1a7f6782d",
+    "src/Main.purs": "070554f648aac8b7b6fade770e11f11ca3fb6d636c36463a384743a1cf08ca6b",
+    "src/Sharpurs/AdtInterop.purs": "b0d054613ea4e8ffcfcfcdc169a5717e1b8668da4d0258c2bcae1c172e073e24",
+    "src/Sharpurs/AdtKernel/Analysis.purs": "7c8e283b43c194cb41fb1ab2016ebf7432c9348531a4a16e02f9fe12b150b82a",
+    "src/Sharpurs/AdtKernel/Emit.purs": "dcf0dc0ba5f9119a3e9977ffe5f9bbea4baec0c5f40550ede77d4759206c4f28",
+    "src/Sharpurs/AdtKernel/Lower.purs": "175cbd6b16ba159847d9a0c6d7ed86579d902f5444659fd5608437e0e9684561",
+    "src/Sharpurs/AdtKernel.purs": "4051a42af938e651c2dd4f4b98fe2b58c137a4ad9cb36d4b559258ec3a703022",
+    "src/Sharpurs/AdtLayout.purs": "75d3f796e06f2dd96c767f84cbfaf4d81b93806a3703a0263bf04a4adc5a8098",
+    "src/Sharpurs/Analysis/Source.purs": "dc53ec20fc72b29aa830e26363f6b53d36caa0099e6fe3b01f99fe66e8795b7b",
+    "src/Sharpurs/CodeGen/Boxed.purs": "4ac396f162ee763f535aaa1dd3193ac24b3c0ed752cd8fa2fda9cb5e9589cf0c",
+    "src/Sharpurs/CodeGen/Case.purs": "c119ba5ec446e3e2c91f4417c5baac111247fd87d24c89a5ff349d6a630af260",
+    "src/Sharpurs/CodeGen/Context.purs": "02ef8b6876ed899c312c2d60f9dde09505a3071a4b00bcddf3c0c350e575dcc3",
+    "src/Sharpurs/CodeGen/Pattern.purs": "bd351ad1ca046e290c281035d4fe39b54bbf04d3bfdcee37e69b53f5acc930f3",
+    "src/Sharpurs/CodeGen/Selection.purs": "3a1794c6095cd18fd1c0395de54de22d537df7df1f03025b4477b5789615ef18",
+    "src/Sharpurs/CodeGen.purs": "4eb6ff200a8120fbded7b47b9d22c08a388b48abceb19cd99674ffe9602e38d1",
+    "src/Sharpurs/ConstructorCall.purs": "46309eeb5139d6c9d18909d41d1f8ea8602133655ceb7adc17b94e9b120473c5",
+    "src/Sharpurs/DirectCall.purs": "29f982cb18ecc8fbe1ae8d577c2d047d437ab83fda95615a198fae8597aa2ba9",
+    "src/Sharpurs/Ffi.purs": "68d2a074c8237edf9f3a39a7ba8a346ea9cc637568a56b44456ef4291ff55db9",
+    "src/Sharpurs/FfiSupport.js": "6d0c0c2b5c5d63dbab21e3d54ead78da7ccf42ec20465971823d581eee728088",
+    "src/Sharpurs/FfiSupport.purs": "b8660c2576b60b58738580778cbe8ed27f4cda7423f1559e4ade5225e700ab05",
+    "src/Sharpurs/FsAst.js": "ba0fd1ddefbbeaebfef2c11cceaacc9ed8c98033379dec9e0edf0736f6e7b2dc",
+    "src/Sharpurs/FsAst.purs": "d3a8700631cfc3f4ac0adcb8eee04dd8747ee8c4b8f8dcba024f2344632be369",
+    "src/Sharpurs/IntArithmetic.purs": "c4660cd17e472532fd8799f6fae0e6d663c3b35d843f1fb91e2a8cdef31e727b",
+    "src/Sharpurs/IntComparison.purs": "916ea540206270b414928f6cd1bdf65e5f4a7bd7c9d554540ba58e159535bf00",
+    "src/Sharpurs/IntKernel/CodeGen.purs": "75ec424b5fabd35929be2c879a074699f9edf981607cfe62c699d984db828189",
+    "src/Sharpurs/IntKernel.purs": "12e73bff3e66afc65ec8e894185b01c938f009e0a8e29530c435c516107cf3f5",
+    "src/Sharpurs/Metrics.js": "7f8f65209271a6ae4691ef77d251bce748c37256e0743bf9f1243ecc4f98ae22",
+    "src/Sharpurs/Metrics.purs": "03ef85b1a77e7b9e3bbe3da1fc75ca350731d2f8f1267a1686e69bce777b9716",
+    "src/Sharpurs/Names.purs": "4a99c422ae8574e5920a1f08ca793feee854cdab655ae133da8eb405606b1813",
+    "src/Sharpurs/Optimized.purs": "bc20ed06aa214ad656036b7889a8da9ec2bcd6c18bfd59ee6a44cbcb4d68ed1c",
+    "src/Sharpurs/Printer/Layout.js": "0880e59ba4fe09da2706a6d1603b7832d29a843c04a2681564b39e65260ae754",
+    "src/Sharpurs/Printer/Layout.purs": "23df3cfc84ced0a4aa8d050ed98303cc3b79e7e61b25c53b8000a24c4058056b",
+    "src/Sharpurs/Printer.purs": "70487620335dfaf896517c5ee9ada4663e4a74878440e98ae48aa53a9458b12a",
+    "src/Sharpurs/Project.purs": "220c70bf31013acca9694f0ecd4e28981e5487653e2c01bad670798ab0a4fdef",
+    "src/Sharpurs/Runtime.purs": "b8c26aadeafe29859d7b1373439852f7ad30957c7d8c9c5a1e10a80bb783999b",
+    "src/Sharpurs/ThunkKernel/Analysis.purs": "b1814fcea54a46f243707ea7d4a9eaa7e754f5e12c84faf14f2a7a852ef64f03",
+    "src/Sharpurs/ThunkKernel/Call.purs": "dbc4763b216b82870c61036a3c7dc9c5dddc01b8e5b64c778fad9bbcfe67d34a",
+    "src/Sharpurs/ThunkKernel/Emit.purs": "c9e4676163aa4364f0278acb16649e576a281b3b59da9233f6e51f978333ac53",
+    "src/Sharpurs/ThunkKernel/Helpers.purs": "a951f182302a5568ad765d77c1616f4d7c4ef28804ab890c1691d5e8459f0db2",
+    "src/Sharpurs/ThunkKernel/Lower.purs": "1f43944af3127091d94628f23f1d6a770ed152c5791bcd9050022b2d28403461",
+    "src/Sharpurs/ThunkKernel.purs": "1141a68b8d9ab42bfde3931f9f772d83cd17e817c42af2110ccc67d9b44d3229",
+    "tests/fixtures/names/Csharp.cs": "42515f9765f58a693de84909ab95ba7f4f25552fce33c43c432e46f54287d985",
+    "tests/fixtures/names/Csharp.purs": "f3a7b90ae243f9bdab68d9b13b465de32dabdcdb8f4cb0d3dcca8a2a8e681b01",
+    "tests/fixtures/names/Entry.fs": "22f45333008b2dfb07875bfc26f4b68417ff55bd67112d0ff73a3650af036e0e",
+    "tests/fixtures/names/Entry.purs": "6569bf3bf19e3180b8c943f95bd645c728a459b11388dd149d53bed28b85b7bf",
+    "tests/fixtures/names/Missing.purs": "8b8d653165ef0756aeef7ab04e3586ee6542e7a4064b0469203c3eaaaf4b9a0d",
+    "tests/fixtures/names/Native.purs": "4cce5fc13f345114081b12b537be930e853ceb797b3f499423e602c4a627a237",
+    "tests/fixtures/names/Records.purs": "39fbb93be2ff77ae3a2895af242dc3b5bb189ca5bd3ec6f9c738252b38a66fc2",
+    "tests/fixtures/names/Types.purs": "e4d2d4ec2d814f4cbfdc6805ede16d555eb763f0ba1e760d8acc089708fd49c2",
+    "tests/fixtures/names/Values.fs": "9e3c49d18908d6b0aa395ae2b2883be207a1f5728bc35caa7fa9f4f3f6ccc92a",
+    "tests/fixtures/names/Values.purs": "804479b546d36295c3bb0c0a536b020233f1c470db7510222de57474577b144c",
+    "tests/names.mjs": "2663564730a9477b84e16e2520e97eab8bfb48b98fc5c372fcdc6249d9c3ca16",
+    "tests/printer.mjs": "86feaed5307ba0e7e467f9e916caa1518890a18fc350c1ee26b719b53fdc439f",
+    "tests/runtime-apply.mjs": "124c9b0534a0332b97795eb36d1b2ab4f7862db80282b9e47992ee66c40eabe0"
+  },
+  "checks": {
+    "pureScriptAssertions": 49,
+    "focusedSuites": 19,
+    "namesRuntimeChecks": 93,
+    "printerRuntimeChecks": 16,
+    "ffiRuntimeChecks": 52,
+    "ffiConverterChecks": 32,
+    "ffiIdenticalDifferentialOutputs": 105,
+    "cliFixtures": [
+      "StringEdgeCases",
+      "StringEscapes",
+      "UnicodeIdentifier",
+      "PrimedTypeName",
+      "JSReserved",
+      "ReservedWords",
+      "TypeOperators",
+      "CSEInitialDigitSymbols",
+      "FFIConstraintWorkaround"
+    ],
+    "runnerCache": {
+      "files": 238,
+      "identical": true
+    },
+    "validatedSteps": [
+      {
+        "name": "build",
+        "command": [
+          "spago",
+          "build"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 1683,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/checks/build.log"
+      },
+      {
+        "name": "bundle",
+        "command": [
+          "spago",
+          "bundle",
+          "--module",
+          "Main",
+          "--platform",
+          "node",
+          "--outfile",
+          "bin/sharpurs.js",
+          "--bundle-type",
+          "app"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 575,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/checks/bundle.log"
+      },
+      {
+        "name": "purescript",
+        "command": [
+          "spago",
+          "test"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 582,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/checks/purescript.log"
+      },
+      {
+        "name": "test:tools",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "--test",
+          "tests/tools.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 2645,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/checks/test-tools.log"
+      },
+      {
+        "name": "test:runtime",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/runtime-apply.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 969,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/recheck/test-runtime.log"
+      },
+      {
+        "name": "test:ffi-support",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/ffi-support.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 1862,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/checks/test-ffi-support.log"
+      },
+      {
+        "name": "test:names",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/names.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 2322,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/recheck/test-names.log"
+      },
+      {
+        "name": "test:printer",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/printer.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 709,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/checks/test-printer.log"
+      },
+      {
+        "name": "test:recursion",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/recursion.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 939,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/checks/test-recursion.log"
+      },
+      {
+        "name": "test:case-patterns",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/case-patterns.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 924,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/checks/test-case-patterns.log"
+      },
+      {
+        "name": "test:kernel",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/int-kernel.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 715,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/checks/test-kernel.log"
+      },
+      {
+        "name": "test:local-kernel",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/local-int-kernel.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 693,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/checks/test-local-kernel.log"
+      },
+      {
+        "name": "test:selection",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/selection.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 75,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/checks/test-selection.log"
+      },
+      {
+        "name": "test:adt-kernel",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/adt-kernel.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 1341,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/checks/test-adt-kernel.log"
+      },
+      {
+        "name": "test:adt-interop",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/adt-interop.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 1397,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/checks/test-adt-interop.log"
+      },
+      {
+        "name": "test:adt-unary",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/adt-unary.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 1423,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/checks/test-adt-unary.log"
+      },
+      {
+        "name": "test:adt-multi",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/adt-multi.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 3272,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/checks/test-adt-multi.log"
+      },
+      {
+        "name": "test:int-comparison",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/int-comparison.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 1120,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/checks/test-int-comparison.log"
+      },
+      {
+        "name": "test:int-arithmetic",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/int-arithmetic.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 1233,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/checks/test-int-arithmetic.log"
+      },
+      {
+        "name": "test:direct-call",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/direct-call.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 1315,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/checks/test-direct-call.log"
+      },
+      {
+        "name": "test:thunk-kernel",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/thunk-kernel.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 3942,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/checks/test-thunk-kernel.log"
+      },
+      {
+        "name": "test:constructor-typeapp",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/constructor-typeapp.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 1585,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/checks/test-constructor-typeapp.log"
+      }
+    ],
+    "initialAggregate": {
+      "success": false,
+      "passed": 21,
+      "failed": [
+        "test:runtime"
+      ]
+    },
+    "recheck": {
+      "success": true,
+      "suites": [
+        "test:runtime",
+        "test:names"
+      ],
+      "reason": "Adapt runtime test to public FfiSupport API; remove fixture shadowing warning. Compiler unchanged."
+    }
+  },
+  "negativeRegression": {
+    "oldCompilerRejected": true,
+    "failure": "Generated F# does not compile",
+    "identicalSourceFiles": 10,
+    "identicalTastModules": 7
+  },
+  "generation": {
+    "b8x": {
+      "success": true,
+      "modules": 2685,
+      "generatedFiles": 2741,
+      "byteIdenticalFiles": 2740,
+      "intentionalChanges": [
+        "Sharpurs_Prelude.fs: UTF-16 pattern helpers only"
+      ],
+      "incrementalTimestampsPreserved": true,
+      "cleanGenerationVerified": true,
+      "inputsUnchanged": true,
+      "strictComparisonSuccess": false,
+      "comparison": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/b8x-generation/comparison.json",
+      "runtimeBeforeSha256": "73596fc92308be7f2fb99f260b8f91b4ee0a621a4e690a91bc0bd6d02289de88",
+      "runtimeAfterSha256": "67bffaebedb2434a00851f982e8399df976ba6f529a41d9ff65e1f19c0506dd2"
+    },
+    "native": {
+      "success": true,
+      "modules": 69,
+      "generatedFiles": 73,
+      "byteIdenticalFiles": 72,
+      "intentionalChanges": [
+        "Sharpurs_Prelude.fs: UTF-16 pattern helpers only"
+      ],
+      "incrementalTimestampsPreserved": true,
+      "cleanGenerationVerified": true,
+      "inputsUnchanged": true,
+      "strictComparisonSuccess": false,
+      "comparison": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/native-generation/comparison.json",
+      "runtimeBeforeSha256": "73596fc92308be7f2fb99f260b8f91b4ee0a621a4e690a91bc0bd6d02289de88",
+      "runtimeAfterSha256": "67bffaebedb2434a00851f982e8399df976ba6f529a41d9ff65e1f19c0506dd2"
+    }
+  },
+  "b8x": {
+    "input": "M11 prepared 2685-module TAST graph, native sources snapshotted for H01",
+    "build": {
+      "command": [
+        "/Users/0x1/.dotnet/dotnet",
+        "build",
+        "output/Main/Program.fsproj",
+        "-c",
+        "Release",
+        "--nologo",
+        "-v",
+        "minimal",
+        "-p:NuGetAudit=false"
+      ],
+      "cwd": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h01/b8x-generation/sandbox/workspace",
+      "exitCode": 0,
+      "seconds": 73.522457625,
+      "log": "b8x-build.log"
+    },
+    "warnings": 378,
+    "errors": 0,
+    "runtime": {
+      "status": "blocked",
+      "executedProcesses": 0,
+      "reason": "Docker API unavailable: OrbStack socket /Users/0x1/.orbstack/run/docker.sock does not exist"
+    }
+  },
+  "evidenceHashes": {
+    "b8x-build.json": "f9eb6e3a863c76e89c8dde07301a71c61ca0ab891942d1227679b6863f57f4ed",
+    "b8x-build.log": "8a79e1b7d00688ee1e8f615e33caf091bc71398d8744740c567df5eb7de3ebfe",
+    "b8x-check.py": "40bc96ccfba2540646e70f237550cc1e466f060f03c85e1898d51cc896a22713",
+    "b8x-comparison.log": "0336a60ae832d38642da7a624eefcf919ac0557f8251a7e81966612b123f57de",
+    "b8x-generation/after-clean.json": "ac6090c4ffc04d4d916de6ede2163881aadf99d0ad3a2684f51ff6355f66671a",
+    "b8x-generation/after-clean.log": "a59a7621038a36fd15a1910fd9772d6d4fa5fef0ef96eafdf7728c6f2e5f75d7",
+    "b8x-generation/after-incremental.json": "c8c555283409b106c884ef9009e72a7b889148940593c09c82bc2690ec2ff972",
+    "b8x-generation/after-incremental.log": "c246a61d51d48bdbf73a6f3a764c2d5e20923102002b26d591ef89145d88b08c",
+    "b8x-generation/before.json": "a52c433c51b032b6e10e7dd8f2b0d484caf62791297871d3771ca7b136b79d4f",
+    "b8x-generation/before.log": "94d811aca51cbd0ef229ebc4563d3b51c97c03e44be9a9f80a633cd226d83241",
+    "b8x-generation/comparison.json": "4698ec8d910429f7df112c984090b59b8f7a6f46d1d15b0a3fdf929202ddc1d6",
+    "b8x-generation/input-origins.json": "ab2dccb4648a61b84cb23979b209c4b1ee5d41a2ea71b9786b9d0a0d5a3ac6e8",
+    "b8x-generation/inputs.json": "0aa5e84766f64e28a41e6b9bb42c2ed2070c70f8e1a5a2e45f8645638d184093",
+    "b8x-runtime-blocked.log": "56e1fc5cacd2db08ea307caf184f70e7e8fad6583fba9007376e14e1c681da77",
+    "b8x-runtime.diff": "52f9921c3c47f19c43672f4280c02c6d29029b6724a42e31b86ab7d39758bb95",
+    "before.json": "6043486fda40fd2f8c31c5dc4731e926970702c8e8304e22a9f368fce8cbe869",
+    "build-before.log": "c39913aa5e716bd85b8903efbe6fe64a7b949740fada3f4a426bff6cddf48019",
+    "checks/build.log": "f1ed2110e8cf4ceeb5b01496526016adaaeb706c85e354ef3ee29393bff0e5a5",
+    "checks/bundle.log": "6cd2b75e5bbda41414ba6835f08b56d3975457d12252a5a320b55008c9cb4293",
+    "checks/purescript.log": "6eec0b6fdb919bb3e5cd1468a0d6f0524f0f3e3b4cd7dcd039e729f8ed6e749a",
+    "checks/results.json": "a96f53fec3897112af1983736032c5e648e72fc91aea1b4cc90bd42304d724c4",
+    "checks/test-adt-interop.log": "834e27c230987e052a943bfc75b4d6191da8d9c1282bde1bb105b096a23e1e8b",
+    "checks/test-adt-kernel.log": "baf294cc24bd07e4ba4de57c5b4979f0355c7f7443fa4296c099dd0ffc55cd37",
+    "checks/test-adt-multi.log": "bee6101c076b7d2315cafc19ff0dca0dbbb92152de931407571237513e6ded6c",
+    "checks/test-adt-unary.log": "dc7a6564aebde0316bca06eb0cb0d08433621ad9ed520abad9e3b3ac7bd7612e",
+    "checks/test-case-patterns.log": "b93db5aacd08c2dffc99e05d522d9f5af89f8f06820382f7ba6792a171bb426c",
+    "checks/test-constructor-typeapp.log": "6ce240f493808e2f07676ef66799566a2be69c6e8576b7fada944c6e9fd3cece",
+    "checks/test-direct-call.log": "316ae0f39fc37cbe354bf5266c015d6caf6065e857b7b440e2c7d4ed53be8c96",
+    "checks/test-ffi-support.log": "54a3bf1499fdddf831d931a869ac7a399f7a749bfe7907593b41ef64b6bcc747",
+    "checks/test-int-arithmetic.log": "a0490185af1f0a53cf2a58cbba216b95d5fa2aea78f879e4f5eb7fe0dd45f7b0",
+    "checks/test-int-comparison.log": "5fbebc04b5488dbc5c555845c491379cb3795399bef39269fb8f7a44f8a205d3",
+    "checks/test-kernel.log": "58d792a88b6102058866239bbd83d7e42829f5107f993f2e88490dedcfb3f93c",
+    "checks/test-local-kernel.log": "93e26295d8896e7458779a8bbf82f7648c3c86689f03b3675112b6f5f815d043",
+    "checks/test-names.log": "97e023311680655b63c0d348673aa62a654e61edf9ebb2a4e095e29908e4a345",
+    "checks/test-printer.log": "7195b506c2a5c47e55859cd1241ba1447f28d175d7aa15b6e681a61640ed55db",
+    "checks/test-recursion.log": "75f4de4e84b62d8a4fc1a756224c6fc48f8ea24fbb6199238a9daec1af7a7afa",
+    "checks/test-runtime.log": "4f7abd62a39f06c9b76ba6d7c4837c897e73dc5152b1555f3de363e6d9c1fb3b",
+    "checks/test-selection.log": "2525233d04932c3d3cbd345a72a769afb89ae969f1e943f7b993edeb3d571d06",
+    "checks/test-thunk-kernel.log": "b87421567440b07cf02e45403f83531f05b7ff144d5470d72da2814b32f14b9b",
+    "checks/test-tools.log": "cff0192b9585c74844ac1654faf51e1fce4c4e430df12a826186fa161364238a",
+    "cli-checks/cli-fixtures.log": "48592c97941d0d7767c882e29ca097de915fc13477d2a7c01cf50f29a4266d65",
+    "cli-checks/results.json": "c2fe81c82f661f4007231ac28533df2390e26376135702d19a40390f76fdd2fe",
+    "cli-checks/test-selection.log": "2525233d04932c3d3cbd345a72a769afb89ae969f1e943f7b993edeb3d571d06",
+    "cli.log": "4086a7229dd7baafe264bab6fc7d0fe398a5d7519b73c309c4fc45bc4274894a",
+    "ffi-final/metadata.json": "429226a0b8bee6b1e4e61ab983917dad0899bdd36221278afa5cb85095ff463c",
+    "ffi-final/validation.log": "97ce3eda2680f9459da502d1c6b697effd9b69c60b4a3b756f21629f667d0131",
+    "finalize.py": "e07c5b0ef94f7622cd5f471ee7adb3818ba5dd9e180ff6cd6163f2f7f711fd05",
+    "generation-validation.json": "281b494885e18dcdfbaac741ea03732d722e4fbae0c659a3486a52de87baffc3",
+    "names-regression-inputs.json": "b875bacd6366ff0dd262b7e9960a36b2df5037fa93f2d10ddb5b001e1ead12d3",
+    "names-verified/fixtures.json": "58f31bb66820e4ecf2350bee5072bac087c54046b8a66e1e6c5e33a2fd366b79",
+    "names-verified/validation.log": "f4b1fcd49968a943bb356ff65ae6639cb3b3f3ece7069e9fa9d25b9b9df33a78",
+    "native-comparison.log": "06336dbd95852897082b962f630b72a21b7e7795bc863b4d0db6e817fe3c93e0",
+    "native-compile.log": "946b7c89c7d507f6a957e030c78379311dbbf6ff200a10b7e5234d28c5beaa08",
+    "native-generation/after-clean.json": "70c3f73f7b4dea0230f13144297aefc7848feba009afad5945abe325f4509465",
+    "native-generation/after-clean.log": "6143da43eb239ec13c8aedc18c597e423631fee0e444a44d27aa77a85263ce00",
+    "native-generation/after-incremental.json": "01477f98e7d2810e605e9fb488ed60a0f050d02a23150887ea8ff8c74ef6e048",
+    "native-generation/after-incremental.log": "ed8a19747beea459197a310eebe69808b25abf1613a0c945a69d78a707f58000",
+    "native-generation/before.json": "f5e6864591a30b0406e84169dac4d4316d9157939fa08f5bd64907b9f4294038",
+    "native-generation/before.log": "4b95e77c2db4e182c3b731ce488e5f36e2390fb2ab8220e823c1d121ab01e03a",
+    "native-generation/comparison.json": "fb7e2400ab09840cf52464789de04df85f134cfc3ea8176fe5c11f32308104b9",
+    "native-generation/input-origins.json": "484404144d17fd237dda50095811925174ca10982daf4ab2dcc396e43aa14184",
+    "native-generation/inputs.json": "d25dc25e128c727b10cb36b5e23ac360faac210e776d00bfa912f7cfed16994e",
+    "native-runtime.diff": "52f9921c3c47f19c43672f4280c02c6d29029b6724a42e31b86ab7d39758bb95",
+    "native-sources.json": "776f5a32a8b2a4648eb7bc1b8759b96f4488f2b4693a65fb8e7c22c51ef412ab",
+    "qualify-generation.py": "d6ae599be6a4d5e25dd5b60c1fb16d8c5e85e9f794e387151a4c5c45d0341963",
+    "recheck/results.json": "b1ff8a16867535096e132baa7315a553e8978d247dc00c587f91333ea43bd5bf",
+    "recheck/test-names.log": "97e023311680655b63c0d348673aa62a654e61edf9ebb2a4e095e29908e4a345",
+    "recheck/test-runtime.log": "b6af9aecc029b9f564a78739f42922722236529f047a554208a6f9e94358cdfb",
+    "regression-confirmed/results.json": "a34a890f911bb1d55263fc0755a115b7100848a2937892874170f1eb9f842a9b",
+    "regression-confirmed/test-names.log": "b9478353c49a6fd6401eb1ae2c5d54e99b2b92f71d4ab441c0fbe1fb882fdaa8",
+    "runner-cache-before.json": "2f87fcfffa40f588b4b14de37d7c5ed889a49fa59012ccc44306d62e22391d52",
+    "runner-cache-comparison.json": "d0d4faeb808f91c4bce8e88ae7ac8128e8628e6ca86c323de1edb449c85be5cf"
+  }
+}

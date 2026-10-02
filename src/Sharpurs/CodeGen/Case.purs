@@ -1,7 +1,7 @@
 -- | Ordinary case translation and the nested-match path for deep unary patterns.
 -- | Expression translation is supplied by the caller, keeping this module
 -- | independent of expression dispatch and its recursive environments.
-module Sharpurs.CodeGen.Case (translate) where
+module Sharpurs.CodeGen.Case (Translators, translate) where
 
 import Prelude
 
@@ -14,23 +14,29 @@ import Sharpurs.CodeGen.Pattern (Chain(..))
 import Sharpurs.CodeGen.Pattern as Pattern
 import Sharpurs.FsAst (FsExpr(..), FsMatchCase(..), FsPattern(..))
 
-translate :: Pattern.Env -> (Expr Ann -> FsExpr) -> Array (Expr Ann) -> Array (CaseAlternative Ann) -> FsExpr
+-- Scrutinees and boxed body templates consume obj. Guards and structural
+-- branches use the enclosing expression boundary. Keep source bodies until
+-- their placement is known, so each call is constructed with its own adapters.
+type Translators =
+  { expression :: Expr Ann -> FsExpr
+  , object :: Expr Ann -> FsExpr
+  }
+
+translate :: Pattern.Env -> Translators -> Array (Expr Ann) -> Array (CaseAlternative Ann) -> FsExpr
 translate env emit expressions alternatives
   -- A case over an uninhabited type is unreachable and keeps the ordinary failure.
   | Array.null alternatives = Boxed.patternFailure
   | otherwise =
       let
-        value = Boxed.matchValue (map emit expressions)
+        value = Boxed.matchValue (map emit.object expressions)
         plan = case expressions of
           [ _ ] -> nestedMatchPlan env alternatives
           _ -> Nothing
       in case plan of
-        Just branches -> compileLevel { depth: 0, boxedValue: value, scrutinee: value }
-          (map (\branch -> { pattern: branch.pattern, body: emit branch.body }) branches)
-          Boxed.patternFailure
+        Just branches -> compileLevel emit { depth: 0, boxedValue: value, scrutinee: value } branches Nothing
         Nothing -> FsMatch value (Array.concatMap (translateAlternative env emit) alternatives)
 
-translateAlternative :: Pattern.Env -> (Expr Ann -> FsExpr) -> CaseAlternative Ann -> Array FsMatchCase
+translateAlternative :: Pattern.Env -> Translators -> CaseAlternative Ann -> Array FsMatchCase
 translateAlternative env emit (CaseAlternative binders guards) =
   let
     pattern = case map (Pattern.translate env) binders of
@@ -38,9 +44,9 @@ translateAlternative env emit (CaseAlternative binders guards) =
       [ single ] -> single
       patterns -> FsPatTuple patterns
   in case guards of
-    Unconditional body -> [ FsMatchCase pattern Nothing (Boxed.parenthesize (emit body)) ]
+    Unconditional body -> [ FsMatchCase pattern Nothing (Boxed.parenthesize (emit.object body)) ]
     Guarded branches -> map (\(Guard guard body) ->
-      FsMatchCase pattern (Just (emit guard)) (Boxed.parenthesize (emit body))) branches
+      FsMatchCase pattern (Just (emit.expression guard)) (Boxed.parenthesize (emit.object body))) branches
 
 type Branch body = { pattern :: Chain, body :: body }
 
@@ -62,21 +68,21 @@ nestedMatchPlan env alternatives = do
 minChainDepth :: Int
 minChainDepth = 4
 
-type ConstructorBranch = { inner :: Maybe Chain, body :: FsExpr }
+type ConstructorBranch = { inner :: Maybe Chain, body :: Expr Ann }
 
 type ConstructorGroup = { name :: String, branches :: Array ConstructorBranch }
 
 -- A catch-all optionally binds the matched value. Constructor and leaf patterns
 -- cannot enter this slot, so compiling it always yields exactly one match case.
-type CatchAll = { name :: Maybe String, body :: FsExpr }
+type CatchAll = { name :: Maybe String, body :: Expr Ann }
 
 type ScannedBranches =
   { constructors :: Array ConstructorGroup
-  , leaves :: Array FsMatchCase
+  , leaves :: Array { pattern :: FsPattern, body :: Expr Ann }
   , catchAll :: Maybe CatchAll
   }
 
-scanBranches :: Array (Branch FsExpr) -> ScannedBranches
+scanBranches :: Array (Branch (Expr Ann)) -> ScannedBranches
 scanBranches = go { constructors: [], leaves: [], catchAll: Nothing }
   where
   -- A catch-all ends the scan. Preserve first-occurrence order of constructor
@@ -86,7 +92,7 @@ scanBranches = go { constructors: [], leaves: [], catchAll: Nothing }
     Just { head: branch, tail } -> case branch.pattern of
       ChainWildcard -> acc { catchAll = Just { name: Nothing, body: branch.body } }
       ChainVariable name -> acc { catchAll = Just { name: Just name, body: branch.body } }
-      ChainLeaf pattern -> go acc { leaves = Array.snoc acc.leaves (FsMatchCase pattern Nothing branch.body) } tail
+      ChainLeaf pattern -> go acc { leaves = Array.snoc acc.leaves { pattern, body: branch.body } } tail
       ChainConstructor name inner -> go
         acc { constructors = appendConstructor name { inner, body: branch.body } acc.constructors } tail
 
@@ -98,35 +104,38 @@ appendConstructor name branch groups = case Array.findIndex (\group -> group.nam
 
 type MatchTarget = { depth :: Int, boxedValue :: FsExpr, scrutinee :: FsExpr }
 
-compileLevel :: MatchTarget -> Array (Branch FsExpr) -> FsExpr -> FsExpr
-compileLevel target branches fallback =
+compileLevel :: Translators -> MatchTarget -> Array (Branch (Expr Ann)) -> Maybe (Expr Ann) -> FsExpr
+compileLevel emit target branches fallback =
   let
     scanned = scanBranches branches
-    fallbackBody = fromMaybe fallback (map _.body scanned.catchAll)
-    constructors = Array.mapWithIndex (compileGroup target.depth fallbackBody) scanned.constructors
+    fallbackBody = case scanned.catchAll of
+      Just branch -> Just branch.body
+      Nothing -> fallback
+    constructors = Array.mapWithIndex (compileGroup emit target.depth fallbackBody) scanned.constructors
+    leaves = map (\branch -> FsMatchCase branch.pattern Nothing (emit.expression branch.body)) scanned.leaves
   in FsMatch target.scrutinee
-    (constructors <> scanned.leaves <> [ compileCatchAll target fallback scanned.catchAll ])
+    (constructors <> leaves <> [ compileCatchAll emit target fallback scanned.catchAll ])
 
-compileCatchAll :: MatchTarget -> FsExpr -> Maybe CatchAll -> FsMatchCase
-compileCatchAll target fallback = case _ of
-  Nothing -> FsMatchCase FsPatWildcard Nothing fallback
-  Just { name: Nothing, body } -> FsMatchCase FsPatWildcard Nothing body
+compileCatchAll :: Translators -> MatchTarget -> Maybe (Expr Ann) -> Maybe CatchAll -> FsMatchCase
+compileCatchAll emit target fallback = case _ of
+  Nothing -> FsMatchCase FsPatWildcard Nothing (fromMaybe Boxed.patternFailure (map emit.expression fallback))
+  Just { name: Nothing, body } -> FsMatchCase FsPatWildcard Nothing (emit.expression body)
   Just { name: Just name, body } ->
     if target.depth == 0 then
-      FsMatchCase (FsPatIdent name) Nothing body
+      FsMatchCase (FsPatIdent name) Nothing (emit.expression body)
     else
       -- Inner constructor matches unbox their scrutinee. Bind the original
       -- boxed field when a source variable captures the whole value instead.
-      FsMatchCase FsPatWildcard Nothing (Boxed.letIn [ Boxed.LocalValue name target.boxedValue ] body)
+      FsMatchCase FsPatWildcard Nothing (Boxed.letIn [ Boxed.LocalValue name target.boxedValue ] (emit.object body))
 
-compileGroup :: Int -> FsExpr -> Int -> ConstructorGroup -> FsMatchCase
-compileGroup depth fallback index group = case Array.head group.branches of
-  Just { inner: Nothing, body } -> FsMatchCase (FsPatCtor group.name []) Nothing body
-  Just { inner: Just ChainWildcard, body } -> FsMatchCase (FsPatCtor group.name [ FsPatWildcard ]) Nothing body
-  Just { inner: Just (ChainVariable name), body } -> FsMatchCase (FsPatCtor group.name [ FsPatIdent name ]) Nothing body
+compileGroup :: Translators -> Int -> Maybe (Expr Ann) -> Int -> ConstructorGroup -> FsMatchCase
+compileGroup emit depth fallback index group = case Array.head group.branches of
+  Just { inner: Nothing, body } -> FsMatchCase (FsPatCtor group.name []) Nothing (emit.expression body)
+  Just { inner: Just ChainWildcard, body } -> FsMatchCase (FsPatCtor group.name [ FsPatWildcard ]) Nothing (emit.expression body)
+  Just { inner: Just (ChainVariable name), body } -> FsMatchCase (FsPatCtor group.name [ FsPatIdent name ]) Nothing (emit.expression body)
   _ ->
     let
       variable = "usd_case_" <> show depth <> "_" <> show index
       target = { depth: depth + 1, boxedValue: FsIdent variable, scrutinee: Boxed.unbox (FsIdent variable) }
       branches = map (\branch -> { pattern: fromMaybe ChainWildcard branch.inner, body: branch.body }) group.branches
-    in FsMatchCase (FsPatCtor group.name [ FsPatIdent variable ]) Nothing (compileLevel target branches fallback)
+    in FsMatchCase (FsPatCtor group.name [ FsPatIdent variable ]) Nothing (compileLevel emit target branches fallback)

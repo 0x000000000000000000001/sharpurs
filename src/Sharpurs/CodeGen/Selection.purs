@@ -93,7 +93,7 @@ prepareModule env candidates (Module source) =
 directCollision :: Set String -> String -> DirectCall.Candidate -> Boolean
 directCollision sourceNames name entry = Array.any
   (\helper -> Set.member helper sourceNames || Array.elem helper entry.args)
-  [ name <> "_direct", name <> "_direct_apply" ]
+  [ Names.direct name, Names.directApply name ]
 
 -- Binding priority: native ADT > Int kernel > optimized NonRec expression >
 -- direct NonRec function > generic source group. Mutual groups stay intact.

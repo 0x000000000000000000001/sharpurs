@@ -20,7 +20,8 @@ import Node.FS.Aff as FS
 import PureScript.Backend.Optimizer.CoreFn (Ann, ExprType(..), Ident(..), Module(..))
 import PureScript.Backend.Optimizer.FfiSupport (findFfiFile)
 import Sharpurs.FfiSupport (appendCsFfiWrappers, appendFfiWrappers)
-import Sharpurs.FsAst (modulePrefix)
+import Sharpurs.FsAst (escapeString)
+import Sharpurs.Names as Names
 
 type ModuleFfi =
   { fsharp :: String
@@ -82,5 +83,5 @@ stubForeign name foreignName arity =
     opens = String.joinWith "" (map (\arg -> "(fun (" <> arg <> ": obj) -> ") parameters)
     closes = String.joinWith "" (map (const ")") parameters)
   in
-    "let " <> modulePrefix name <> "_" <> foreignName <> " = box (" <> opens
-      <> "failwith \"FFI not implemented: " <> name <> "." <> foreignName <> "\"" <> closes <> ")\n"
+    "let " <> Names.inModule name foreignName <> " = box (" <> opens
+      <> "failwith " <> escapeString ("FFI not implemented: " <> name <> "." <> foreignName) <> closes <> ")\n"

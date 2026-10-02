@@ -3,14 +3,14 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { appendFfiWrappersImpl } from "../src/Sharpurs/FfiSupport.js";
+import { appendFfiWrappers } from "../output/Sharpurs.FfiSupport/index.js";
 import { helpers as prelude } from "../output/Sharpurs.Runtime/index.js";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
-const exceptionFfi = appendFfiWrappersImpl("Effect.Exception")([
+const exceptionFfi = appendFfiWrappers("Effect.Exception")([
   "throwException", "catchException",
 ])(await read("../../sharpurs-exceptions/src/Effect/Exception.fs"));
-const fixtureFfi = appendFfiWrappersImpl("RuntimeFixture")([
+const fixtureFfi = appendFfiWrappers("RuntimeFixture")([
   "increment", "sum", "returnFunction",
 ])(`let increment (value: int) = value + 1
 let sum (left: int) (right: int) = left + right

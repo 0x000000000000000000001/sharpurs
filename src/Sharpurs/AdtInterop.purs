@@ -53,7 +53,7 @@ translateConsumer producers arities source@(Module consumer) = do
     producerNames = Array.concatMap layoutNames layouts
     consumerNames = Array.concatMap
       (\decl -> Array.cons (Names.inModule consumerName decl.name)
-        (Array.concatMap (\ctor -> let name = Names.inModule consumerName ctor.name in [ name, name <> "usd_Ctor" ]) decl.constructors))
+        (Array.concatMap (\ctor -> let name = Names.inModule consumerName ctor.name in [ name, Names.constructor name ]) decl.constructors))
       consumer.dataDecls
   guard (unique moduleNames && not (Array.elem consumerName moduleNames))
   guard (unique (map modulePrefix (Array.snoc moduleNames consumerName)))

@@ -54,7 +54,7 @@ prepareModule (Module source) backend = do
       group <- Array.find (Array.any (\(Tuple name _) -> name == binding.name) <<< _.bindings) backend.bindings
       guard (group.recursive == binding.recursive && (not group.recursive || Array.length group.bindings == 1))
       expression <- Analysis.lookupExpression binding.name backend
-      worker <- Analysis.worker (qualify binding.name) (publicName binding.name <> "_thunk_native") helpers binding expression
+      worker <- Analysis.worker (qualify binding.name) (Names.thunkNative (publicName binding.name)) helpers binding expression
       lowered <- Lower.binding worker helpers expression
       declaration <- Emit.worker worker binding.recursive lowered
       guard (validIdentifier worker.nativeName && not (Array.elem worker.nativeName (publicNames <> localNames)))

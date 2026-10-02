@@ -23,6 +23,7 @@ import Sharpurs.AdtKernel.Lower as Lower
 import Sharpurs.AdtLayout as Layout
 import Sharpurs.Analysis.Source as Source
 import Sharpurs.FsAst (FsDecl(..), FsModule(..))
+import Sharpurs.Names as Names
 
 -- Contains all public constructor wrappers and the selected multi-argument
 -- workers. nativeNames lists functions only; other source bindings stay boxed.
@@ -99,8 +100,8 @@ prepareModule core@(Module source) backend = do
           }
     candidates = (Array.foldl select { globals: Map.empty, candidates: [] } sourceBindings).candidates
     emitted = ctorBindings <> candidates
-    generatedNames = Array.concatMap (\item -> [ item.signature.nativeName ] <> if item.recursive then [ item.signature.publicName <> "_tco" ] else []) emitted
-      <> map (\item -> item.signature.nativeName <> "_apply") candidates
+    generatedNames = Array.concatMap (\item -> [ item.signature.nativeName ] <> if item.recursive then [ Names.recursive item.signature.publicName ] else []) emitted
+      <> map (Names.guarded <<< _.signature.nativeName) candidates
     ctorNames = map _.name constructors
   guard (not (Array.null candidates))
   guard (unique generatedNames && all Layout.validIdentifier (publicNames <> generatedNames))

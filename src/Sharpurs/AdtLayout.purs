@@ -19,12 +19,13 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.String as String
 import Data.String.CodeUnits as CU
-import Data.String.Pattern (Pattern(..), Replacement(..))
+import Data.String.Pattern (Pattern(..))
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import PureScript.Backend.Optimizer.CoreFn (ExprType, Ident(..), Module(..), ModuleName(..), Qualified(..))
 import PureScript.Backend.Optimizer.CoreFn as C
 import Sharpurs.FsAst (sanitizeName)
+import Sharpurs.Names as Names
 
 type Ctor =
   { name :: String
@@ -53,9 +54,9 @@ fromModule (Module mod) = do
   let
     ModuleName moduleName = mod.name
     qualify name = moduleName <> "." <> name
-    nativeName name = sanitizeName (String.replaceAll (Pattern ".") (Replacement "_") moduleName <> "_" <> name)
+    nativeName = Names.inModule moduleName
     typeNames = map (nativeName <<< _.name) mod.dataDecls
-    ctorNames = Array.concatMap (\decl -> map (\ctor -> nativeName ctor.name <> "usd_Ctor") decl.constructors) mod.dataDecls
+    ctorNames = Array.concatMap (\decl -> map (Names.constructor <<< nativeName <<< _.name) decl.constructors) mod.dataDecls
     names = typeNames <> ctorNames
     initial =
       { moduleName
@@ -79,7 +80,7 @@ fromModule (Module mod) = do
         (\ctor -> do
           nativeFields <- traverse (nativeType initial) ctor.fields
           pure
-            { name: nativeName ctor.name <> "usd_Ctor"
+            { name: Names.constructor (nativeName ctor.name)
             , sourceName: Qualified (Just mod.name) (Ident ctor.name)
             , typeName
             , sourceType
