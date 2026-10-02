@@ -257,3 +257,7 @@ rounding precision. Source, typed-input and assembly hashes identify the execute
 program. A result-validation replay establishes output preservation; a timing
 comparison additionally needs identical workloads, separate processes and all
 builds completed before the measurement series.
+
+The [2 October 2026 replay report](validation/m11-2026-10-02.md) records the concrete
+toolchain, source revisions, application outputs and evidence for the maintenance
+plan's integration qualification.

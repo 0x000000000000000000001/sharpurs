@@ -296,6 +296,12 @@ Focused regression commands are defined in [package.json](package.json):
 
 Build the compiler first: the focused tests import its `output/` modules, including the runtime source exported by `Sharpurs.Runtime`. The runtime test additionally needs `sharpurs-exceptions`. Suites with PureScript fixtures use the TAST `purs` and run generated F# through `dotnet fsi`; `test:ffi-support` compiles and runs a generated F#/C# project. `PURS=/path/to/purs` and `DOTNET=/path/to/dotnet` select those executables in the focused scripts. The shell runner instead uses `purs` and `dotnet` through `PATH`.
 
+The [2 October 2026 integration replay report](docs/validation/m11-2026-10-02.md)
+records the compiler/tool revisions, fixture and library checks, b8x `Test.Main`
+executions, database cleanup and reference benchmark outputs. The
+[full replay procedure](docs/testing.md#full-integration-replay) connects these
+checks to their commands and required application configuration.
+
 ## Architecture
 
 The main parts of the compilation pipeline are:

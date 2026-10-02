@@ -233,3 +233,8 @@ obsolete outputs. The [replay guide](testing.md) documents the exact commands,
 required checkouts, shared test-support contracts and retained failure evidence.
 Existing benchmark baselines require their own separate-process performance
 comparisons if optimization or runtime behavior changes.
+
+The [M11 integration report](validation/m11-2026-10-02.md) links the pinned sources
+and tools to the complete fixture/library replay, b8x `Test.Main` execution and
+benchmark-result checks. It also records generated-project diagnostics and the
+location of the detailed evidence.
