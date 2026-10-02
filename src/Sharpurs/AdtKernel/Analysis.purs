@@ -16,6 +16,8 @@ module Sharpurs.AdtKernel.Analysis
   , checkCtorIdentity
   , globalReference
   , validateReference
+  , Operation(..)
+  , Primitive
   , primitive
   , typeOf
   , unique
@@ -173,20 +175,35 @@ validateReference sig (NeutralExpr (S.Typed ty inner)) = do
 validateReference _ (NeutralExpr (S.Var _)) = Just unit
 validateReference _ _ = Nothing
 
--- The operator subset carries both its type contract and its native spelling.
-primitive :: S.BackendOperator2 -> Maybe { symbol :: String, operand :: ExprType, result :: ExprType }
+-- Admitted operations carry semantic identities and type contracts only.
+-- Emit owns their target-language spelling and evaluation syntax.
+data Operation
+  = BooleanAnd
+  | BooleanOr
+  | IntAdd
+  | IntSubtract
+  | IntEqual
+  | IntNotEqual
+  | IntGreaterThan
+  | IntGreaterThanOrEqual
+  | IntLessThan
+  | IntLessThanOrEqual
+
+type Primitive = { operation :: Operation, operand :: ExprType, result :: ExprType }
+
+primitive :: S.BackendOperator2 -> Maybe Primitive
 primitive = case _ of
-  S.OpBooleanAnd -> Just { symbol: "&&", operand: C.Boolean, result: C.Boolean }
-  S.OpBooleanOr -> Just { symbol: "||", operand: C.Boolean, result: C.Boolean }
-  S.OpIntNum S.OpAdd -> Just { symbol: "+", operand: C.Int, result: C.Int }
-  S.OpIntNum S.OpSubtract -> Just { symbol: "-", operand: C.Int, result: C.Int }
-  S.OpIntOrd op -> Just { symbol: case op of
-    S.OpEq -> "="
-    S.OpNotEq -> "<>"
-    S.OpGt -> ">"
-    S.OpGte -> ">="
-    S.OpLt -> "<"
-    S.OpLte -> "<=", operand: C.Int, result: C.Boolean }
+  S.OpBooleanAnd -> Just { operation: BooleanAnd, operand: C.Boolean, result: C.Boolean }
+  S.OpBooleanOr -> Just { operation: BooleanOr, operand: C.Boolean, result: C.Boolean }
+  S.OpIntNum S.OpAdd -> Just { operation: IntAdd, operand: C.Int, result: C.Int }
+  S.OpIntNum S.OpSubtract -> Just { operation: IntSubtract, operand: C.Int, result: C.Int }
+  S.OpIntOrd op -> Just { operation: case op of
+    S.OpEq -> IntEqual
+    S.OpNotEq -> IntNotEqual
+    S.OpGt -> IntGreaterThan
+    S.OpGte -> IntGreaterThanOrEqual
+    S.OpLt -> IntLessThan
+    S.OpLte -> IntLessThanOrEqual, operand: C.Int, result: C.Boolean }
   _ -> Nothing
 
 -- This supplies an expected type for a let RHS; it does not validate that RHS.

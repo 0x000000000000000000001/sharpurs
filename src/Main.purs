@@ -3,9 +3,11 @@ module Main (main) where
 import Prelude
 
 import Data.Array as Array
+import Data.Either (Either(..))
+import Data.List (List(..))
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
 import Data.Set (Set)
 import Data.Set as Set
@@ -14,14 +16,16 @@ import Data.Tuple (Tuple(..))
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
+import Effect.Console as Console
 import Effect.Ref as Ref
 import Node.Process as Process
-import PureScript.Backend.Optimizer.App (coreFnModulesFromOutput, loadDirectives, parseCLIArgs)
+import PureScript.Backend.Optimizer.App (coreFnModulesFromOutput, loadDirectives)
 import PureScript.Backend.Optimizer.Builder (buildModules)
 import PureScript.Backend.Optimizer.Convert (BackendModule)
 import PureScript.Backend.Optimizer.CoreFn (Ann, Ident(..), Module(..), ModuleName(..), Qualified(..))
 import PureScript.Backend.Optimizer.Semantics.Foreign (ForeignEval, coreForeignSemantics)
 import Sharpurs.AdtKernel as AdtKernel
+import Sharpurs.CLI as CLI
 import Sharpurs.CodeGen (translateOptimizedModuleWithThunks)
 import Sharpurs.Ffi as Ffi
 import Sharpurs.Metrics as Metrics
@@ -31,19 +35,30 @@ import Sharpurs.Project as Project
 import Sharpurs.ThunkKernel as ThunkKernel
 
 main :: Effect Unit
-main = launchAff_ $ Metrics.measure "backend total" \_ -> do
-  args <- parseCLIArgs <$> liftEffect Process.argv
+main = do
+  arguments <- Array.drop 2 <$> Process.argv
+  case CLI.parse arguments of
+    Left diagnostic -> do
+      Console.error ("sharpurs: " <> diagnostic <> "\nRun sharpurs --help for usage.")
+      Process.setExitCode 2
+    Right CLI.ShowHelp -> Console.log CLI.help
+    Right (CLI.Compile config) -> launchAff_ (compile config)
+
+compile :: CLI.Config -> Aff Unit
+compile config = Metrics.measure "backend total" \_ -> do
   modules <- Metrics.measure "load TAST + sort" \_ -> coreFnModulesFromOutput "output"
   let modulesArray = Array.fromFoldable modules
 
-  { directives, context } <- Metrics.measure "prepare" \_ -> do
+  { directives, context, moduleFiles } <- Metrics.measure "prepare" \_ -> do
     Project.prepare
     directives <- loadDirectives
     nativeConstructors <- liftEffect (Ref.new Set.empty)
+    moduleFiles <- liftEffect (Ref.new Nil)
     pure
       { directives
+      , moduleFiles
       , context:
-          { ffiDirectory: args.mbFfiDir
+          { ffiDirectory: config.ffiDirectory
           , constructorArities: collectConstructorArities modulesArray
           , nativeConstructors
           }
@@ -60,14 +75,18 @@ main = launchAff_ $ Metrics.measure "backend total" \_ -> do
       -- No optimizer cache: every module must register its native constructors
       -- and emit its files in dependency order on each invocation.
       , onSkipModule: \_ _ -> pure Nothing
-      , onCodegenModule: \_ source optimized _ -> emitModule context source optimized
+      , onCodegenModule: \_ source optimized _ -> do
+          files <- emitModule context source optimized
+          liftEffect (Ref.modify_ (Cons files) moduleFiles)
       }
       modules
 
-  Metrics.measure "finalize" \_ ->
+  Metrics.measure "finalize" \_ -> do
+    -- Accumulate in constant time, then restore the builder's dependency order.
+    emitted <- Array.reverse <<< Array.fromFoldable <$> liftEffect (Ref.read moduleFiles)
     Project.finalize
-      { mainModule: fromMaybe "Main" args.mbMainModule
-      , moduleNames: map (\(Module source) -> unwrap source.name) modulesArray
+      { mainModule: config.mainModule
+      , modules: emitted
       }
 
 type EmitContext =
@@ -76,7 +95,7 @@ type EmitContext =
   , nativeConstructors :: Ref.Ref (Set String)
   }
 
-emitModule :: EmitContext -> Module Ann -> BackendModule -> Aff Unit
+emitModule :: EmitContext -> Module Ann -> BackendModule -> Aff Project.ModuleFiles
 emitModule context source optimized = do
   let
     name = unwrap optimized.name

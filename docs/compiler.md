@@ -5,9 +5,9 @@
 Start in [`src/Main.purs`](../src/Main.purs). Its measured phases follow the actual execution order:
 
 1. **Load TAST + sort:** the optimizer reader loads `output/*/corefn.json` and sorts modules by dependency.
-2. **Prepare:** write the runtime prelude, load optimization directives, collect constructor arities, and initialize the set of native constructor wrappers.
-3. **Optimize + emit:** the optimizer's sequential builder calls `emitModule` for each module. It validates native ADT/thunk selections and registers constructor wrappers. `CodeGen.Selection` collects the remaining candidates and plans binding/expression routes; `CodeGen` translates the selected plans. The callback then loads foreign sources and writes the module.
-4. **Finalize:** write the entrypoint and .NET projects, preserving dependency order in F# compile items.
+2. **Prepare:** write the runtime prelude, load optimization directives, collect constructor arities, and initialize the native-constructor set and invocation-local output inventory.
+3. **Optimize + emit:** the optimizer's sequential builder calls `emitModule` for each module. It validates native ADT/thunk selections and registers constructor wrappers. `CodeGen.Selection` collects the remaining candidates and plans binding/expression routes; `CodeGen` translates the selected plans. The callback then loads foreign sources, writes the module and records its returned `ModuleFiles`.
+4. **Finalize:** write the entrypoint and .NET projects from that inventory, preserving dependency order in F# compile items and sorting the current C# filenames.
 
 The input is the enriched typed CoreFn produced by the compiler fork. `Module Ann` is the source representation; `BackendModule` is the optimizer's representation. Code generation needs both: the source retains declarations and layout information, while optimized bindings can offer supported native implementations.
 
@@ -18,7 +18,8 @@ The input is the enriched typed CoreFn produced by the compiler fork. `Module An
 | CLI arguments, phase order, optimizer callbacks, cross-module constructor state | [`Main.purs`](../src/Main.purs) |
 | Foreign source lookup, F#/C# precedence, missing-implementation stubs | [`Sharpurs/Ffi.purs`](../src/Sharpurs/Ffi.purs) |
 | Native declaration recognition, call shapes and boxed-wrapper templates | [`Sharpurs/FfiSupport.js`](../src/Sharpurs/FfiSupport.js), [`FfiSupport.purs`](../src/Sharpurs/FfiSupport.purs) |
-| Generated file paths, write-if-changed behavior, MSBuild items and templates | [`Sharpurs/Project.purs`](../src/Sharpurs/Project.purs) |
+| Generated file inventory, MSBuild items and project templates | [`Sharpurs/Project.purs`](../src/Sharpurs/Project.purs) |
+| Directory creation, optional reads, write-if-changed and path-bearing errors | [`Sharpurs/Project/FileSystem.purs`](../src/Sharpurs/Project/FileSystem.purs), [`FileSystem.js`](../src/Sharpurs/Project/FileSystem.js) |
 | F# runtime helpers, event-loop bookkeeping, process entrypoint | [`Sharpurs/Runtime.purs`](../src/Sharpurs/Runtime.purs) |
 | General expression/binding translation and emission of selected plans | [`Sharpurs/CodeGen.purs`](../src/Sharpurs/CodeGen.purs) |
 | Candidate registration, direct-helper collisions and implementation priority | [`Sharpurs/CodeGen/Selection.purs`](../src/Sharpurs/CodeGen/Selection.purs) |
@@ -33,9 +34,9 @@ The input is the enriched typed CoreFn produced by the compiler fork. `Module An
 | Deferred recursive-group indentation and its marker definitions | [`Sharpurs/Printer/Layout.purs`](../src/Sharpurs/Printer/Layout.purs), [`Layout.js`](../src/Sharpurs/Printer/Layout.js) |
 | Closed ADT layouts, constructor metadata and native type names | [`Sharpurs/AdtLayout.purs`](../src/Sharpurs/AdtLayout.purs) |
 | ADT module admission, binding selection/order and generated-name collisions | [`Sharpurs/AdtKernel.purs`](../src/Sharpurs/AdtKernel.purs) |
-| ADT signatures, source dependencies and type/constructor evidence | [`Sharpurs/AdtKernel/Analysis.purs`](../src/Sharpurs/AdtKernel/Analysis.purs) |
+| ADT signatures, source dependencies, named primitive operations and type/constructor evidence | [`Sharpurs/AdtKernel/Analysis.purs`](../src/Sharpurs/AdtKernel/Analysis.purs) |
 | Optimized ADT bodies, nested type checks and native call targets | [`Sharpurs/AdtKernel/Lower.purs`](../src/Sharpurs/AdtKernel/Lower.purs) |
-| ADT definition headers, public wrappers, guarded calls and recursive bridges | [`Sharpurs/AdtKernel/Emit.purs`](../src/Sharpurs/AdtKernel/Emit.purs) |
+| ADT body templates, definition headers, public wrappers, guarded calls and recursive bridges | [`Sharpurs/AdtKernel/Emit.purs`](../src/Sharpurs/AdtKernel/Emit.purs) |
 | Whole-native ADT producers and cross-module consumer checks | [`Sharpurs/AdtInterop.purs`](../src/Sharpurs/AdtInterop.purs) |
 | Thunk worker selection, recursion-group agreement and name collisions | [`Sharpurs/ThunkKernel.purs`](../src/Sharpurs/ThunkKernel.purs) |
 | Thunk signatures, parameter evidence, capture plans and reserved names | [`Sharpurs/ThunkKernel/Analysis.purs`](../src/Sharpurs/ThunkKernel/Analysis.purs) |
@@ -88,7 +89,7 @@ Expression selection has its own entry point, `forExpression`, with this priorit
 1. **Admit the layout and constructors.** `AdtLayout.fromModule` validates a closed representation using source `dataDecls`: native Int/Boolean fields and local monomorphic ADTs. `AdtKernel` checks source/optimized module agreement, excludes foreign/class declarations, and validates every constructor implementation and public wrapper.
 2. **Preserve source dependencies.** `Analysis.unsupportedBindings` finds noncanonical imports and propagates that exclusion through local dependants. This evidence survives optimizer inlining, including inlined partial helpers whose invocation boundary is observable. Constructor signatures become callable when their binding is visited in source order.
 3. **Select functions in source order.** Source and optimized recursion groups must agree and each selected function must be a singleton. Its complete source lambda spine must match the optimized signature, with at least one argument whose ADT has a constructor containing that same ADT. Calls can use previously admitted definitions and the current recursive function. A rejected function does not enter that registry.
-4. **Lower a supported body.** `Lower.binding` collects parameters and translates the optimized expression, checking nested annotations, distinct/nonnegative lexical levels, exact application saturation, constructor metadata and primitive operand types. `Analysis.typeOf` supplies an expected type for a let RHS; lowering still validates the complete RHS. Unsupported forms, including unresolved type applications, reject the binding.
+4. **Lower a supported body.** `Lower.binding` collects parameters and translates the optimized expression, checking nested annotations, distinct/nonnegative lexical levels, exact application saturation, constructor metadata and primitive operand types. `Analysis.typeOf` supplies an expected type for a let RHS; lowering still validates the complete RHS. Unsupported forms, including unresolved type applications, reject the binding. Each accepted form calls an `Emit` body template after validating its children; `Lower` does not assemble F# body syntax.
 5. **Emit and register.** `Emit` receives a lowered definition with named `parameters` and `body` fields. It produces the native header and object-ABI boundaries. Module admission also checks generated names and requires at least one selected function. `AdtModule.bindings` contains constructors and selected functions; `nativeNames` lists functions only.
 
 The emitted boundaries have distinct roles:
@@ -103,6 +104,42 @@ The emitted boundaries have distinct roles:
 `AdtKernel.fromModule` is the separate all-or-nothing path used by `AdtInterop.prepareProducer`. It requires every optimized binding to have a supported native signature and body, supports whole mutually recursive function groups, and emits unguarded internal calls plus public wrappers. `AdtInterop` then checks producer completeness, module/name collisions and constructor arities before exposing factories to a boxed consumer. The CLI's `prepareModule` path supplies its constructor registry through `Main` and can retain generic source bindings alongside native functions.
 
 The ADT kernel, interop, unary and multi-argument suites cover layout/type rejection, public and partial applications, sharing, short-circuiting, source dependencies and exception boundaries. The constructor-type-application suite covers factories consumed through instantiated constructors.
+
+### Changing an ADT body template
+
+`Analysis.primitive` admits a backend operator as a `Primitive` containing a named
+`Operation`, its operand type and its result type. The ten operations are Boolean
+And/Or, Int addition/subtraction and the six Int comparisons. Their F# spelling
+belongs exclusively to `Emit.operator`. Adding a primitive requires both an
+explicit type/admission rule and an exhaustive rendering case.
+
+`Lower.expression` validates the expected result and recursively lowers the
+operands before calling `Emit.binary { operation, left, right }`. The same split
+applies to the other templates:
+
+| Template | Already-validated inputs |
+| --- | --- |
+| `intLiteral`, `booleanLiteral`, `localName` | Literal type or registered lexical level |
+| `call { target, arguments }` | Known signature, exact saturation and typed arguments; `Lower` selects the guarded target when required |
+| `ctorApplication constructor fields` | Constructor identity, field names/order, arity and types |
+| `projectField { constructor, value, index }` | Constructor identity, in-range field index, field label/result type and scrutinee type |
+| `isTag { constructor, value }` | Known constructor, Boolean result and scrutinee type |
+| `letIn { level, nativeType, value, body }` | Fresh increasing level, admitted native type, fully checked RHS and body in the extended scope |
+| `branch { cases, fallback }` | Boolean conditions and one expected result type; each case names its `condition` and `body` |
+| `failure message` | Admitted result type; `Emit` owns F# string escaping |
+
+For example, change the match parentheses or invalid-constructor diagnostic in
+`Emit.projectField`. Its caller in `Lower` continues to prove the constructor and
+field contract. These templates accept already-rendered children and contain no
+source/optimized-AST recognition. Preserve evaluation order: call arguments stay
+outside the callee's exception guard, `let` evaluates its RHS once, Boolean And/Or
+and branches evaluate only the required expressions, and field access preserves
+the original value's identity.
+
+`npm run test:adt-lowering` checks this boundary with typed positive/negative
+scenarios and compiled F# assertions. An optional historical bundle compares
+admissions, rejected forms, parameter types and complete emitted bodies; see the
+[differential replay procedure](testing.md#adt-lowering-differential-replay).
 
 ## Inside the thunk kernel
 
@@ -181,7 +218,50 @@ Partial application constructs closures until the final native argument arrives.
 - **Every direct call carries its own adapters.** `FsDirectApp` records `PassValues` or `UnboxArgumentsBoxResult`. The former preserves arguments and result; the latter unboxes each argument to the target's inferred signature and boxes the result. Nested calls retain their own conventions. `Printer.printExpr` is the single renderer; `printExprInline` is a compatibility alias with identical behavior. Declaration, lambda, constructor, guard and branch placement cannot change a constructed call.
 - **Local recursive groups need a final layout pass.** `CodeGen.Boxed` emits markers from `Printer.Layout` for groups whose indentation depends on their enclosing expression. `Project.writeModule` calls `normalizeRecIndent` after assembling the whole source file. Marker definitions and decoding share one source; column accounting uses UTF-16 code units.
 - **Function-call exceptions have a boundary.** `sharpurs_apply` preserves `TargetInvocationException` wrapping for both its fast path and reflection path. Direct-call wrappers must preserve the corresponding behavior.
-- **Project writes are incremental.** Identical text keeps its timestamp. Generation does not delete stale files, and all `.cs` files remaining in `output/Main/` enter the C# project. `sharp.packages.props` supplies raw item elements for the F# project only.
+- **Project writes are incremental and inventory-driven.** Identical text keeps its timestamp. Only current module outputs enter the projects; `sharp.packages.props` supplies explicit application items for the F# project. See the ownership and error contracts below.
+
+## Project outputs and filesystem errors
+
+`Project.writeModule` returns `ModuleFiles { fsharp, csharp }` after its writes
+succeed. These are filenames relative to `output/Main`; a source whose text was
+already identical is still an output of the current invocation. `Main` accumulates
+these records in a list and reverses it once after the sequential builder, keeping
+dependency order without repeatedly copying a growing array. `Project.finalize`
+receives the resulting array rather than reconstructing outputs from module names
+or directory contents. It surrounds the F# module files with the fixed prelude
+and entrypoint, and sorts just the inventoried C# filenames.
+
+The ownership boundary is:
+
+- Sharpurs writes the prelude, module `.fs`/`.cs` sources, entrypoint,
+  `Program.fsproj`, `Directory.Build.props` and, when needed, `FFI.CSharp.csproj`.
+- Old module sources may remain on disk but are not compile items. When the last
+  C# FFI disappears, Sharpurs removes its fixed `FFI.CSharp.csproj` and omits the
+  corresponding reference. It does not scan the output directory for cleanup.
+- `output/Main/corefn.json` is an upstream compiler **input**, even though it
+  shares the generated-project directory. Other application files and native
+  source inputs also stay outside the generated-output inventory.
+- Application dependencies belong in explicit MSBuild items: use
+  `sharp.packages.props` for `PackageReference`, `ProjectReference` or assembly
+  `Reference` items in the F# project. Keep application-owned C# sources in their
+  own referenced project instead of relying on a file left in `output/Main`.
+  Relative reference paths are resolved from the generated project directory.
+
+This changes the former policy that silently included every leftover `.cs` in
+the generated C# library. The [project regression suite](testing.md#project-lifecycle-and-io)
+checks that policy with invalid stale sources, removed inputs and a real explicit
+application project reference.
+
+`Project.FileSystem` centralizes four operations. `ensureDirectory` accepts
+`EEXIST` only after `stat` confirms a directory; other creation/stat failures
+propagate. `readOptionalText` treats only `ENOENT` as absence. `writeTextIfChanged`
+compares readable text and writes only missing/changed files; a failed read never
+authorizes an overwrite. `removeIfExists` tolerates only an absent target.
+Failures include the requested path in their diagnostic, retain Node's `code`
+and `syscall`, and preserve the original error as `cause`. This also gives a path
+to Node errors such as `EISDIR` from `readFile`, which can omit it. An unreadable
+`sharp.packages.props` therefore fails the invocation rather than silently
+discarding dependencies.
 
 ## Shared analyses and recognition contracts
 

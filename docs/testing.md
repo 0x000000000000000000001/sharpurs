@@ -92,8 +92,9 @@ has ended. A cache restoration failure prints the retained backup location.
   and runs the shared optimizer callback contract. Its builder changes cwd only
   while writing fixture-local `.purmeta`, restoring it even after an error.
 - Suites retain their assertions, native/generic/JavaScript oracles, fixtures and
-  acceptance criteria. Six suites share these mechanics: recursion, case patterns,
-  direct calls, integer arithmetic, multi-argument ADTs and thunks.
+  acceptance criteria. Recursion, case patterns, direct calls, integer arithmetic,
+  multi-argument ADTs and thunks share the real-TAST mechanics. ADT lowering also
+  uses the copying and F# process helpers for its small typed scenarios.
 - Historical oracle adapters retain their own runtime constructors and dictionaries.
   `FFI_SUPPORT_ORACLE` accepts a self-contained older FFI JavaScript module;
   `CONSTRUCTOR_TYPEAPP_ORACLE_OUTPUT` accepts the historical output tree with
@@ -106,8 +107,8 @@ THUNK_KERNEL_ARTIFACTS="$HOME/sharpurs-evidence/thunks-001" \
   npm test -- --skip-build --skip-assertions --suite thunk-kernel
 ```
 
-Other supported variables include `NAMES_ARTIFACTS`, `FFI_SUPPORT_ARTIFACTS`, `ADT_MULTI_ARTIFACTS`,
-`ADT_INTEROP_ARTIFACTS`, `CONSTRUCTOR_TYPEAPP_ARTIFACTS`, `DIRECT_CALL_ARTIFACTS`,
+Other supported variables include `PROJECT_ARTIFACTS`, `NAMES_ARTIFACTS`, `FFI_SUPPORT_ARTIFACTS`, `ADT_MULTI_ARTIFACTS`,
+`ADT_INTEROP_ARTIFACTS`, `ADT_LOWERING_ARTIFACTS`, `CONSTRUCTOR_TYPEAPP_ARTIFACTS`, `DIRECT_CALL_ARTIFACTS`,
 `INT_COMPARISON_ARTIFACTS` and `INT_ARITHMETIC_ARTIFACTS`. The unary and interop ADT
 suites both use `ADT_INTEROP_ARTIFACTS`; give them separate destinations in separate
 invocations. Aggregate logs survive failures; each suite defines which additional
@@ -132,6 +133,44 @@ the TAST compiler and .NET SDK, but no native-library sibling checkouts.
 The [H01 report](validation/h01-2026-10-02.md) records the before/after regression,
 the qualified generation comparison and the scope of application validation.
 
+### Project lifecycle and I/O
+
+`npm run test:project` compiles the dependency-free fixtures in
+[`tests/fixtures/project/`](../tests/fixtures/project/) to real TAST and runs seven
+CLI/MSBuild/runtime phases: mixed F#/C#, its incremental replay, removal of a
+module and a C# FFI, another incremental replay, F# only, its incremental replay
+and clean regeneration. Each executable must return the same independently
+checked value, **42**, and consume an explicit application `ProjectReference`.
+The fixture includes a dependency order different from alphabetical order.
+
+Invalid stale `.fs`/`.cs` sources remain in the output directory. The suite checks
+the complete compile-item lists, stable C# ordering, disappearance of the obsolete
+C# project, identical current files after clean regeneration, exact incremental
+mtimes and preservation of `Main/corefn.json` and application-owned files.
+Named fixture files replace the native implementations; no generated source is
+rewritten to make a build pass.
+
+The CLI must also fail on a directory used as `sharp.packages.props` and name the
+path in stderr. [`tests/support/project-io.mjs`](../tests/support/project-io.mjs)
+calls production project operations against real missing paths, files in place
+of directories, unreadable files, read-only files/directories and an unremovable
+obsolete project. It checks error codes, paths and original causes, as well as
+successful absent-fragment and unchanged-read-only-output behavior. POSIX
+permission cases are explicitly reported as skipped when running as root;
+other cases still run. The H04 validation ran all eleven failure cases as a
+non-root user, with no skips.
+
+```bash
+PROJECT_ARTIFACTS="$HOME/sharpurs-evidence/project-001" \
+  npm test -- --suite project --suite ffi-support --suite names --suite tools
+```
+
+`PROJECT_ARTIFACTS` retains each completed phase's generated files, content/mtime
+manifest, I/O failure report and command log. `PROJECT_COMPILER` can select a
+self-contained historical CLI bundle: the H03 bundle fails the first phase's
+compile-item assertion because it includes the invalid leftover C# file.
+See the [H04 report](validation/h04-2026-10-02.md) for the exact qualification.
+
 ### Call conventions
 
 `npm run test:printer` constructs calls with `FsAst.directCall` and
@@ -147,6 +186,44 @@ For a source-call change, also run `direct-call`, `recursion`, `case-patterns`,
 fixtures check eligibility, partial/over-application and exception boundaries.
 The [H02 report](validation/h02-2026-10-02.md) records their replay and strict
 before/after generation comparisons on frozen b8x and native inputs.
+
+### ADT lowering differential replay
+
+`npm run test:adt-lowering` calls the production `Lower.binding` with **108 typed
+scenarios**: the ten admitted primitives, calls, constructors, fields, tags,
+lexical bindings, branches and failures, plus contradictory/unsupported inputs.
+It compiles/runs **109 F# checks** of values, sharing, branch/argument order,
+short-circuiting, string escaping and exception envelopes. Static F# support and
+assertions live in [`tests/fixtures/adt-lowering/`](../tests/fixtures/adt-lowering/).
+The real-TAST ADT kernel/interop/unary/multi and constructor suites complement
+these deliberately small lowering inputs.
+
+Before editing the compiler, build it and snapshot the complete lowering API:
+
+```bash
+EVIDENCE=$(mktemp -d "${TMPDIR:-/tmp}/sharpurs-adt-lowering.XXXXXX")
+export PATH="$PWD/node_modules/.bin:$HOME/.dotnet:$PATH"
+spago build
+./node_modules/.bin/esbuild tests/support/adt-lowering-api.mjs \
+  --bundle --platform=node --format=esm --outfile="$EVIDENCE/adt-lowering-before.mjs"
+
+# After editing, rebuild and compare against that immutable bundle.
+ADT_LOWERING_ORACLE="$EVIDENCE/adt-lowering-before.mjs" \
+ADT_LOWERING_ARTIFACTS="$EVIDENCE/adt-lowering-after" \
+  npm test -- --suite adt-lowering --suite adt-kernel --suite adt-multi
+```
+
+The test rebuilds each scenario with each compiler's own PureScript constructors.
+It compares admission/rejection, parameter levels/native types and every emitted
+body byte-for-byte; it also compares the complete generated definitions. This
+avoids mixing old/new `instanceof` identities or importing current dependencies
+into the historical lowering implementation. With no oracle configured, the
+same admission and F# behavior assertions still run.
+
+`ADT_LOWERING_ARTIFACTS` retains the generated F#, static support/assertions,
+per-scenario results, source hashes and runtime log. The
+[H03 report](validation/h03-2026-10-02.md) records the historical differential and
+the independent whole-compiler generation comparison.
 
 ## Compare complete generations before and after a change
 

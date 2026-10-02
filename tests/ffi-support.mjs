@@ -117,6 +117,7 @@ try {
     Both: ['chosen'], Search: ['value'], Missing: Object.keys(missing), Empty: [],
   };
   const emitted = new globalThis.Map();
+  const modules = [];
   await runAff(Project.prepare);
   for (const [shortName, required] of Object.entries(names)) {
     let foreign = Map.empty;
@@ -137,14 +138,14 @@ try {
       yes(ffi.csharp instanceof Just, 'C# implementation remains available');
       equal(ffi.csharp.value0, await readFile(join(sourceDirectory, `${shortName}.cs`), 'utf8'), 'C# source is preserved verbatim');
     } else yes(ffi.csharp instanceof Nothing, 'no C# source invented');
-    await runAff(Project.writeModule(source.name)(ffi)(''));
+    modules.push(await runAff(Project.writeModule(source.name)(ffi)('')));
   }
   equal(emitted.get('Empty').fsharp, '', 'empty module needs no stubs');
   yes(emitted.get('Search').fsharp.includes('let value = 73'), 'configured directory supplies the native file');
   equal(await readFile(join(directory, 'output/Main/Fixture.Both.cs'), 'utf8'), await readFile(join(fixtures, 'Both.cs'), 'utf8'), 'Project writes C# even when F# owns the wrappers');
 
-  await runAff(Project.writeModule('Entry')({ fsharp: '', csharp: Nothing.value })(await readFile(join(backend, 'tests/ffi-support.fsx'), 'utf8')));
-  await runAff(Project.finalize({ mainModule: 'Entry', moduleNames: [...Object.keys(names).map(name => `Fixture.${name}`), 'Entry'] }));
+  modules.push(await runAff(Project.writeModule('Entry')({ fsharp: '', csharp: Nothing.value })(await readFile(join(backend, 'tests/ffi-support.fsx'), 'utf8'))));
+  await runAff(Project.finalize({ mainModule: 'Entry', modules }));
   const result = command(process.env.DOTNET || 'dotnet', ['run', '-c', 'Release', '--nologo', '--project', 'output/Main/Program.fsproj'], directory);
   assert.doesNotMatch(result.stdout + result.stderr, /warning FS\d+/, 'native FFI fixtures compile without F# warnings');
   const runtime = result.stdout.match(/ffi-support runtime: (\d+) checks passed/);
