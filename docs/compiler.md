@@ -456,3 +456,7 @@ The [M11 integration report](validation/m11-2026-10-02.md) links the pinned sour
 and tools to the complete fixture/library replay, b8x `Test.Main` execution and
 benchmark-result checks. It also records generated-project diagnostics and the
 location of the detailed evidence.
+
+The [H07 cycle-2 report](validation/h07-2026-10-03.md) adds the complete 23-suite
+qualification, recovered CLI inventory, fresh b8x graph, ten application processes,
+three benchmark processes and the checked cleanup/archive evidence.

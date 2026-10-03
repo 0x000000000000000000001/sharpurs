@@ -552,6 +552,7 @@ SHA-256 checksum; verify every archive member against its recorded bytes. A fina
 source/cache check ties the results to the actual validated inputs. Record failed
 attempts and their diagnosed retries alongside the successful evidence.
 
-The [2 October 2026 replay report](validation/m11-2026-10-02.md) records the concrete
-toolchain, source revisions, application outputs and evidence for the maintenance
-plan's integration qualification.
+The [H07 cycle-2 report](validation/h07-2026-10-03.md) records the complete
+qualification, including the diagnosed disk-exhaustion failure, inclusive CLI
+recovery, requested cleanup and attributed external application change. The
+[M11 replay report](validation/m11-2026-10-02.md) remains the first-cycle reference.
