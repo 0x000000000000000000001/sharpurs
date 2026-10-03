@@ -4,6 +4,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { optimizedTyped } from "./support/ast.mjs";
+import { fsharpFixture } from "./support/fsharp.mjs";
 import * as C from "../output/PureScript.Backend.Optimizer.CoreFn/index.js";
 import * as S from "../output/PureScript.Backend.Optimizer.Syntax/index.js";
 import { Tuple } from "../output/Data.Tuple/index.js";
@@ -94,7 +96,7 @@ rejectLocal("stale polymorphic signature", loop({ signature: func([int, variable
 rejectLocal("stale nested signature", loop({ innerSignature: func([variable], variable) }));
 rejectLocal("stale body annotation", loop({ body: typed(variable, local(3)) }));
 rejectLocal("String specialization is not an Int loop", loop({ signature: func([int, string], string) }));
-rejectLocal("untyped LetRec is not enough evidence", loop().value1);
+rejectLocal("untyped LetRec is not enough evidence", optimizedTyped(loop()).expression);
 rejectLocal("contradictory root annotation", typed(string, loop()));
 rejectLocal("parameter levels must be distinct", loop({ levels: [2, 2] }));
 rejectLocal("parameter cannot shadow recursive group level", loop({ levels: [1, 3] }));
@@ -175,63 +177,12 @@ const effects = cases.map(([iterations, initial], index) => {
   const output = printExpr(accepted(`effect envelope ${iterations}/${initial}`, fromBinding(effectFixture(iterations, initial))));
   return `let effect${index} : obj = ${output}`;
 });
-const doubles = `
-let events = ResizeArray<string>()
-let mutable throwOnShow = false
-let FixtureFx_opaque : obj = box (fun (value: obj) -> box (fun (_: obj) ->
-    events.Add("opaque")
-    value))
-let FixtureFx_bind : obj = box (fun (action: obj) -> box (fun (next: obj) -> box (fun (unit: obj) ->
-    events.Add("bind")
-    let value = sharpurs_apply action unit
-    events.Add("continue")
-    let continuation = sharpurs_apply next value
-    sharpurs_apply continuation unit)))
-let FixtureFx_pure : obj = box (fun (value: obj) -> box (fun (_: obj) ->
-    events.Add("pure")
-    value))
-let FixtureFx_show : obj = box (fun (value: obj) ->
-    events.Add("show")
-    if throwOnShow then raise (System.InvalidOperationException("fixture-show"))
-    box (string (unbox<int> value)))
-`;
+const doubles = await fsharpFixture("local-int-kernel/Support.fs");
 const fsCases = cases.map(([n, acc]) => `(${n}, ${acc}, ${(n + acc) | 0})`).join("; ");
-const runtime = `
-let mutable checks = 0
-let check label condition =
-    if not condition then failwith label
-    checks <- checks + 1
-let call2 fn a b = sharpurs_apply (sharpurs_apply fn (box a)) (box b)
-check "effect construction is delayed" (events.Count = 0)
-check "public value retains obj -> obj ABI" (plain :? (obj -> obj))
-let partial = sharpurs_apply plain (box 10)
-check "partial application retains obj -> obj ABI" (partial :? (obj -> obj))
-check "partial application can be reused" (unbox<int> (sharpurs_apply partial (box 2)) = 12)
-check "partial application retains first argument" (unbox<int> (sharpurs_apply partial (box -7)) = 3)
-for n, acc, expected in [|${fsCases}|] do
-    check (sprintf "native loop %d/%d" n acc) (unbox<int> (call2 plain n acc) = expected)
-let effects : (obj * string) array = [|${cases.map(([n, acc], index) => `(effect${index}, "${(n + acc) | 0}")`).join("; ")}|]
-for action, expected in effects do
-    check "effect retains object function ABI" (action :? (obj -> obj))
-    for iteration in 1 .. 2 do
-        events.Clear()
-        let actual = sharpurs_apply action (box ()) |> unbox<string>
-        check "effect result" (actual = expected)
-        check "effect order and repeatability" (Seq.toList events = ["bind"; "opaque"; "continue"; "show"; "pure"])
-events.Clear()
-throwOnShow <- true
-let mutable wrapped = false
-try
-    sharpurs_apply effect0 (box ()) |> ignore
-with
-| :? System.Reflection.TargetInvocationException as error ->
-    let mutable deepest : System.Exception = error
-    while not (isNull deepest.InnerException) do deepest <- deepest.InnerException
-    wrapped <- deepest :? System.InvalidOperationException && deepest.Message = "fixture-show"
-check "exception preserves dynamic application wrapper" wrapped
-check "exception interrupts later effects" (Seq.toList events = ["bind"; "opaque"; "continue"; "show"])
-printfn "local-int-kernel runtime: %d checks passed" checks
-`;
+const runtime = await fsharpFixture("local-int-kernel/Runtime.fs", {
+  CASES: fsCases,
+  EFFECTS: cases.map(([n, acc], index) => `(effect${index}, "${(n + acc) | 0}")`).join("; "),
+});
 
 const directory = await mkdtemp(join(tmpdir(), "sharpurs-local-int-kernel-"));
 try {

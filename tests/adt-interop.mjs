@@ -6,6 +6,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { clone, optimizedBinding } from "./support/ast.mjs";
+import { fsharpFixture } from "./support/fsharp.mjs";
 import { helpers as preludeFs } from "../output/Sharpurs.Runtime/index.js";
 import * as C from "../output/PureScript.Backend.Optimizer.CoreFn/index.js";
 import * as Aff from "../output/Effect.Aff/index.js";
@@ -35,21 +37,12 @@ function command(program, args, cwd) {
 function successful(result, label) {
   if (result.status !== 0) throw new Error(`${label} failed (${result.signal || result.status}):\n${result.stdout}\n${result.stderr}`);
 }
-// Preserve the real compiler/optimizer ADT prototypes for targeted mutations.
-function clone(value) {
-  if (Array.isArray(value)) return value.map(clone);
-  if (!value || typeof value !== "object") return value;
-  return Object.assign(Object.create(Object.getPrototypeOf(value)), Object.fromEntries(
-    Object.entries(value).map(([key, child]) => [key, clone(child)])));
-}
 function renameModule(value, name) {
-  if (typeof value === "string") return value.replaceAll("AdtPilot", name);
-  if (Array.isArray(value)) return value.map((child) => renameModule(child, name));
-  if (!value || typeof value !== "object") return value;
-  const renamed = Object.assign(Object.create(Object.getPrototypeOf(value)), Object.fromEntries(
-    Object.entries(value).map(([key, child]) => [key, renameModule(child, name)])));
-  if (renamed instanceof C.ADT) renamed.value1 = renamed.value0.split(".");
-  return renamed;
+  return clone(value, renamed => {
+    if (typeof renamed === "string") return renamed.replaceAll("AdtPilot", name);
+    if (renamed instanceof C.ADT) renamed.value1 = renamed.value0.split(".");
+    return renamed;
+  });
 }
 
 const directory = await mkdtemp(join(tmpdir(), "sharpurs-adt-interop-"));
@@ -122,6 +115,7 @@ try {
   absentLayout.backend.dataDecls = [];
   rejected("producer must pass native emitter", prepareProducer(absentLayout.core)(absentLayout.backend));
   const absentWrapper = clone(producer);
+  optimizedBinding(absentWrapper.backend, "T");
   absentWrapper.backend.bindings = absentWrapper.backend.bindings.map((group) => ({
     ...group, bindings: group.bindings.filter((item) => item.value0 !== "T"),
   })).filter((group) => group.bindings.length > 0);
@@ -144,81 +138,8 @@ try {
   rejected("producer namespaces cannot collide after flattening",
     translateConsumer([dottedProducer.value0, flatProducer.value0])(dottedRegistry)(consumer));
   const header = `let (|LitInt|_|) (expected: int) (value: obj) = if value :? int && unbox value = expected then Some() else None\n`;
-  const foreign = `
-let events = ResizeArray<int>()
-let track : obj = box (fun (label: obj) -> box (fun (value: obj) -> events.Add(unbox<int> label); value))
-let AdtConsumer_trackColor = track
-let AdtConsumer_trackTree = track
-let AdtConsumer_trackInt = track
-`;
-  const runtime = `
-let mutable checks = 0
-let check label ok = if not ok then failwith label else checks <- checks + 1
-let apply = sharpurs_apply
-let make fn color left value right = apply (apply (apply (apply fn color) (box left)) (box value)) (box right) |> unbox<AdtPilot_Tree>
-let leaf value = AdtPilot_T_adt_native AdtPilot_R_adt_native AdtPilot_E_adt_native value AdtPilot_E_adt_native
-let red = leaf 7
-let made = make AdtConsumer_saturated AdtPilot_B red 11 red
-check "saturated consumer native depth" (AdtPilot_depth_adt_native made = 2)
-check "saturated consumer Int" (AdtPilot_rootValue_adt_native made = 11)
-check "saturated consumer left identity" (System.Object.ReferenceEquals(AdtPilot_leftChild_adt_native made, red))
-let partial = apply AdtConsumer_partial (box red)
-let make11 = apply partial (box 11)
-let first = apply make11 (box red) |> unbox<AdtPilot_Tree>
-let second = apply make11 AdtPilot_E |> unbox<AdtPilot_Tree>
-check "partial constructor reusable first" (AdtPilot_depth_adt_native first = 2)
-check "partial constructor reusable second" (AdtPilot_depth_adt_native second = 2)
-check "partial constructor retained identity" (System.Object.ReferenceEquals(AdtPilot_leftChild_adt_native second, red))
-for value in [System.Int32.MinValue; -1; 0; 7; System.Int32.MaxValue] do
-    for fn in [AdtConsumer_throughGeneric; AdtConsumer_throughPartial] do
-        let tree = apply fn (box value) |> unbox<AdtPilot_Tree>
-        check "constructor as polymorphic value Int" (AdtPilot_rootValue_adt_native tree = value)
-        check "consumer projection native Int" (unbox<int> (apply AdtConsumer_rootValue (box tree)) = value)
-        check "constructor as polymorphic value depth" (AdtPilot_depth_adt_native tree = 1)
-check "consumer left projection identity" (System.Object.ReferenceEquals(apply AdtConsumer_leftChild (box made), red))
-check "consumer Color projection" (unbox<AdtPilot_Color> (apply AdtConsumer_rootColor (box made)) = AdtPilot_B_adt_native)
-let black value = AdtPilot_T_adt_native AdtPilot_B_adt_native AdtPilot_E_adt_native value AdtPilot_E_adt_native
-let deep = AdtPilot_T_adt_native AdtPilot_B_adt_native red 11 (black 99)
-check "nested color/tree/Int pattern hit" (unbox<int> (apply AdtConsumer_deepPattern (box deep)) = 99)
-check "nested Int pattern miss" (unbox<int> (apply AdtConsumer_deepPattern (box (AdtPilot_T_adt_native AdtPilot_B_adt_native (leaf 8) 11 (black 99)))) = 0)
-check "nested color pattern miss" (unbox<int> (apply AdtConsumer_deepPattern (box (AdtPilot_T_adt_native AdtPilot_R_adt_native red 11 (black 99)))) = 0)
-check "nested tree pattern empty miss" (unbox<int> (apply AdtConsumer_deepPattern AdtPilot_E) = 0)
-check "named child projection identity" (System.Object.ReferenceEquals(apply AdtConsumer_namedChild (box deep), red))
-check "named child fallback" (unbox<AdtPilot_Tree> (apply AdtConsumer_namedChild AdtPilot_E) = AdtPilot_E_adt_native)
-let shared = apply AdtConsumer_shared (box red) |> unbox<AdtPilot_Tree>
-match shared with
-| AdtPilot_Tusd_Ctor(_, left, _, right) ->
-    check "shared children identity" (System.Object.ReferenceEquals(left, right))
-    check "shared input identity" (System.Object.ReferenceEquals(left, red))
-| _ -> failwith "shared consumer value was not a node"
-check "producer native depth accepts consumer result" (AdtPilot_depth_adt_native shared = 2)
-check "consumer calls producer wrapper" (unbox<int> (apply AdtConsumer_roundTrip (box red)) = 2)
-check "input retains original value" (AdtPilot_rootValue_adt_native red = 7)
-let boxed = apply AdtConsumer_wrap (box made)
-check "local boxed ADT retains native child identity" (System.Object.ReferenceEquals(apply AdtConsumer_unwrap boxed, made))
-check "local boxed ADT retains boxed Int" (unbox<int> (apply AdtConsumer_boxedValue boxed) = 42)
-check "boxed outer and native inner pattern hit" (unbox<int> (apply AdtConsumer_boxedPattern boxed) = 7)
-check "boxed outer and native inner pattern miss" (unbox<int> (apply AdtConsumer_boxedPattern (apply AdtConsumer_wrap (box red))) = 0)
-match unbox<AdtConsumer_ConsumerBox> boxed with
-| AdtConsumer_ConsumerBoxusd_Ctor(child, value) ->
-    check "local boxed constructor retains object fields" ((child :? AdtPilot_Tree) && (value :? int))
-events.Clear()
-let ordered = apply AdtConsumer_orderedConstruction (box red) |> unbox<AdtPilot_Tree>
-check "saturated arguments evaluate left to right once" (List.ofSeq events = [1; 2; 3; 4])
-check "ordered construction native depth" (AdtPilot_depth_adt_native ordered = 2)
-events.Clear()
-let orderedPartial = apply AdtConsumer_orderedPartial (box red)
-check "supplied partial arguments evaluate eagerly" (List.ofSeq events = [1; 2])
-let reusedPartial = apply orderedPartial (box 17)
-check "partial retains arguments without reevaluation" (List.ofSeq events = [1; 2])
-let orderedFirst = apply reusedPartial (box red) |> unbox<AdtPilot_Tree>
-let orderedSecond = apply reusedPartial AdtPilot_E |> unbox<AdtPilot_Tree>
-check "repeated partial application keeps captured argument evaluations" (List.ofSeq events = [1; 2])
-check "partial first result retains native Int" (AdtPilot_rootValue_adt_native orderedFirst = 17)
-check "partial second result retains native Int" (AdtPilot_rootValue_adt_native orderedSecond = 17)
-check "partial result retains left input identity" (System.Object.ReferenceEquals(AdtPilot_leftChild_adt_native orderedSecond, red))
-printfn "adt-interop runtime: %d checks passed" checks
-`;
+  const foreign = await fsharpFixture("adt-interop/Foreign.fs");
+  const runtime = await fsharpFixture("adt-interop/Runtime.fs");
   const fsx = join(directory, "adt-interop.fsx");
   const source = [preludeFs, header, producerFs, foreign, consumerFs, runtime].join("\n\n");
   await writeFile(fsx, source);
@@ -233,7 +154,9 @@ printfn "adt-interop runtime: %d checks passed" checks
     const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
     const sourceFiles = ["src/Sharpurs/AdtKernel.purs", "src/Sharpurs/AdtLayout.purs", "src/Sharpurs/AdtInterop.purs", "src/Sharpurs/CodeGen.purs",
       ...["Analysis", "Lower", "Emit"].map(name => `src/Sharpurs/AdtKernel/${name}.purs`),
-      "tests/adt-interop.mjs", ...fixtures.map((name) => `tests/fixtures/${name}.purs`)];
+      "tests/adt-interop.mjs", "tests/support/ast.mjs", "tests/support/fsharp.mjs",
+      "tests/fixtures/adt-interop/Runtime.fs", "tests/fixtures/adt-interop/Foreign.fs",
+      ...fixtures.map((name) => `tests/fixtures/${name}.purs`)];
     const hashes = {};
     for (const file of sourceFiles) hashes[file] = hash(await readFile(join(backend, file)));
     await writeFile(join(destination, "metadata.json"), JSON.stringify({

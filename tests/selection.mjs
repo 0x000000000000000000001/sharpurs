@@ -2,6 +2,7 @@
 // and emission together. Recognizer eligibility/runtime checks live in the
 // corresponding focused suites; this test fixes the policy between those paths.
 import assert from "node:assert/strict";
+import { annotation, sourceBinding, sourceApplication, sourceVariable } from "./support/ast.mjs";
 import * as C from "../output/PureScript.Backend.Optimizer.CoreFn/index.js";
 import { Just, Nothing } from "../output/Data.Maybe/index.js";
 import * as Map from "../output/Data.Map.Internal/index.js";
@@ -113,7 +114,7 @@ for (const suffix of ["_direct", "_direct_apply"]) {
 
 const core = source([new C.NonRec(fn()), called()]);
 const missingType = fn();
-missingType.value0.type = Nothing.value;
+annotation(missingType).type = Nothing.value;
 rejectsDirect("unproven source signature", missingType);
 
 const unrelated = {
@@ -126,9 +127,13 @@ unrelatedNative.native.value0.bindings = Map.singleton("absent")(nativeDeclarati
 check("unrelated native binding does not suppress the source direct function", emit(core, emptyCandidates, unrelatedNative).includes(direct));
 
 const unqualifiedCall = called();
-unqualifiedCall.value0.value2.value1.value1.value1.value0 = Nothing.value;
 const importedCall = called();
-importedCall.value0.value2.value1.value1.value1.value0 = new Just("Other.Module");
+function callee(group) {
+  const binding = sourceBinding(source([group]), "called");
+  return sourceVariable(sourceApplication(binding.expression, 2, "called fixture").head);
+}
+callee(unqualifiedCall).owner = Nothing.value;
+callee(importedCall).owner = new Just("Other.Module");
 for (const [label, call] of [["lexical shadow", unqualifiedCall], ["other owner", importedCall]]) {
   const generated = emit(source([new C.NonRec(fn()), call]));
   const caller = generated.split("\n").find(line => line.startsWith(`let ${prefix}_called `));

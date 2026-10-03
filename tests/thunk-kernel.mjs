@@ -6,6 +6,9 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { compileFixtures, copyFixtures, packageSource, runFsharp } from './support/fixtures.mjs';
 import { optimizeCoreFn } from './support/corefn.mjs';
+import { clone, annotation, sourceBinding, sourceLambda, sourceLambdas, sourceApplication,
+  sourceTypeApp, optimizedBinding, optimizedTyped, findNodes } from './support/ast.mjs';
+import { fsharpFixture } from './support/fsharp.mjs';
 import { createHash } from 'node:crypto';
 import { helpers as preludeFs } from '../output/Sharpurs.Runtime/index.js';
 import * as C from '../output/PureScript.Backend.Optimizer.CoreFn/index.js';
@@ -20,20 +23,12 @@ import { printModule } from '../output/Sharpurs.Printer/index.js';
 const backend = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const artifacts = process.env.THUNK_KERNEL_ARTIFACTS && resolve(process.env.THUNK_KERNEL_ARTIFACTS);
 const transcript = [];
-function clone(value) {
-  if (Array.isArray(value)) return value.map(clone);
-  if (!value || typeof value !== 'object') return value;
-  return Object.assign(Object.create(Object.getPrototypeOf(value)), Object.fromEntries(
-    Object.entries(value).map(([key, child]) => [key, clone(child)])));
-}
-function bindings(core) {
-  return core.decls.flatMap(group => group instanceof C.NonRec ? [group.value0] : group.value0);
-}
-function selections(plan, tree, found = []) {
-  if (!tree || typeof tree !== 'object') return found;
-  if (tree instanceof C.ExprApp && fromExpr(plan)(tree) instanceof Just) found.push(tree);
-  for (const child of Object.values(tree)) selections(plan, child, found);
-  return found;
+const selections = (plan, tree) => findNodes(tree, node => node instanceof C.ExprApp && fromExpr(plan)(node) instanceof Just);
+function forceCall(expr) {
+  const call = sourceApplication(expr, 1, 'force call');
+  const seed = call.args[0];
+  const worker = sourceApplication(seed, 2, 'chain seed');
+  return { call, seed, worker, helper: sourceTypeApp(call.head), suffix: worker.nodes[0].node };
 }
 const directory = await mkdtemp(join(tmpdir(), 'sharpurs-thunk-kernel-'));
 try {
@@ -49,7 +44,7 @@ try {
   const selected = prepareModule(state.core)(state.backend);
   assert.ok(selected instanceof Just, 'typed thunk workers found');
   const plan = selected.value0;
-  const binding = name => bindings(state.core).find(b => b.value1 === name);
+  const binding = name => sourceBinding(state.core, name).node;
   const generate = candidate => printModule(translateOptimizedModuleWithThunks(Set.empty)(Nothing.value)(candidate)(Map.empty)(state.backend)(state.core));
   const generated = generate(selected), oracle = generate(Nothing.value);
   let checks = 0;
@@ -65,56 +60,58 @@ try {
   yes(oracle.includes('sharpurs_apply'), 'oracle uses actual generic generated application');
   const original = selections(plan, binding('run'))[0];
   const reject = (label, edit) => {
-    const expr = clone(original); edit(expr);
+    const expr = clone(original); edit(expr, forceCall(expr));
+    assert.notDeepEqual(expr, original, `${label}: mutation changed its target`);
     yes(fromExpr(plan)(expr) instanceof Nothing, label);
   };
-  reject('missing call type', expr => { expr.value0.type = Nothing.value; });
-  reject('contradictory call type', expr => { expr.value0.type = new Just(C.Number.value); });
-  reject('missing argument type', expr => { expr.value2.value0.type = Nothing.value; });
-  reject('function argument type does not prove closure provenance', expr => {
-    const ann = clone(expr.value2.value0);
-    expr.value2 = new C.ExprVar(ann, new C.Qualified(Nothing.value, 'unknownSeed'));
+  reject('missing call type', expr => { annotation(expr).type = Nothing.value; });
+  reject('contradictory call type', expr => { annotation(expr).type = new Just(C.Number.value); });
+  reject('missing argument type', (_, p) => { annotation(p.seed).type = Nothing.value; });
+  reject('function argument type does not prove closure provenance', (_, p) => {
+    const ann = clone(annotation(p.seed));
+    p.call.nodes[0].argument = new C.ExprVar(ann, new C.Qualified(Nothing.value, 'unknownSeed'));
   });
-  yes(original.value1 instanceof C.ExprTypeApp, 'real TAST v3 instantiates force at Int');
-  reject('wrong helper TypeApp', expr => { expr.value1.value2 = C.Number.value; });
-  reject('contradictory polymorphic helper type', expr => { expr.value1.value1.value0.type = new Just(C.Int.value); });
-  reject('missing worker suffix type', expr => { expr.value2.value1.value0.type = Nothing.value; });
-  reject('wrong worker suffix type', expr => { expr.value2.value1.value0.type = new Just(C.Int.value); });
-  reject('partial worker is not a thunk', expr => { expr.value2 = expr.value2.value1; });
-  reject('extra worker argument', expr => { expr.value2 = new C.ExprApp(expr.value2.value0, expr.value2, expr.value2.value2); });
+  yes(forceCall(original).call.head instanceof C.ExprTypeApp, 'real TAST v3 instantiates force at Int');
+  reject('wrong helper TypeApp', (_, p) => { p.helper.argument = C.Number.value; });
+  reject('contradictory polymorphic helper type', (_, p) => { annotation(p.helper.expression).type = new Just(C.Int.value); });
+  reject('missing worker suffix type', (_, p) => { annotation(p.suffix).type = Nothing.value; });
+  reject('wrong worker suffix type', (_, p) => { annotation(p.suffix).type = new Just(C.Int.value); });
+  reject('partial worker is not a thunk', (_, p) => { p.call.nodes[0].argument = p.suffix; });
+  reject('extra worker argument', (_, p) => { p.call.nodes[0].argument = new C.ExprApp(annotation(p.seed), p.seed, p.worker.args[1]); });
   const rejectWorker = (label, edit) => {
     const mutated = clone(state); edit(mutated);
+    assert.notDeepEqual(mutated, state, `${label}: mutation changed its target`);
     const result = prepareModule(mutated.core)(mutated.backend);
-    const sites = result instanceof Just ? selections(result.value0, bindings(mutated.core).find(b => b.value1 === 'run')) : [];
+    const sites = result instanceof Just ? selections(result.value0, sourceBinding(mutated.core, 'run').node) : [];
     yes(sites.length === 0, label);
   };
-  const source = st => bindings(st.core).find(b => b.value1 === 'chain').value2;
-  rejectWorker('missing source function type', st => { source(st).value0.type = Nothing.value; });
-  rejectWorker('contradictory source function type', st => { source(st).value0.type = new Just(C.Int.value); });
-  rejectWorker('returned Unit is not a source argument', st => { source(st).value2 = source(st).value2.value2; });
-  rejectWorker('missing inner source lambda type', st => { source(st).value2.value0.type = Nothing.value; });
+  const source = st => sourceLambdas(sourceBinding(st.core, 'chain').expression, 2, 'chain');
+  rejectWorker('missing source function type', st => { annotation(source(st).lambdas[0].node).type = Nothing.value; });
+  rejectWorker('contradictory source function type', st => { annotation(source(st).lambdas[0].node).type = new Just(C.Int.value); });
+  rejectWorker('returned Unit is not a source argument', st => { const fn = source(st); fn.lambdas[0].body = fn.lambdas[1].body; });
+  rejectWorker('missing inner source lambda type', st => { annotation(source(st).lambdas[1].node).type = Nothing.value; });
   rejectWorker('contradictory optimized signature', st => {
-    st.backend.bindings.flatMap(g => g.bindings).find(b => b.value0 === 'chain').value1.value0 = C.Int.value;
+    optimizedTyped(optimizedBinding(st.backend, 'chain').expression).type = C.Int.value;
   });
   rejectWorker('native helper name collision', st => {
     const workerName = generated.match(/let rec (?:private )?(TypedThunks_chain_thunk_native)\b/)?.[1];
     assert.ok(workerName, 'native worker declaration found');
-    const extra = clone(bindings(st.core).find(b => b.value1 === 'runLiteral'));
+    const extra = clone(sourceBinding(st.core, 'runLiteral').node);
     extra.value1 = workerName.replace(/^TypedThunks_/, '');
     st.core.decls.push(new C.NonRec(extra));
   });
   rejectWorker('native worker cannot shadow a source-local binder', st => {
-    bindings(st.core).find(b => b.value1 === 'run').value2.value1 = 'TypedThunks_chain_thunk_native';
+    sourceLambda(sourceBinding(st.core, 'run').expression).parameter = 'TypedThunks_chain_thunk_native';
   });
-  const forceSource = st => bindings(st.core).find(b => b.value1 === 'force').value2;
-  rejectWorker('helper needs source type evidence', st => { forceSource(st).value0.type = Nothing.value; });
+  const forceSource = st => sourceLambda(sourceBinding(st.core, 'force').expression);
+  rejectWorker('helper needs source type evidence', st => { annotation(forceSource(st).node).type = Nothing.value; });
   rejectWorker('helper checks nested optimized annotations', st => {
-    const expr = st.backend.bindings.flatMap(g => g.bindings).find(b => b.value0 === 'force').value1;
-    expr.value1 = new S.Typed(C.Int.value, expr.value1);
+    const typed = optimizedTyped(optimizedBinding(st.backend, 'force').expression);
+    typed.expression = new S.Typed(C.Int.value, typed.expression);
   });
   rejectWorker('optimized helper shape cannot erase an opaque source dependency', st => {
     const fn = forceSource(st);
-    fn.value2 = new C.ExprVar(clone(fn.value2.value0), new C.Qualified(new Just('ThunkExternal'), 'track'));
+    fn.body = new C.ExprVar(clone(annotation(fn.body)), new C.Qualified(new Just('ThunkExternal'), 'track'));
   });
 
   const js = await import(pathToFileURL(join(directory, 'output/TypedThunks/index.js')));
@@ -132,101 +129,13 @@ try {
     yes(js.runCaptureCollision(depth)(left)(right) === captured, 'JS multiple captures agree with Int32 oracle');
     return [depth, left, right, two, captured];
   });
-  const support = `
-open System
-let (|LitInt|_|) (expected: int) (value: obj) = if value :? int && unbox<int> value = expected then Some() else None
-let (|LitBool|_|) (expected: bool) (value: obj) = if value :? bool && unbox<bool> value = expected then Some() else None
-let Data_Unit_unit = box ()
-let events = ResizeArray<int>()
-let ThunkExternal_track : obj = box (fun (value: obj) -> events.Add(unbox<int> value); value)
-let Partial_Unsafe_unsafePartial : obj = box (fun (value: obj) -> sharpurs_apply value (box ()))
-let Partial_Unsafe__unsafePartial = Partial_Unsafe_unsafePartial
-let binary operation : obj = box (fun (x: obj) -> box (fun (y: obj) -> operation x y))
-let intAdd = binary (fun x y -> box (unbox<int> x + unbox<int> y))
-let intSub = binary (fun x y -> box (unbox<int> x - unbox<int> y))
-let Data_Semiring_semiringInt : obj = box (Map.ofList ["add", intAdd])
-let Data_Ring_ringInt : obj = box (Map.ofList ["sub", intSub])
-let Data_Semiring_semiringNumber : obj = box (Map.ofList ["add", binary (fun x y -> box (unbox<float> x + unbox<float> y))])
-let Data_Semiring_add : obj = box (fun (dict: obj) -> Map.find "add" (unbox<Map<string,obj>> dict))
-let Data_Ring_sub : obj = box (fun (dict: obj) -> Map.find "sub" (unbox<Map<string,obj>> dict))
-`;
+  const support = await fsharpFixture('thunk-kernel/Support.fs');
   const external = printModule(translateModule(Map.empty)(captured.get('ThunkExternal').core));
   const scoped = (name, body) => `module ${name} =\n${body.split('\n').map(line => `    ${line}`).join('\n')}\n`;
-  const runtime = `
-let mutable checks = 0
-let check label condition = if not condition then failwith label else checks <- checks + 1
-let apply = sharpurs_apply
-let call fn n seed = apply (apply fn (box n)) (box seed) |> unbox<int>
-let cases = [${cases.map(row => `(${row.join(', ')})`).join('; ')}]
-for depth, seed, expected in cases do
-    check "native route agrees with JS" (call Native.TypedThunks_run depth seed = expected)
-    check "generic oracle agrees with JS" (call Oracle.TypedThunks_run depth seed = expected)
-    check "literal seed result" (apply Native.TypedThunks_runLiteral (box depth) |> unbox<int> = depth + 7)
-    let left = apply (apply Native.TypedThunks_escaped (box depth)) (box seed)
-    check "escaping thunk stays callable" (apply Native.TypedThunks_force left |> unbox<int> = expected)
-    check "escaping thunk reusable" (apply Native.TypedThunks_force left |> unbox<int> = expected)
-    let partial = apply Native.TypedThunks_run (box depth)
-    check "partial Int capture reused" (apply partial (box seed) |> unbox<int> = expected)
-    check "partial captures independent" (apply partial (box 9) |> unbox<int> = depth + 9)
-for step, depth, seed in [(2, 5, 7); (-3, 10, 29); (System.Int32.MaxValue, 3, 7)] do
-    let callBy fn = apply (apply (apply fn (box step)) (box depth)) (box seed) |> unbox<int>
-    check "additional captured step" (callBy Native.TypedThunks_runBy = callBy Oracle.TypedThunks_runBy)
-for depth, left, right, two, captured in [${captureCases.map(row => `(${row.join(', ')})`).join('; ')}] do
-    let callTwo fn = apply (apply (apply fn (box depth)) (box left)) (box right) |> unbox<int>
-    check "independent native seeds" (callTwo Native.TypedThunks_runTwo = two)
-    check "independent generic seeds" (callTwo Oracle.TypedThunks_runTwo = two)
-    check "capture names cannot shadow later capture values" (callTwo Native.TypedThunks_runCaptureCollision = captured)
-    check "generic multiple capture oracle" (callTwo Oracle.TypedThunks_runCaptureCollision = captured)
-    let partial = apply Native.TypedThunks_runCaptureCollision (box depth)
-    let withLeft = apply partial (box left)
-    check "reused multiple capture partial" (apply withLeft (box right) |> unbox<int> = captured)
-    check "reused partial gets a fresh right capture" (apply withLeft (box -7) |> unbox<int> = depth + left - 7)
-    check "reused partial gets a fresh left capture" (apply (apply partial (box 19)) (box right) |> unbox<int> = depth + 19 + right)
-for depth in [0; 1; 3; 1000] do
-    let seed : obj = box (fun (_: obj) -> events.Add(31); box 11)
-    events.Clear()
-    check "unknown callback retains result" (call Native.TypedThunks_unknownCallback depth seed = depth + 11)
-    check "unknown callback executes once" (List.ofSeq events = [31])
-    let partial = apply Native.TypedThunks_chain (box depth)
-    let left = apply partial seed
-    check "construction is delayed" (List.ofSeq events = [31])
-    for _ in [1..2] do apply Native.TypedThunks_force left |> ignore
-    check "no memoization added" (List.ofSeq events = [31; 31; 31])
-    events.Clear()
-    check "opaque nested seed result" (call Native.TypedThunks_opaqueRun depth 12 = depth + 12)
-    check "opaque seed observes exactly one call" (List.ofSeq events = [12])
-let signature action =
-    let rec shape (error: exn) wrappers =
-        match error with
-        | :? System.Reflection.TargetInvocationException as invocation when not (isNull invocation.InnerException) -> shape invocation.InnerException (wrappers + 1)
-        | cause -> cause.GetType().FullName, wrappers
-    let caught = try action() |> ignore; None with ex -> Some (shape ex 0)
-    match caught with Some value -> value | None -> failwith "Expected exception"
-for depth in [0; 1; 3] do
-    check "local partial exception boundary" (signature (fun () -> call Native.TypedThunks_partialRun depth 1) = signature (fun () -> call Oracle.TypedThunks_partialRun depth 1))
-    check "imported partial exception boundary" (signature (fun () -> call Native.TypedThunks_importedRun depth 1) = signature (fun () -> call Oracle.TypedThunks_importedRun depth 1))
-let sentinel = InvalidOperationException("delayed callback")
-for depth in [0; 1; 3; 1000] do
-    let mutable throws = 0
-    let seed : obj = box (fun (_: obj) -> throws <- throws + 1; raise sentinel : obj)
-    let chain = apply (apply Native.TypedThunks_chain (box depth)) seed
-    check "throwing seed stays delayed" (throws = 0)
-    for repeat in [1..2] do
-        let mutable caught = None
-        try apply Native.TypedThunks_force chain |> ignore with ex -> caught <- Some ex
-        let rec cause (ex: exn) count =
-            match ex with
-            | :? System.Reflection.TargetInvocationException as e when not (isNull e.InnerException) -> cause e.InnerException (count + 1)
-            | e -> e, count
-        let exceptionCause, wrappers = cause caught.Value 0
-        check "deferred cause identity" (Object.ReferenceEquals(exceptionCause, sentinel))
-        check "original force boundaries" (wrappers = 2 * (depth + 1))
-        check "repeat force calls again" (throws = repeat)
-let mutable total = 0
-for _ in [1..1000] do total <- total + call Native.TypedThunks_run 1000 0
-check "full million-thunk workload" (total = 1000000)
-printfn "thunk-kernel runtime: %d checks passed" checks
-`;
+  const runtime = await fsharpFixture('thunk-kernel/Runtime.fs', {
+    CASES: cases.map(row => `(${row.join(', ')})`).join('; '),
+    CAPTURE_CASES: captureCases.map(row => `(${row.join(', ')})`).join('; '),
+  });
   const script = [preludeFs, support, external, scoped('Native', generated), scoped('Oracle', oracle), runtime].join('\n\n');
   await writeFile(join(directory, 'thunk-kernel.fsx'), script);
   if (artifacts) {
@@ -243,7 +152,8 @@ printfn "thunk-kernel runtime: %d checks passed" checks
   if (artifacts) {
     const sourceHashes = {};
     for (const file of ['src/Sharpurs/ThunkKernel.purs', 'tests/thunk-kernel.mjs',
-      'tests/support/fixtures.mjs', 'tests/support/corefn.mjs',
+      'tests/support/fixtures.mjs', 'tests/support/corefn.mjs', 'tests/support/ast.mjs', 'tests/support/fsharp.mjs',
+      'tests/fixtures/thunk-kernel/Support.fs', 'tests/fixtures/thunk-kernel/Runtime.fs',
       ...['Analysis', 'Helpers', 'Lower', 'Call', 'Emit'].map(name => `src/Sharpurs/ThunkKernel/${name}.purs`),
       ...fixtureFiles.map(name => `tests/fixtures/thunk-kernel/${name}`)]) {
       sourceHashes[file] = createHash('sha256').update(await readFile(join(backend, file))).digest('hex');

@@ -7,6 +7,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { clone, annotation, sourceBinding, sourceApplication, sourceTypeApp,
+  sourceVariable, findNodes, expectNode } from './support/ast.mjs';
+import { fsharpFixture } from './support/fsharp.mjs';
 import { helpers as preludeFs } from '../output/Sharpurs.Runtime/index.js';
 import * as C from '../output/PureScript.Backend.Optimizer.CoreFn/index.js';
 import * as Aff from '../output/Effect.Aff/index.js';
@@ -38,20 +41,11 @@ function command(program, args, cwd) {
   assert.equal(result.status, 0, `${program}: ${result.stdout}\n${result.stderr}`);
   return result;
 }
-function clone(value) {
-  if (Array.isArray(value)) return value.map(clone);
-  if (!value || typeof value !== 'object') return value;
-  return Object.assign(Object.create(Object.getPrototypeOf(value)), Object.fromEntries(
-    Object.entries(value).map(([key, child]) => [key, clone(child)])));
-}
-function walk(value, visit) {
-  if (!value || typeof value !== 'object') return;
-  visit(value);
-  for (const child of Object.values(value)) walk(child, visit);
-}
-function bindings(core) { return core.decls.flatMap(group => group instanceof C.NonRec ? [group.value0] : group.value0); }
+// Constructor recognition deliberately crosses erased TypeApp boundaries.
+// Keep this choice here rather than making the shared application view erase them.
 function head(expr) {
   while (expr instanceof C.ExprApp || expr instanceof C.ExprTypeApp) expr = expr.value1;
+  annotation(expr);
   return expr;
 }
 // Metadata is not evaluated by the generic backend. Removing IsConstructor
@@ -60,14 +54,13 @@ function head(expr) {
 // body, argument, type application or exception boundary is hand-reimplemented.
 function forceCurried(core) {
   const result = clone(core);
-  walk(result, node => {
-    if (node instanceof C.ExprTypeApp) {
-      const target = head(node);
-      if (target instanceof C.ExprVar && target.value0.meta instanceof Just && target.value0.meta.value0 instanceof C.IsConstructor) {
-        target.value0.meta = Nothing.value;
-      }
+  for (const node of findNodes(result, node => node instanceof C.ExprTypeApp)) {
+    const target = head(node);
+    const ann = annotation(target);
+    if (target instanceof C.ExprVar && ann.meta instanceof Just && ann.meta.value0 instanceof C.IsConstructor) {
+      ann.meta = Nothing.value;
     }
-  });
+  }
   return result;
 }
 async function collect(compiler, directory, builderDictionary = compiler.Aff.monadEffectAff) {
@@ -133,8 +126,8 @@ try {
   const core = captured.get('ConstructorTypeApp').core;
   const currentMod = new Just('ConstructorTypeApp');
   const recognize = expr => fromExpr(config.constructors)(currentMod)(expr);
-  const selections = tree => { const found=[]; walk(tree,node => { if (node instanceof C.ExprApp && recognize(node) instanceof Just) found.push(node); }); return found; };
-  const binding = name => bindings(core).find(value => value.value1 === name);
+  const selections = tree => findNodes(tree, node => node instanceof C.ExprApp && recognize(node) instanceof Just);
+  const binding = name => sourceBinding(core, name).node;
   for (const name of ['boxInt', 'importedBox', 'pair', 'polyPair', 'explicitPair', 'justInt', 'list', 'prepend', 'ordered', 'throwFirst', 'throwSecond', 'nativePair']) {
     yes(selections(binding(name)).length>0, `${name}: saturated instantiated constructor selected`);
   }
@@ -147,53 +140,55 @@ try {
   const original = selections(binding('pair'))[0];
   const selected = recognize(original).value0;
   yes(selected.name==='ConstructorTypeApp_Tuple' && selected.arity===2, 'two-field constructor identity and arity');
-  const malformed = (label, edit) => { const expr=clone(original); edit(expr); yes(recognize(expr) instanceof Nothing,label); };
-  malformed('missing constructor metadata', expr => { head(expr).value0.meta=Nothing.value; });
-  malformed('newtype metadata is not ordinary constructor metadata', expr => { head(expr).value0.meta=new Just(C.IsNewtype.value); });
-  malformed('constructor metadata arity disagrees', expr => { head(expr).value0.meta.value0.value1=['value0']; });
-  malformed('local shadow is not a qualified constructor', expr => { head(expr).value1.value0=Nothing.value; });
-  malformed('unregistered qualified owner', expr => { head(expr).value1.value0=new Just('OtherModule'); });
-  malformed('unregistered constructor name', expr => { head(expr).value1.value1='OtherCtor'; });
-  yes(recognize(original.value1) instanceof Nothing, 'partial constructor invocation retained');
+  const malformed = (label, edit) => {
+    const expr = clone(original); edit(expr);
+    assert.notDeepEqual(expr, original, `${label}: mutation changed its target`);
+    yes(recognize(expr) instanceof Nothing, label);
+  };
+  malformed('missing constructor metadata', expr => { annotation(head(expr)).meta = Nothing.value; });
+  malformed('newtype metadata is not ordinary constructor metadata', expr => { annotation(head(expr)).meta = new Just(C.IsNewtype.value); });
+  malformed('constructor metadata arity disagrees', expr => {
+    const meta = expectNode(annotation(head(expr)).meta, Just, 'constructor metadata').value0;
+    expectNode(meta, C.IsConstructor).value1 = ['value0'];
+  });
+  malformed('local shadow is not a qualified constructor', expr => { sourceVariable(head(expr)).owner = Nothing.value; });
+  malformed('unregistered qualified owner', expr => { sourceVariable(head(expr)).owner = new Just('OtherModule'); });
+  malformed('unregistered constructor name', expr => { sourceVariable(head(expr)).name = 'OtherCtor'; });
+  yes(recognize(sourceApplication(original, 2).nodes[1].fn) instanceof Nothing, 'partial constructor invocation retained');
   const interleaved=clone(original);
-  const firstApplication=interleaved.value1;
-  const typeApplication=firstApplication.value1;
-  assert.ok(typeApplication instanceof C.ExprTypeApp, 'real fixture contains an instantiated constructor head');
-  const firstArgument=firstApplication.value2, secondArgument=interleaved.value2;
+  const applied = sourceApplication(interleaved, 2, 'pair constructor');
+  const firstApplication = applied.nodes[0];
+  const typeApplication = sourceTypeApp(applied.head);
+  assert.ok(typeApplication.node instanceof C.ExprTypeApp, 'real fixture contains an instantiated constructor head');
+  const [firstArgument, secondArgument] = applied.args;
   // Move an erased type application between the two runtime arguments. Its
   // annotation follows the partial application; argument expressions stay put.
-  firstApplication.value1=typeApplication.value1;
-  typeApplication.value1=firstApplication;
-  typeApplication.value0=clone(firstApplication.value0);
-  interleaved.value1=typeApplication;
+  firstApplication.fn = typeApplication.expression;
+  typeApplication.expression = firstApplication.node;
+  typeApplication.node.value0 = clone(annotation(firstApplication.node));
+  applied.nodes[1].fn = typeApplication.node;
   const interleavedCall=recognize(interleaved);
   yes(interleavedCall instanceof Just, 'TypeApp between runtime applications still exposes saturation');
   yes(interleavedCall.value0.args[0]===firstArgument && interleavedCall.value0.args[1]===secondArgument,
     'interleaved TypeApp preserves both argument expressions in order');
-  yes(recognize(new C.ExprApp(clone(original.value0),clone(original),clone(original.value2))) instanceof Nothing, 'overapplication retained');
+  yes(recognize(new C.ExprApp(clone(annotation(original)), clone(original), clone(sourceApplication(original, 2).args[1]))) instanceof Nothing, 'overapplication retained');
   const withoutRegistry = Map.delete(Ord.ordString)('ConstructorTypeApp_Tuple')(config.constructors);
   yes(fromExpr(withoutRegistry)(currentMod)(original) instanceof Nothing, 'missing layout registry entry');
   const wrongRegistry = Map.insert(Ord.ordString)('ConstructorTypeApp_Tuple')(3)(config.constructors);
   yes(fromExpr(wrongRegistry)(currentMod)(original) instanceof Nothing, 'registry arity disagreement');
-  const erased = clone(original);
-  function eraseApps(value) {
-    if (value instanceof C.ExprTypeApp) return eraseApps(value.value1);
-    if (!value || typeof value!=='object') return value;
-    for (const key of Object.keys(value)) value[key]=Array.isArray(value[key])?value[key].map(eraseApps):eraseApps(value[key]);
-    return value;
-  }
-  yes(recognize(eraseApps(erased)) instanceof Nothing, 'ordinary constructor path remains distinct');
+  const erased = clone(original, node => node instanceof C.ExprTypeApp ? sourceTypeApp(node).expression : node);
+  yes(recognize(erased) instanceof Nothing, 'ordinary constructor path remains distinct');
   const explicit = clone(original);
   const target=head(explicit);
   function replaceHead(value) {
-    if (value===target) return new C.ExprConstructor(clone(target.value0),'Tuple','Tuple',['value0','value1']);
+    if (value===target) return new C.ExprConstructor(clone(annotation(target)),'Tuple','Tuple',['value0','value1']);
     if (value instanceof C.ExprApp || value instanceof C.ExprTypeApp) value.value1=replaceHead(value.value1);
     return value;
   }
   replaceHead(explicit);
   yes(recognize(explicit) instanceof Just, 'explicit constructor node uses current module registry');
   const malformedExplicit=clone(explicit);
-  head(malformedExplicit).value3=['value0'];
+  expectNode(head(malformedExplicit), C.ExprConstructor, 'explicit constructor').value3 = ['value0'];
   yes(recognize(malformedExplicit) instanceof Nothing, 'explicit constructor fields must agree with registry arity');
   yes(fromExpr(config.constructors)(Nothing.value)(explicit) instanceof Nothing, 'explicit node requires module context');
   const generate = source => Printer.printModule(CodeGen.translateModuleWithConstructorWrappers(config.wrappers)(config.constructors)(source));
@@ -224,96 +219,9 @@ try {
     const list=js.list(value), next=Number(BigInt.asIntN(32,BigInt(value)+1n));
     yes(list.value0===value && list.value1.value0===next,'JS List wrapping and field order');
   }
-  const support=`
-let (|LitInt|_|) (expected: int) (value: obj) = if value :? int && unbox<int> value = expected then Some() else None
-let (|LitBool|_|) (expected: bool) (value: obj) = if value :? bool && unbox<bool> value = expected then Some() else None
-let events = ResizeArray<int>()
-let sentinel = InvalidOperationException("constructor argument")
-let ConstructorTypeApp_track : obj = box (fun (label: obj) -> box (fun (value: obj) -> events.Add(unbox<int> label); value))
-let ConstructorTypeApp_explode : obj = box (fun (label: obj) -> events.Add(unbox<int> label); raise sentinel : obj)
-`;
+  const support = await fsharpFixture('constructor-typeapp/Support.fs');
   const scoped=(name,body)=>`module ${name} =\n${body.split('\n').map(line=>`    ${line}`).join('\n')}\n`;
-  const runtime=`
-let mutable checks = 0
-let check label condition = if not condition then failwith label else checks <- checks + 1
-let apply = sharpurs_apply
-let call2 fn a b = apply (apply fn a) b
-let pairNative value = match unbox<Native.ConstructorTypeApp_Tuple> value with Native.ConstructorTypeApp_Tupleusd_Ctor (a,b) -> a,b
-let pairOracle value = match unbox<Oracle.ConstructorTypeApp_Tuple> value with Oracle.ConstructorTypeApp_Tupleusd_Ctor (a,b) -> a,b
-let rec listNative value =
-    match unbox<Native.ConstructorTypeApp_List> value with
-    | Native.ConstructorTypeApp_Nilusd_Ctor -> []
-    | Native.ConstructorTypeApp_Consusd_Ctor (a,tail) -> unbox<int> a :: listNative tail
-let rec listOracle value =
-    match unbox<Oracle.ConstructorTypeApp_List> value with
-    | Oracle.ConstructorTypeApp_Nilusd_Ctor -> []
-    | Oracle.ConstructorTypeApp_Consusd_Ctor (a,tail) -> unbox<int> a :: listOracle tail
-for value in [System.Int32.MinValue; -1; 0; 1; System.Int32.MaxValue] do
-    match unbox<ConstructorImported_Envelope> (apply Native.ConstructorTypeApp_importedBox (box value)) with
-    | ConstructorImported_Envelopeusd_Ctor payload -> check "imported polymorphic payload" (unbox<int> payload=value)
-    match unbox<ConstructorImported_Envelope> (apply Oracle.ConstructorTypeApp_importedBox (box value)) with
-    | ConstructorImported_Envelopeusd_Ctor payload -> check "imported polymorphic oracle payload" (unbox<int> payload=value)
-    match unbox<Native.ConstructorTypeApp_Box> (apply Native.ConstructorTypeApp_boxInt (box value)) with
-    | Native.ConstructorTypeApp_Boxusd_Ctor payload -> check "single payload" (unbox<int> payload=value)
-    match unbox<Oracle.ConstructorTypeApp_Box> (apply Oracle.ConstructorTypeApp_boxInt (box value)) with
-    | Oracle.ConstructorTypeApp_Boxusd_Ctor payload -> check "single payload oracle" (unbox<int> payload=value)
-    for text in [""; "alpha"; "☃"] do
-        for native,baseline in [(Native.ConstructorTypeApp_pair,Oracle.ConstructorTypeApp_pair);(Native.ConstructorTypeApp_polyPair,Oracle.ConstructorTypeApp_polyPair);(Native.ConstructorTypeApp_explicitPair,Oracle.ConstructorTypeApp_explicitPair)] do
-            let a,b=pairNative (call2 native (box value) (box text))
-            let c,d=pairOracle (call2 baseline (box value) (box text))
-            check "two type arguments preserve payloads" (unbox<int> a=value && unbox<string> b=text && a=c && b=d)
-        let partial=apply Native.ConstructorTypeApp_partialPair (box value)
-        for suffix in [text; text+"!"] do
-            let a,b=pairNative (apply partial (box suffix))
-            check "partial constructor reused" (unbox<int> a=value && unbox<string> b=suffix)
-    match unbox<Native.ConstructorTypeApp_Maybe> (apply Native.ConstructorTypeApp_justInt (box value)) with
-    | Native.ConstructorTypeApp_Justusd_Ctor a -> check "Maybe payload" (unbox<int> a=value)
-    | _ -> failwith "Expected Just"
-    check "List constructor/order/Int32 oracle" (listNative (apply Native.ConstructorTypeApp_list (box value))=listOracle (apply Oracle.ConstructorTypeApp_list (box value)))
-    let tail=apply Native.ConstructorTypeApp_list (box value)
-    match unbox<Native.ConstructorTypeApp_List> (call2 Native.ConstructorTypeApp_prepend (box 91) tail) with
-    | Native.ConstructorTypeApp_Consusd_Ctor (a,b) -> check "recursive payload shares source tail" (unbox<int> a=91 && Object.ReferenceEquals(b,tail))
-    | _ -> failwith "Expected Cons"
-    check "ordinary polymorphic function unaffected" (call2 Native.ConstructorTypeApp_ordinaryCall (box value) (box 99) |> unbox<int> = value)
-match unbox<Native.ConstructorTypeApp_Maybe> Native.ConstructorTypeApp_nothingInt with
-| Native.ConstructorTypeApp_Nothingusd_Ctor -> check "nullary constructor remains callable value" true
-| _ -> failwith "Expected Nothing"
-for fn,decode in [(Native.ConstructorTypeApp_ordered,pairNative);(Oracle.ConstructorTypeApp_ordered,pairOracle);(Native.ConstructorTypeApp_capturedArgument,pairNative);(Oracle.ConstructorTypeApp_capturedArgument,pairOracle)] do
-    events.Clear()
-    let partial=apply fn (box 7)
-    let beforeSecond=List.ofSeq events
-    let a,b=decode (apply partial (box 11))
-    check "arguments observed once in order" (List.ofSeq events=[1;2] && unbox<int> a=7 && unbox<int> b=11)
-    if Object.ReferenceEquals(fn,Native.ConstructorTypeApp_capturedArgument) || Object.ReferenceEquals(fn,Oracle.ConstructorTypeApp_capturedArgument) then
-        check "partial captures first argument eagerly" (beforeSecond=[1])
-let failure action =
-    let caught = try action() |> ignore; None with error -> Some error
-    let rec unwrap (error: exn) depth =
-        match error with
-        | :? System.Reflection.TargetInvocationException as e when not (isNull e.InnerException) -> unwrap e.InnerException (depth+1)
-        | e -> e,depth
-    match caught with
-    | None -> failwith "Expected argument exception"
-    | Some e -> unwrap e 0
-for native,baseline,expectedEvents in [(Native.ConstructorTypeApp_throwFirst,Oracle.ConstructorTypeApp_throwFirst,[1]);(Native.ConstructorTypeApp_throwSecond,Oracle.ConstructorTypeApp_throwSecond,[1;2])] do
-    events.Clear()
-    let cause,depth=failure(fun () -> apply native (box 37))
-    check "exception argument order" (List.ofSeq events=expectedEvents)
-    events.Clear()
-    let oldCause,oldDepth=failure(fun () -> apply baseline (box 37))
-    check "original exception identity" (Object.ReferenceEquals(cause,sentinel) && Object.ReferenceEquals(oldCause,sentinel))
-    check "unchanged exception wrapping depth" (depth=oldDepth && depth=2)
-    check "oracle exception argument order" (List.ofSeq events=expectedEvents)
-let tail=ConstructorNative_Node_adt_native 13 ConstructorNative_Leaf_adt_native
-let boxedTail=box tail
-let a,b=pairNative(call2 Native.ConstructorTypeApp_nativePair (box 17) boxedTail)
-check "native factory payload type" (a :? ConstructorNative_Tree)
-check "native value payload identity" (Object.ReferenceEquals(b,boxedTail))
-match unbox<ConstructorNative_Tree> a with
-| ConstructorNative_Nodeusd_Ctor (value,child) -> check "native factory field values" (value=17 && Object.ReferenceEquals(child,tail))
-| _ -> failwith "Expected native Node"
-printfn "constructor-typeapp runtime: %d checks passed" checks
-`;
+  const runtime = await fsharpFixture('constructor-typeapp/Runtime.fs');
   const script=['open System',preludeFs,support,producerFs,importedFs,scoped('Native',generated),scoped('Oracle',oracle),runtime].join('\n\n');
   await writeFile(join(directory,'constructor-typeapp.fsx'),script);
   if(artifacts) {

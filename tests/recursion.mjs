@@ -7,6 +7,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { compileFixtures, copyFixtures, runFsharp } from "./support/fixtures.mjs";
 import { readCoreFn } from "./support/corefn.mjs";
+import { fsharpFixture } from "./support/fsharp.mjs";
 import * as Map from "../output/Data.Map/index.js";
 import { ordString } from "../output/Data.Ord/index.js";
 import { translateModule } from "../output/Sharpurs.CodeGen/index.js";
@@ -51,20 +52,8 @@ try {
   assertions.push(`check "recursive values have no worker" ${oracle.recursiveValues} Recursion_Context_recursiveValues`);
 
   await writeFile(join(directory, "Sharpurs_Prelude.fs"), prelude);
-  await writeFile(join(directory, "recursion.fsx"), normalizeRecIndent(`
-#load "Sharpurs_Prelude.fs"
-open Sharpurs_Prelude
-let Recursion_Context_decrement : obj = box (fun (value: obj) -> box (unbox<int> value - 1))
-let Recursion_Context_increment : obj = box (fun (value: obj) -> box (unbox<int> value + 1))
-${generated}
-let mutable checks = 0
-let check label expected actual =
-    if unbox<int> actual <> expected then failwithf "%s: expected %d, got %A" label expected actual
-    checks <- checks + 1
-let call2 fn first second = sharpurs_apply (sharpurs_apply fn (box first)) (box second)
-${assertions.join("\n")}
-printfn "recursion: %d runtime checks passed against JavaScript" checks
-`));
+  const runtime = await fsharpFixture("recursion/Runtime.fs", { GENERATED: generated, ASSERTIONS: assertions.join("\n") });
+  await writeFile(join(directory, "recursion.fsx"), normalizeRecIndent(runtime));
   const result = runFsharp(directory, "recursion.fsx");
   process.stdout.write(result.stdout);
 } finally {

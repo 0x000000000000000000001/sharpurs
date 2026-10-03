@@ -95,6 +95,10 @@ has ended. A cache restoration failure prints the retained backup location.
 - [tests/support/corefn.mjs](../tests/support/corefn.mjs) loads current CoreFn values
   and runs the shared optimizer callback contract. Its builder changes cwd only
   while writing fixture-local `.purmeta`, restoring it even after an error.
+- [tests/support/ast.mjs](../tests/support/ast.mjs) copies prototype-bearing trees
+  and provides checked, named access to source/optimized fixture nodes.
+- [tests/support/fsharp.mjs](../tests/support/fsharp.mjs) loads suite-owned F#
+  fragments from `tests/fixtures/` and validates explicit insertion slots.
 - Suites retain their assertions, native/generic/JavaScript oracles, fixtures and
   acceptance criteria. Recursion, case patterns, direct calls, integer arithmetic,
   multi-argument ADTs and thunks share the real-TAST mechanics. ADT lowering also
@@ -111,12 +115,107 @@ THUNK_KERNEL_ARTIFACTS="$HOME/sharpurs-evidence/thunks-001" \
   npm test -- --skip-build --skip-assertions --suite thunk-kernel
 ```
 
-Other supported variables include `CLI_ARTIFACTS`, `PROJECT_ARTIFACTS`, `NAMES_ARTIFACTS`, `FFI_SUPPORT_ARTIFACTS`, `ADT_MULTI_ARTIFACTS`,
+Other supported variables include `CLI_ARTIFACTS`, `PROJECT_ARTIFACTS`, `NAMES_ARTIFACTS`, `FFI_SUPPORT_ARTIFACTS`, `ADT_KERNEL_ARTIFACTS`, `ADT_MULTI_ARTIFACTS`,
 `ADT_INTEROP_ARTIFACTS`, `ADT_LOWERING_ARTIFACTS`, `CONSTRUCTOR_TYPEAPP_ARTIFACTS`, `DIRECT_CALL_ARTIFACTS`,
 `INT_COMPARISON_ARTIFACTS` and `INT_ARITHMETIC_ARTIFACTS`. The unary and interop ADT
 suites both use `ADT_INTEROP_ARTIFACTS`; give them separate destinations in separate
 invocations. Aggregate logs survive failures; each suite defines which additional
 generated files it retains and at what point.
+
+### Contributing a structural mutation
+
+Copy the real parsed fixture with `clone` before editing it. The helper preserves
+PureScript constructor prototypes and recursively copies enumerable fields and
+arrays. `structuredClone` and JSON round-trips lose the `instanceof` evidence used
+by the compiler. `clone` copies trees, not arbitrary cyclic JavaScript graphs;
+its optional post-order transform keeps oracle renaming decisions in the suite.
+
+Select the intended node and state the contract being violated. For example,
+the ADT multi suite removes evidence from the second **source** lambda:
+
+```js
+const state = clone(producer);
+const binding = sourceBinding(state.core, "assemble");
+const fn = sourceLambdas(binding.expression, 4, "assemble");
+annotation(fn.lambdas[1].node).type = Nothing.value;
+assert.notDeepEqual(state, producer, "missing inner lambda type: target changed");
+const candidate = prepareModule(state.core)(state.backend);
+assert.ok(candidate instanceof Just && !candidate.value0.nativeNames.includes("assemble"),
+  "missing source evidence keeps this function generic");
+```
+
+Use the source and optimized selectors for their respective representations:
+
+| Selector | Checked shape and returned access |
+| --- | --- |
+| `sourceBinding(core, name)` / `sourceBindings(core)` | `NonRec`/`Rec` groups and `Binding` nodes; named `name`, `expression`, raw `node` and owning `group` |
+| `optimizedBinding(backend, name)` | Optimized groups and binding tuples; named `expression`, `name`, raw `node` and `group` |
+| `sourceLambdas(expr, count, label)` | Exact consecutive source-lambda count; ordered `lambdas` and the remaining `body` |
+| `sourceApplication(expr, arity, label)` | Exact runtime application count before a boundary; `head`, ordered `args`, and live application `nodes` |
+| `sourceTypeApp` / `sourceVariable` | Explicit type-application argument/expression or variable owner/name |
+| `annotation` / `annotatedType` | Source annotation with a `Maybe` type; the latter additionally requires `Just` and the requested type constructor |
+| `optimizedTyped` / `optimizedLambda` | Optimized annotation and lambda/parameter tuples, including mutable parameter `level` |
+| `firstNode(tree, Type, label, predicate)` | First preorder match, with a diagnostic assertion if none exists |
+
+Named views are **live**: setting `binding.expression`, `call.head`,
+`call.nodes[i].argument` or `lambda.parameter` updates the original selected tree.
+Use `.node` when passing the underlying constructor to production functions.
+`call.args` is an ordered array of node references; replace an argument edge via
+`call.nodes[i].argument`, not by assigning to that temporary array.
+
+Binding/data-declaration lookup requires exactly one match. Application/lambda
+selectors require the expected arity and do not erase `TypeApp` or cross a `let`.
+The constructor-TypeApp suite explicitly owns its different boundary traversal.
+A lost target must throw before the negative recognizer assertion is reached;
+never treat a missing fixture node as a successful rejection.
+
+The support module imports only runtime constructors and structural utilities.
+Each suite keeps its production recognizer calls, mutation decisions, rejection
+labels, generic/JavaScript oracles and historical compiler adapters. A historical
+compiler must construct/read its trees with **its own** runtime constructors and
+dictionaries. Do not apply current-constructor selectors to an older output tree.
+
+`npm run test:fixture-support` checks prototype-preserving isolation, live edges,
+absent/ambiguous/wrong-shaped targets, annotation evidence, traversal order and
+explicit application boundaries. The concrete examples are
+[`direct-call.mjs`](../tests/direct-call.mjs),
+[`int-arithmetic.mjs`](../tests/int-arithmetic.mjs) and
+[`adt-multi.mjs`](../tests/adt-multi.mjs).
+
+### Contributing an F# fixture
+
+Keep static F# support and assertions in the suite's fixture directory, usually
+`Support.fs` and `Runtime.fs`. The JavaScript suite explicitly assembles the
+runtime prelude, support, generated modules, generic oracle and runtime assertions
+in their required order. These fragments are test programs, not application FFI.
+The unary and interoperability suites share only their identical `AdtConsumer`
+foreign support; their runtime assertions remain separate.
+
+For calculated data or generated assertions, use named slots, for example:
+
+```fsharp
+let cases = [
+{{CASES}}
+]
+```
+
+```js
+const runtime = await fsharpFixture("int-arithmetic/Runtime.fs", { CASES: fsCases });
+const script = [preludeFs, support, generated, fallback, runtime].join("\n\n");
+```
+
+Every supplied slot must occur exactly once; missing, repeated and unused slots
+fail before F# execution. Replacement text is inserted literally. JavaScript
+continues to calculate oracle data and generated assertions; static fixture files
+keep the suite-specific runtime contracts visible. Save the **assembled** program
+before invoking FSI so that a failure can be replayed directly. The aggregate log
+records the process output; the primary mutation suites also retain their
+`validation.log` on selector/compilation/runtime failures when their artifact
+variable is set.
+
+When refactoring these tests, compare the complete assembled F# files and the
+mutated recognizer inputs with a frozen baseline, as well as the suite results.
+Matching check counts alone would not detect an accidentally changed oracle call.
 
 ### CLI contract and Spago transport
 

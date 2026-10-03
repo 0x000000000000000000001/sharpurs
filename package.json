@@ -11,6 +11,7 @@
     "test": "node tests/run.mjs",
     "compare:generation": "node scripts/compare-generation.mjs",
     "test:tools": "node --test tests/tools.mjs",
+    "test:fixture-support": "node --test tests/fixture-support.mjs",
     "test:cli": "node tests/cli.mjs",
     "test:runtime": "node tests/runtime-apply.mjs",
     "test:ffi-support": "node tests/ffi-support.mjs",
