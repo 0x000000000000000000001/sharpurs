@@ -1,0 +1,2510 @@
+{
+  "milestone": "H06",
+  "date": "2026-10-03",
+  "milestoneComplete": true,
+  "cyclePoints": 95,
+  "startingRevision": "4fb200cd9b86c1c2eb7033b164609a56208d4009",
+  "recordedRevision": "8f566241a8f7ab126b18f5930b75b25f94c3b3f9",
+  "baseline": "Validated H05 self-contained bundle plus immutable source and complete compiled runtime snapshot before any H06 edits",
+  "tools": {
+    "node": {
+      "path": "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+      "version": "v24.8.0",
+      "sha256": "fd3aa1222fbb439a59723a0ff62ac9d8fec1b337d2f38a499a8bbca5552cab81"
+    },
+    "spago": {
+      "path": "/opt/homebrew/lib/node_modules/spago/bin/bundle.js",
+      "version": "1.0.3",
+      "sha256": "af09821f2fd74948f0a4d05694c4eb3390abbabede3838c65686f26906278eeb"
+    },
+    "purs": {
+      "path": "/Users/0x1/.local/bin/purs",
+      "version": "0.15.16 [development build; commit: 3c8fcfd7a3d440bba487fe9fe059284cffc6e908 DIRTY]",
+      "sha256": "758f82437163403272d9537eb934231f17d6efbe147f6107c276d257643a30d2"
+    },
+    "dotnet": {
+      "path": "/Users/0x1/.dotnet/dotnet",
+      "version": "8.0.423",
+      "sha256": "a80d4e75cd0c97d2057521684b362353d454daff0f556b09747c5b79a7b8409e"
+    }
+  },
+  "compilerBeforeSha256": "8cc32482e7eb290cf9c8d8110e8045a70c45a32cf2e88044af8874fd865535eb",
+  "compilerAfterSha256": "e55d7ccc0a7f6927de34401aab19547fa8b4c28e6571d408b27c2894994743ee",
+  "sharpursProductionSourcesUnchanged": true,
+  "externalDependencyRebuild": {
+    "head": "c9386b4d572503bb7b6d1ce9547ec30dcded2920",
+    "status": "",
+    "runtimeChanges": {
+      "PureScript.Backend.Optimizer.Builder/corefn.json": {
+        "before": "869163cc8b36072caf8b8aa4db39dd827dbc818b7b48f46af4678c55e032b26b",
+        "after": "4dfb13a1d258ad0f45578272320254eea010364b8b0d78ed321444e0ee398d8e"
+      },
+      "PureScript.Backend.Optimizer.Builder/docs.json": {
+        "before": "3c9f893f34df45c5bd5c79087cf332738edcbe743a54a088ddd66982310ea738",
+        "after": "48a3f4166c5d9bbe479de4af82ffa275896354b10bb7882e27891ad6f5255ed8"
+      },
+      "PureScript.Backend.Optimizer.Builder/externs.cbor": {
+        "before": "cd95d8febdaf062ca6ee9022af51bcf1281983e0509ce6a78b7754ac3f4324b8",
+        "after": "58b10acf4415dd870b76597199876fe0d34dc6cb33649a2ad364394235cbb100"
+      },
+      "PureScript.Backend.Optimizer.Builder/index.js": {
+        "before": "77a62a8aa96f44b1bb6dda0d5466d6fc0180a21179b1e87ac53930dd466f2028",
+        "after": "d58757ca65055fce259fcca764636fa84e7f39381068bdc3483ee1568df3b774"
+      },
+      "PureScript.Backend.Optimizer.Builder/index.js.map": {
+        "before": "248123bbc1696d929d03041d230056227acc0733d994b959c0b9c67df5aac81c",
+        "after": "7447c8223130e4a6698ef74017bae9bba27a2a4b361c9cc4300116861fe61775"
+      },
+      "PureScript.Backend.Optimizer.Cache/corefn.json": {
+        "before": "913a84237d986a4ab16bcae21da624ffe759fe75438ae17cc086805b46983695",
+        "after": "6daacf2a470b84fec765df3104d9025bebc1435fd2e52816dba1e7770dd32cca"
+      },
+      "PureScript.Backend.Optimizer.Cache/docs.json": {
+        "before": "36b6f4b9cae558e8ded245dcd617786b3c41cf52a9f75c96242abf46d8c83801",
+        "after": "b7dcbe2fb8bc99c8a21d73b6ba3b190e4c2a86bcde8f1fb9f3ff86c0b956307e"
+      },
+      "PureScript.Backend.Optimizer.Cache/externs.cbor": {
+        "before": "c0fd4c4d8f5b7eaffb5a63bf3a47e650e6c8bff98e42fc258f184f507aa6ff92",
+        "after": "926b6b26b3822d07655203c1def499fc501ce3d775553bb3110364a155c48ff1"
+      },
+      "PureScript.Backend.Optimizer.Cache/foreign.js": {
+        "before": "53a344fa7f08c213be098252b5ffed8b55f7b4d247d0ce36949904c4ab0372f9",
+        "after": "5b3675ac2a4456b7b2cc149480ec8cb15bdcf4dd221b77c30f65f1a42d241566"
+      },
+      "PureScript.Backend.Optimizer.Cache/index.js": {
+        "before": "c9f0174a44b09d02936fe00917709b12849e80b640e3f9d992d745bbc0923fc8",
+        "after": "709e57ce0ba01616ab8e765cdd598e3b33156c752bb31136a908f5340c906014"
+      },
+      "PureScript.Backend.Optimizer.Cache/index.js.map": {
+        "before": "b28bb0aac790482e723341fe314834e544ee6f1414f7729673699db88b6fe721",
+        "after": "9a1d73206c12eb8982898074024480bd791c6e59ad88f073ef7b27cada71861c"
+      },
+      "cache-db.json": {
+        "before": "6891264a2d95fce15097b07740daba0727d35ff3bc8fb45a5a376f8a66a1a686",
+        "after": "b9bc386071f568f657377f8197bff1c7d380a6be4794179482a1da943420242d"
+      }
+    },
+    "sourceHashes": {
+      "PureScript/Backend/Optimizer/Analysis.purs": "074a3c1d7fb4bd1379569713f24df1e4348b46cfb6df1731b07cba09539ebad1",
+      "PureScript/Backend/Optimizer/App.go": "0d6608dd70ee35f83cb1a8e1010ffff55bebc45b5d3006d52ca940b31e34c863",
+      "PureScript/Backend/Optimizer/App.js": "4623771fa7363d9d70b7ca78b297ce4a44df8120261836cf7683170be6eb1d23",
+      "PureScript/Backend/Optimizer/App.purs": "141a5e5ef08af4674ee85276286f51fac2bc38e8efd9e83596c6ac36b5c40b6a",
+      "PureScript/Backend/Optimizer/App.rs": "8da3c1178a312370e3812d7255a0e95105b0982f2f03dbb2d87a36ed66635a23",
+      "PureScript/Backend/Optimizer/BoundedMemo.go": "ad49194ca32b9c5e28d236d77cbec3390de4e34745069948f4713ea038678375",
+      "PureScript/Backend/Optimizer/BoundedMemo.js": "9a687c12c9846dca73b4de256e341cd5cb30e68cd8d51c1cfdbef3a0319f83f5",
+      "PureScript/Backend/Optimizer/BoundedMemo.purs": "8f49b9eac027e1bc417a384747bce50453bdfed50e8a56cb62f043fbe22a2186",
+      "PureScript/Backend/Optimizer/BoundedMemo.rs": "73bafe286a79a0c2d4dfe617dc37c6a0ed9d1b81088c4ea57a9e9de0f075de45",
+      "PureScript/Backend/Optimizer/Builder.purs": "1ad1783a5ba112b2c3a26c82807d7babeb6da5d2c2b634c4478fafd746e0d2a5",
+      "PureScript/Backend/Optimizer/Cache.go": "7de4befda400c1e96ebc081efe41d97487ac7dbfb77e962e3e23e316af73d4a9",
+      "PureScript/Backend/Optimizer/Cache.js": "5b3675ac2a4456b7b2cc149480ec8cb15bdcf4dd221b77c30f65f1a42d241566",
+      "PureScript/Backend/Optimizer/Cache.purs": "3e5fc5cb648991d7a199e42180669005e76717b42b1247e84c5e6ae9fb49699f",
+      "PureScript/Backend/Optimizer/Cache.rs": "b3286532d31efec3359e8ef3aa55fe53bcbff3f10b31ae08f1daf72789cbb174",
+      "PureScript/Backend/Optimizer/Codegen/Tco.purs": "2d635c3e0bc2a1ebc73842634dcc67bb1299903af0113b0f0f877ddaed84005f",
+      "PureScript/Backend/Optimizer/Convert.purs": "260133d6b9c421dc4204032ac25fb5235c84342bbcd54fda94370d68fcdc7ee6",
+      "PureScript/Backend/Optimizer/CoreFn/BindingGroups.purs": "a5400999067bbd3d80890c2fdc0156da79958b0bf71cab53e300fd1af9178cc7",
+      "PureScript/Backend/Optimizer/CoreFn/Json/Text.go": "2d64d5d4efefd1cb58e7c6c95292de241986cf028bfbb07f6d4bf6059522147e",
+      "PureScript/Backend/Optimizer/CoreFn/Json/Text.js": "30f165ae5379eff45e6b6ae2002799bb6a7ec4b9e721817d473921e5acbbae54",
+      "PureScript/Backend/Optimizer/CoreFn/Json/Text.purs": "d26fc5b2fce9cacd355a3911085eee33596943d28952359b70fb4b6e0886cf85",
+      "PureScript/Backend/Optimizer/CoreFn/Json/Text.rs": "1b731b6896fa05d513d72d8ef6d06bf399737737e327ccbb2a99703b5d2f3e3a",
+      "PureScript/Backend/Optimizer/CoreFn/Json.go": "28b010a275094af6487b32e9905cccbdd38d6f767d277fae5a87ebfad4fb5069",
+      "PureScript/Backend/Optimizer/CoreFn/Json.js": "4f9ef829194a29dcf6b7c117b480bff8e3a8dcf2411496bbede9ef934af02fa5",
+      "PureScript/Backend/Optimizer/CoreFn/Json.purs": "a3b883121f247308446196d7f349269719580de3b89d1b9e7165d351022603a4",
+      "PureScript/Backend/Optimizer/CoreFn/Json.rs": "08703c95830b8f5be261d57802f86036129294557a63ab5fa432b908cb8d5e07",
+      "PureScript/Backend/Optimizer/CoreFn/Sort.purs": "8ab446c246b1954016dc18cd4f034290b90be99f5016c50c3939ed9bf133eaa7",
+      "PureScript/Backend/Optimizer/CoreFn/TypeTable.purs": "b6aafa4e3a1b6a0f70d4aa6827e3f4dd6864e252d6f1938331af3698784e8ca3",
+      "PureScript/Backend/Optimizer/CoreFn/Usage.go": "2be03fb02e413cb45337588971bc0fbf048797321563d875631cb30552e27186",
+      "PureScript/Backend/Optimizer/CoreFn/Usage.js": "2289e3874b65414657177f0f5f1cf0edff129942141303fd49b7554c670889c1",
+      "PureScript/Backend/Optimizer/CoreFn/Usage.purs": "ea7d45986bc57d0d9b2e10fd0c465483f595844da852b8de25a76cf45435e273",
+      "PureScript/Backend/Optimizer/CoreFn/Usage.rs": "a7aae88a5717c7415e2e5a9c2db1bb403f089c89b2f724e037405a5c475319ce",
+      "PureScript/Backend/Optimizer/CoreFn/expr.rs": "051fbd8aad2180c09ceb15062c6a09ed1b33e5de043fff4ce5a44e4f64bd1b7d",
+      "PureScript/Backend/Optimizer/CoreFn/ident.rs": "0fa554c641cad751d6ce395082ced1320f9d15d7fe96cdb4513127d63c673f16",
+      "PureScript/Backend/Optimizer/CoreFn/mod.rs": "8980aa85ae14415f63bf94b1c7badb9a435316d6b992d16411abe1832101c988",
+      "PureScript/Backend/Optimizer/CoreFn/module.rs": "a8679f28198843cb28cb290c7bf2e9d9268f7418d08bd0d96f3082a3c3f0a8fe",
+      "PureScript/Backend/Optimizer/CoreFn/pattern.rs": "74338efa21ee00a190680fed13748918d3bbada53d7e9b7d26a6164ec9ece325",
+      "PureScript/Backend/Optimizer/CoreFn/types.rs": "5258daceadd42d8633ed575e463ad711a29257d9d5cbfd87dcd99aaf2c77b83f",
+      "PureScript/Backend/Optimizer/CoreFn.purs": "2c3a157acb568cf00dc2776f0fb8aaeeb39adc14100250e4ac67b93206e1b463",
+      "PureScript/Backend/Optimizer/Directives/Defaults.purs": "8799277cf190864eead0208ead1a29993991fb907d6df178aaf29132aac21468",
+      "PureScript/Backend/Optimizer/Directives.purs": "cfe37edcc3fa097068559d65f740110f45e32e013a20129f0ed91272006a1e9c",
+      "PureScript/Backend/Optimizer/FfiSupport.go": "2b477300185adbdf42a83b5621b8a1f4b6bc9bf8a41f6c8f7b97b6f19307988d",
+      "PureScript/Backend/Optimizer/FfiSupport.js": "1f90f63ba5bad5ae2181546735c27d67c58bab4d2148767a3f44e1d8f3cfd139",
+      "PureScript/Backend/Optimizer/FfiSupport.purs": "c786426fcb9c67dd9302039395334eb5dfc06f4fbe768b3878359249f0c4909e",
+      "PureScript/Backend/Optimizer/FfiSupport.rs": "7bf7985092b4b4f817a40148ec4a01d2558ac2682cffd7b943d795c5413a98c8",
+      "PureScript/Backend/Optimizer/FreeVars.purs": "b070bf284f8c12927deefb4f1aa6e6c2659ccd47a5dde515f3b12041365b935c",
+      "PureScript/Backend/Optimizer/Monomorphize.go": "c13db9d0d92a7894742cdab11a64bf3695d67b82e780593fed83a14bb68cd080",
+      "PureScript/Backend/Optimizer/Monomorphize.js": "a60bdce13c890fc1f630ccc2c71483b8de33d06e8b76cf97fd2042519b170833",
+      "PureScript/Backend/Optimizer/Monomorphize.purs": "a928e668447fa2bad05c3772e6d58f20d6f51a7c26f35b798f80277b79c3f5de",
+      "PureScript/Backend/Optimizer/Monomorphize.rs": "1ec14d45f5d380f7f00ca5de683a15f69a37586bc40e7d8e95a504deb9f01485",
+      "PureScript/Backend/Optimizer/NativeMaps.go": "ed9abc50601c8451eab09e1da5a68dd9c7e72c03516ce5b4097bc5b436c801e8",
+      "PureScript/Backend/Optimizer/NativeMaps.js": "c9b37667cde4a47998e383b9f89796e9e7aafbc69c0dc74e0e87bc61eab68725",
+      "PureScript/Backend/Optimizer/NativeMaps.purs": "ee794d88344e4fc9300af57b2f0974db0293bf9323d22d58bcec828b03195269",
+      "PureScript/Backend/Optimizer/NativeMaps.rs": "49238b35faf75258fa05378f115ade2865c7bf077a63638230ce4398b94f4799",
+      "PureScript/Backend/Optimizer/Reachability.purs": "fc755e09648652308cc6f785610d6a6ef1946ff3f779419872953bed7320a3e8",
+      "PureScript/Backend/Optimizer/Semantics/Foreign.purs": "870d95c93ef996cedf1411fc9da30d6b4b11a27bd62d17fa0e70fbb95cb60dae",
+      "PureScript/Backend/Optimizer/Semantics.purs": "b9ea1f12929d1f65eb017fa3adb2dab9d2130d329e05ec066c82c5b93ee26e5a",
+      "PureScript/Backend/Optimizer/Substitute.purs": "7fc0140a115ba6550c8956d3986063901ca0fe428ba5b34d307a2a7eb42d8cdc",
+      "PureScript/Backend/Optimizer/Syntax.purs": "1b7e4f9d86b28cbd024d8a945b8f45886d55f505b73bca484a5440512affb643",
+      "PureScript/Backend/Optimizer/Tracer/Printer.purs": "8d70264979447fd54156d3a35739c8cf3dcefcd1338bac93d0c3ccdfc2b37fea",
+      "PureScript/Backend/Optimizer/TypeSubstitution.purs": "87f803e9b5983cafeceff509ed4e3eadf6e32bb264cb908fafdab1eeea22de02",
+      "PureScript/Backend/Optimizer/Utils.purs": "55c5deef32fa9c21167f1c3c8981b13769035a7f44878de56dc66d9067a64874",
+      "PureScript/Backend/Optimizer/lib.rs": "03a63e44b769ab917719800a9e68014f447a90385a7b1aaa4c1754bee9f28ee2",
+      "PureScript/Backend/Optimizer/main.rs": "87bbe4d96322fb3cde5b2ccb3b36d3e5db8f212b0d23444e3f2986196105ee90",
+      "PureScript/Backend/Optimizer/syntax.rs": "9f350a620905f4f18da13eb50818be89ebbc312ca5ac82dc010a2e2aded7e258"
+    },
+    "compilerBeforeSha256": "8cc32482e7eb290cf9c8d8110e8045a70c45a32cf2e88044af8874fd865535eb",
+    "compilerAfterSha256": "e55d7ccc0a7f6927de34401aab19547fa8b4c28e6571d408b27c2894994743ee"
+  },
+  "historicalConstructorAdapterUnchanged": true,
+  "changedSinceSnapshot": [
+    "docs/testing.md",
+    "package.json",
+    "tests/adt-interop.mjs",
+    "tests/adt-kernel.mjs",
+    "tests/adt-multi.mjs",
+    "tests/adt-unary.mjs",
+    "tests/case-patterns.mjs",
+    "tests/constructor-typeapp.mjs",
+    "tests/direct-call.mjs",
+    "tests/int-arithmetic.mjs",
+    "tests/int-comparison.mjs",
+    "tests/local-int-kernel.mjs",
+    "tests/printer.mjs",
+    "tests/recursion.mjs",
+    "tests/selection.mjs",
+    "tests/thunk-kernel.mjs"
+  ],
+  "addedSources": [
+    "tests/fixture-support.mjs",
+    "tests/fixtures/adt-interop/Foreign.fs",
+    "tests/fixtures/adt-interop/Runtime.fs",
+    "tests/fixtures/adt-kernel/Runtime.fs",
+    "tests/fixtures/adt-multi/Runtime.fs",
+    "tests/fixtures/adt-multi/Support.fs",
+    "tests/fixtures/adt-unary/Runtime.fs",
+    "tests/fixtures/case-patterns/Runtime.fs",
+    "tests/fixtures/constructor-typeapp/Runtime.fs",
+    "tests/fixtures/constructor-typeapp/Support.fs",
+    "tests/fixtures/direct-call/Runtime.fs",
+    "tests/fixtures/direct-call/Support.fs",
+    "tests/fixtures/int-arithmetic/Runtime.fs",
+    "tests/fixtures/int-arithmetic/Support.fs",
+    "tests/fixtures/int-comparison/Runtime.fs",
+    "tests/fixtures/int-comparison/Support.fs",
+    "tests/fixtures/local-int-kernel/Runtime.fs",
+    "tests/fixtures/local-int-kernel/Support.fs",
+    "tests/fixtures/printer/Support.fs",
+    "tests/fixtures/recursion/Runtime.fs",
+    "tests/fixtures/thunk-kernel/Runtime.fs",
+    "tests/fixtures/thunk-kernel/Support.fs",
+    "tests/support/ast.mjs",
+    "tests/support/fsharp.mjs"
+  ],
+  "sourceHashes": {
+    ".gitattributes": "ff3f7af69cd90810a6620cee01e34cbd955e9b4915f45e1ad8aa5252d02e6431",
+    ".gitignore": "183ac3c8c6b1a1c8456da7d98d29292bf5b4131f1f3dcf93c5b8d62dd2834ed1",
+    "LICENSE": "12d3eee5ac3d63188ac357e466670b25b92b384e63a5d6cd89bf5a78931ad51e",
+    "asset/logo.dark.png": "1b3c0306b94d0e880d0c5fb6b6e3a07eaa113280ae525e5bf6e81cea80cad44d",
+    "asset/logo.white.png": "2b2c4558860e00cb8acfa40d91a1e214744346455dc03633ad36c35079348726",
+    "bak/spago.d/fs/p/arrays/src/Data/Array/NonEmpty/Internal.fs": "e1c89f3ce6d1421aaad2dc63262efa81652e1565893408a1b6a25e449b5292d5",
+    "bak/spago.d/fs/p/arrays/src/Data/Array/ST/Partial.fs": "00caf24671402d58e2494d8bafbafb3da29f036eff86f45f1e32899b93e09bc4",
+    "bak/spago.d/fs/p/arrays/src/Data/Array/ST.fs": "0d98e746508acf2ea861aa56614b80bee661e5006cd5be69bf475083d85e5982",
+    "bak/spago.d/fs/p/arrays/src/Data/Array.fs": "36997e0f78a2ac043970c76f8f226c10afd877aff6d58bf135b5beccc1dca47a",
+    "bak/spago.d/fs/p/arrays/src/Data/FunctorWithIndex.fs": "1c3fcd89631d598685769c777ba1a609b5ab52ccab87b71183c6e020ae950f56",
+    "bak/spago.d/fs/p/assert/src/Test/Assert.fs": "d77af8088ec6814a7c8a580c3789dd253370232145dcb0b1ad71550f9b68206c",
+    "bak/spago.d/fs/p/control/src/Control/Extend.fs": "dabcdb74a2fd42860b9f7daffcac7e6a40cf6f7b593bcd521b67311ec61b9b09",
+    "bak/spago.d/fs/p/effect/src/Effect/Unsafe.fs": "112e6fd901e3a4087d565ab8701997326decf8508df5dffea31ccb3fe46c2255",
+    "bak/spago.d/fs/p/enums/src/Data/Enum.fs": "8d1f45e2af0d4509b2f44c42332904621d88ff718a5732ed549c568cd86b6c68",
+    "bak/spago.d/fs/p/exceptions/src/Effect/Exception.fs": "7e611b6876fb43e184dec01e7cb0c7f3e8d5511569babbe16aa45ea9a778ad30",
+    "bak/spago.d/fs/p/foldable-traversable/src/Data/Foldable.fs": "20f6007f1f6d2d23a9c4e8363e3dedb2ed0c9486e535837b750b46f071c03852",
+    "bak/spago.d/fs/p/foldable-traversable/src/Data/Traversable.fs": "0342a34a2fa85d2f0cee682df9b3e52fb021d5748c9324ea747c214ec97ec68a",
+    "bak/spago.d/fs/p/foreign-object/src/Foreign/Object/ST.fs": "3d38311110c1e0714eb0c86702530d9552e41a6e5d07644ac832c51556ba43c3",
+    "bak/spago.d/fs/p/foreign-object/src/Foreign/Object.fs": "37b76c68b1ffac234219b0f4c60afa8007fa786e3e0fe4647ad4da2f5e649247",
+    "bak/spago.d/fs/p/functions/src/Data/Function/Uncurried.fs": "8c529a8cc895e505d16210ca79adface49b729e254770e850885aec1b534cfef",
+    "bak/spago.d/fs/p/integers/src/Data/Int/Bits.fs": "caebab8c09b3ea75040bf9f2e8e67963eb9f123066cd6f24713171e13309c488",
+    "bak/spago.d/fs/p/integers/src/Data/Int.fs": "12ee85817f7cdde4c28c86c80034ba726e55c23482178c4f644ea7b8f75c9f75",
+    "bak/spago.d/fs/p/lazy/src/Data/Lazy.fs": "df3fe2c7a471ce5411a8c84a4facf0f14518ae5762af6f587e1b5035bc524b49",
+    "bak/spago.d/fs/p/numbers/src/Data/Number/Format.fs": "2978f46a4aeb9691036af2d2de48312d930f088fcd4086442ecfdc059918b505",
+    "bak/spago.d/fs/p/numbers/src/Data/Number.fs": "d0070be1801289b51baf598d79dace1e7b485f49b502ba464539745705d46b6e",
+    "bak/spago.d/fs/p/record/src/Record/Builder.fs": "65597039e9e14e779e69f65411e2c02f45c612b8926b748f6a59cd67b61478f3",
+    "bak/spago.d/fs/p/record/src/Record/Unsafe/Union.fs": "2717c80543d7758f0d5312fc27676f6b73bc56bec483b15dfebb66808a1453b2",
+    "bak/spago.d/fs/p/record/src/Record/Unsafe.fs": "6c978baf761b74d923467d52c8dc2d548f21107677caacb1ce70b35ddce51e3c",
+    "bak/spago.d/fs/p/src/Control/Extend.fs": "8b2a764fee9fc30491ba418f4c6dbc21450acf8d361df3467fa6c461d52ad751",
+    "bak/spago.d/fs/p/st/src/Control/Monad/ST/Internal.fs": "2a6bc0e519e4f094f8a2eabe6f585f7ec9947addd50301049ce96f3699a6a0e1",
+    "bak/spago.d/fs/p/st/src/Control/Monad/ST/Uncurried.fs": "81ab5af40af35dce479d76b3a1269add6ed069d15d0006603b406a6ff7a9875d",
+    "bak/spago.d/fs/p/strings/src/Data/String/CodePoints.fs": "2de993208ff25f39da6166bbf396433fa8aeb83b3460528742de75f1ead6b251",
+    "bak/spago.d/fs/p/strings/src/Data/String/CodeUnits.fs": "a2a5a396ffbf36898a3736cd7b505808be40862861549894c627b0e780f4f2e4",
+    "bak/spago.d/fs/p/strings/src/Data/String/Common.fs": "8ac0f4e387454478e664ca465eaef045047921b27a6aee2deda13c9008066ab6",
+    "bak/spago.d/fs/p/strings/src/Data/String/Regex.fs": "8d7e49f651e968fac8f6b5703e4fa0d0fe095882427674bf93f09c59b2f58664",
+    "bak/spago.d/fs/p/strings/src/Data/String/Unsafe.fs": "13fbe14c02c60ed73b2bb7656411e66a337bfe36dc5ee9097eba3381325bed0a",
+    "bak/spago.d/fs/p/unfoldable/src/Data/Unfoldable.fs": "fb141e4f2ac81ea3dbe826e4f89b96debd01f6007285ff496c2eca435a96e695",
+    "bak/spago.d/fs/p/unfoldable/src/Data/Unfoldable1.fs": "056c29b23670a02c6d9f21701dbf910eb2825b970e8c52b625d45a75a31daf11",
+    "bin/modtest": "8619314f2f0afa5e434a10996141391a44196970df5faaa3d0ba742fc8368551",
+    "bin/pkg": "5dc567a08df88bcc4409b65ef4697c9b73a2b148b10dc2b22f70f3a9b3ae6a8c",
+    "bin/sharpurs": "3e84ed2bc7e785af22716ddaccdbcd2283432a4889a939ce135acd26c326c9c9",
+    "bin/test": "99b66f5e713f893b9e6b3fd02c6bce734a00893ebced2146ce2808b4a778ac9f",
+    "package-lock.json": "99f5a73dc486474d0c3c6aa558746d5b3bba4d2d3a8b28fd060ba3e5dc0e9ef0",
+    "package.json": "b41f5f06c3690b086e072a5388781675e906d8d230dfbb8fc8ec459f8dd255d3",
+    "scripts/compare-generation.mjs": "2bc10a61b2997d34bccea92abddfebf4ab3b61cae9e8be56d6850f852da05c0c",
+    "scripts/support/generation.mjs": "79e17919c7c067cb0b5080334f45dbc921f3f3a73008d7ccb3e6e68c5359f8ca",
+    "scripts/support/process.mjs": "441fab191403f05673347c8b5a348957e3dd8fcb75f83235c12e83e3ddf10785",
+    "spago.lock": "7155cbb11f0ebad6708e24277d14fbfac3bb368177afdf6b358f65163a6dfec1",
+    "spago.yaml": "61e6bf54c56eb1fb6d74c84472f88800ca223fd546e9c619cf4535528b72b666",
+    "src/Main.purs": "582f2e7d17bb05a8fb7c1b25828992b0b6e4bd09dfb2e9353ee5010b3a641376",
+    "src/Sharpurs/AdtInterop.purs": "b0d054613ea4e8ffcfcfcdc169a5717e1b8668da4d0258c2bcae1c172e073e24",
+    "src/Sharpurs/AdtKernel/Analysis.purs": "05703927dc81b4a49ed6a5671c8a7be0f0d164cff440bc702d58ddf293c90b29",
+    "src/Sharpurs/AdtKernel/Emit.purs": "e9044479c7144f8dff3c3d99d16411fedd419214d3f74f3a18dfe897ad64245d",
+    "src/Sharpurs/AdtKernel/Lower.purs": "520aaf54821d5d201eb7fddca45e67af44e1a82d9ad1e12fa82accd89177677b",
+    "src/Sharpurs/AdtKernel.purs": "4051a42af938e651c2dd4f4b98fe2b58c137a4ad9cb36d4b559258ec3a703022",
+    "src/Sharpurs/AdtLayout.purs": "75d3f796e06f2dd96c767f84cbfaf4d81b93806a3703a0263bf04a4adc5a8098",
+    "src/Sharpurs/Analysis/Source.purs": "dc53ec20fc72b29aa830e26363f6b53d36caa0099e6fe3b01f99fe66e8795b7b",
+    "src/Sharpurs/CLI.purs": "f424c5438c4a483736fb09d9d56c87f614b9e9b4b289d0f598f14c5b44d0bf24",
+    "src/Sharpurs/CodeGen/Boxed.purs": "ea9fd50a986aec4691e7209dd633c01870a3854f491016f3db5108d8853ad15c",
+    "src/Sharpurs/CodeGen/Case.purs": "2ddb5416998bbb9144869d10c35728411dfcbb11a2c8f10889bba9fe81d70b6e",
+    "src/Sharpurs/CodeGen/Context.purs": "02ef8b6876ed899c312c2d60f9dde09505a3071a4b00bcddf3c0c350e575dcc3",
+    "src/Sharpurs/CodeGen/Pattern.purs": "bd351ad1ca046e290c281035d4fe39b54bbf04d3bfdcee37e69b53f5acc930f3",
+    "src/Sharpurs/CodeGen/Selection.purs": "3a1794c6095cd18fd1c0395de54de22d537df7df1f03025b4477b5789615ef18",
+    "src/Sharpurs/CodeGen.purs": "d80aeba1ed0c955f76ca13cdaf92ff57de4a4accb525c3a8025664bc4ae85352",
+    "src/Sharpurs/ConstructorCall.purs": "46309eeb5139d6c9d18909d41d1f8ea8602133655ceb7adc17b94e9b120473c5",
+    "src/Sharpurs/DirectCall.purs": "29f982cb18ecc8fbe1ae8d577c2d047d437ab83fda95615a198fae8597aa2ba9",
+    "src/Sharpurs/Ffi.purs": "68d2a074c8237edf9f3a39a7ba8a346ea9cc637568a56b44456ef4291ff55db9",
+    "src/Sharpurs/FfiSupport.js": "6d0c0c2b5c5d63dbab21e3d54ead78da7ccf42ec20465971823d581eee728088",
+    "src/Sharpurs/FfiSupport.purs": "b8660c2576b60b58738580778cbe8ed27f4cda7423f1559e4ade5225e700ab05",
+    "src/Sharpurs/FsAst.js": "ba0fd1ddefbbeaebfef2c11cceaacc9ed8c98033379dec9e0edf0736f6e7b2dc",
+    "src/Sharpurs/FsAst.purs": "2cf92b8e1c58110982f61bbe8cdc6462e5821a853a74cd4ae2058e14de6e08c6",
+    "src/Sharpurs/IntArithmetic.purs": "c4660cd17e472532fd8799f6fae0e6d663c3b35d843f1fb91e2a8cdef31e727b",
+    "src/Sharpurs/IntComparison.purs": "916ea540206270b414928f6cd1bdf65e5f4a7bd7c9d554540ba58e159535bf00",
+    "src/Sharpurs/IntKernel/CodeGen.purs": "75ec424b5fabd35929be2c879a074699f9edf981607cfe62c699d984db828189",
+    "src/Sharpurs/IntKernel.purs": "12e73bff3e66afc65ec8e894185b01c938f009e0a8e29530c435c516107cf3f5",
+    "src/Sharpurs/Metrics.js": "7f8f65209271a6ae4691ef77d251bce748c37256e0743bf9f1243ecc4f98ae22",
+    "src/Sharpurs/Metrics.purs": "03ef85b1a77e7b9e3bbe3da1fc75ca350731d2f8f1267a1686e69bce777b9716",
+    "src/Sharpurs/Names.purs": "4a99c422ae8574e5920a1f08ca793feee854cdab655ae133da8eb405606b1813",
+    "src/Sharpurs/Optimized.purs": "bc20ed06aa214ad656036b7889a8da9ec2bcd6c18bfd59ee6a44cbcb4d68ed1c",
+    "src/Sharpurs/Printer/Layout.js": "0880e59ba4fe09da2706a6d1603b7832d29a843c04a2681564b39e65260ae754",
+    "src/Sharpurs/Printer/Layout.purs": "23df3cfc84ced0a4aa8d050ed98303cc3b79e7e61b25c53b8000a24c4058056b",
+    "src/Sharpurs/Printer.purs": "a41feeef86d227ae40100b02c407da940e1081186da3114c5fd3c8a5c0417362",
+    "src/Sharpurs/Project/FileSystem.js": "92559655be015d0e20b82f30f6806f6adfd77f32fefd3ce23c5cef2816a93625",
+    "src/Sharpurs/Project/FileSystem.purs": "15444e3978f51fe9ba9e0031ae6a500d9f9fb899073f6938dadb8be3384787bf",
+    "src/Sharpurs/Project.purs": "20fae55627da7499ff29dfa8d873cc27cc6a05ed7b657f52c10b955a72dbbbb6",
+    "src/Sharpurs/Runtime.purs": "b8c26aadeafe29859d7b1373439852f7ad30957c7d8c9c5a1e10a80bb783999b",
+    "src/Sharpurs/ThunkKernel/Analysis.purs": "b1814fcea54a46f243707ea7d4a9eaa7e754f5e12c84faf14f2a7a852ef64f03",
+    "src/Sharpurs/ThunkKernel/Call.purs": "dbc4763b216b82870c61036a3c7dc9c5dddc01b8e5b64c778fad9bbcfe67d34a",
+    "src/Sharpurs/ThunkKernel/Emit.purs": "c9e4676163aa4364f0278acb16649e576a281b3b59da9233f6e51f978333ac53",
+    "src/Sharpurs/ThunkKernel/Helpers.purs": "a951f182302a5568ad765d77c1616f4d7c4ef28804ab890c1691d5e8459f0db2",
+    "src/Sharpurs/ThunkKernel/Lower.purs": "1f43944af3127091d94628f23f1d6a770ed152c5791bcd9050022b2d28403461",
+    "src/Sharpurs/ThunkKernel.purs": "1141a68b8d9ab42bfde3931f9f772d83cd17e817c42af2110ccc67d9b44d3229",
+    "test/Main.purs": "c02dc8a1593418147347f11ee5a26f33d9c3691bad5081d13348bd97b9544d46",
+    "tests/adt-interop.mjs": "ee5ed9f795b71393269d656cf8f19f1aaafe3277451e4ed9cea7ca330d988aa1",
+    "tests/adt-kernel.mjs": "37b794da9386ceec4cf203940db67cdc07dbdbccce5c7653d7e73b4d306e68d3",
+    "tests/adt-lowering.mjs": "f3d351a3c120ed8fd335b5d3c56f4baa9f079913d69ff1617dde51585e41c116",
+    "tests/adt-multi.mjs": "0bc3384642a771a3316f83f68870865a300e83e901fdb52073ce547e99a71610",
+    "tests/adt-unary.mjs": "3f282de6ab2e0f6cd95cbce6928f55165b19481e6506b3ce1970a6c0857613a3",
+    "tests/case-patterns.mjs": "d2a195fe5b37b5efc6a8c4951582b434fd91625b70df6049d99b8b42923bcac0",
+    "tests/cli.mjs": "6dc13cd89e8a9bb6c8339eb4532cc3ada2490c44f342ad5f68f2b4b839f7bc35",
+    "tests/constructor-typeapp.mjs": "14451e3ebb0bbf81cda8a2f810588fb17b6787bb6dec3810025f2eb71414971f",
+    "tests/direct-call.mjs": "2db23d48f650f26b5f78f00a770dab46b62a1c218e7b5d990cb8c865510b7f17",
+    "tests/ffi-support.fsx": "d3389cc451a445e0c1c0769c6ca7ee4f2d4de53cc42af36c61d3f16a8c549c46",
+    "tests/ffi-support.mjs": "4a2142d5f656607fe6ac8f5dbe31d5cbd9a267e146ba44acd3e7ed2bff786f9e",
+    "tests/fixture-support.mjs": "457e55b86230eddbee2d8f96ed6426607fb3173ac0f86598a8d3026120890108",
+    "tests/fixtures/AdtConsumer.purs": "1224e4c20e95e457420ba79f6ffa2aef8e76bf74d1db37b7a8db5392d40dfad1",
+    "tests/fixtures/AdtPilot.purs": "835a8adefcf733302cbacb45125061c8e0fac01e3ec3bea43213c08d178bed01",
+    "tests/fixtures/AdtUnary.purs": "6ed3b1d5b7760c1a5e0e3da9a51d6a17137ac74ca9d305326285617af651f488",
+    "tests/fixtures/IntCompare.purs": "ae763298ae9222832161ef1099e203797c2a865d990eda59ee950355bb1bb3a9",
+    "tests/fixtures/adt-interop/Foreign.fs": "0054a93c41a52d2810e92979e3c8f38e2d72a67327803954d267d7055687687e",
+    "tests/fixtures/adt-interop/Runtime.fs": "964548021c87996f0c9fb0221c6cc2d27cb0415eed3cff2d6240f9361f774f92",
+    "tests/fixtures/adt-kernel/Runtime.fs": "e960b78e4d068c265b72b4e5b5a9a37579c0b42b9e1850b28969d7b667ee6881",
+    "tests/fixtures/adt-lowering/Assertions.fsx": "46d26ad86620d01f962c42dc9ecb747859fac6ec541f78e8d5f39895b19e923e",
+    "tests/fixtures/adt-lowering/Support.fs": "09bddcb4af2b37f8392ef2d63dd7aa10c69faae970f09e2f10c69e4e3bd014e7",
+    "tests/fixtures/adt-multi/AdtMulti.purs": "487c3ce058fa7943f3d84f33961e61faf678be71164db3569b2618803200097e",
+    "tests/fixtures/adt-multi/AdtMultiConsumer.js": "768a308df18225a71c1e6a44d0ed8f1839c917a417f4a83b644cf4fbf0528a1c",
+    "tests/fixtures/adt-multi/AdtMultiConsumer.purs": "7087f9c5edacf1ef2db5e6bdb95eb55e08fb5c62dd6dee0a4856c05a0fe73cb2",
+    "tests/fixtures/adt-multi/AdtMultiExternal.purs": "229d9d53e0af27cd7ee4a4e39fd072a03ad98085d69932b3b16f2c64f3919c77",
+    "tests/fixtures/adt-multi/Runtime.fs": "26b2e20d83f6db1adf4de8dccd86a6a43f2bb6541abc9e239e13967f1cf77d77",
+    "tests/fixtures/adt-multi/Support.fs": "d8981edff3e58e0ef24d8a910e93daaf7a72faddaabb20e01c0c37af31cc710c",
+    "tests/fixtures/adt-unary/Runtime.fs": "c58280a56f8d4524cf0eac2c95252ab2a4a98586fb46d0fde5edf2ce9e8b0078",
+    "tests/fixtures/case-patterns/CasePatterns.js": "8d20bf4d6445db8f6ad77cd1c04a2b5082f180490fee3756f5aea569636503de",
+    "tests/fixtures/case-patterns/CasePatterns.purs": "da1297b8e74eed6b3448c02df6f77af3312ed9ac9477d2a7988317020b98b3f6",
+    "tests/fixtures/case-patterns/Runtime.fs": "7a9af157fd7f6d0d111120339abfd721086409909ee55948109c13e11c29fd1e",
+    "tests/fixtures/cli/Entry.purs": "806964c0518e620b70877528a58d9f3170fe1bfae2b9cd0a5b4b52780b034a7c",
+    "tests/fixtures/cli/Main.fs": "451e49ac7cdefbcb74754531962de332701d0c738241140ed41b0a6038c05215",
+    "tests/fixtures/cli/Main.purs": "f8823f6f79ba2b3c05f81d9a56b96bab72385519f7b5938df202535d70036f5d",
+    "tests/fixtures/cli/Selected.fs": "6861d00b58013be18fc2754243f1f357ee3c19a579231f94fa6b21ee32f67a99",
+    "tests/fixtures/cli/Truncated.fs": "3aede00170aadee68bd5b06f273f8aac06546fde6c99b160a786ec124a4038e6",
+    "tests/fixtures/constructor-typeapp/ConstructorImported.purs": "b7cfacc01bc9eeb5d1d1526accd3dd25925b921b2a39b16864c4b6910efe6599",
+    "tests/fixtures/constructor-typeapp/ConstructorNative.purs": "f6158c1fd4a5b3eaca6e59f354780f2242da7d830718ba1f59ea72156808aac9",
+    "tests/fixtures/constructor-typeapp/ConstructorTypeApp.js": "2cf9fafb4634704c5dbc9a5b7f1d59c12e14303acc2bc24f609c07383d0abc5d",
+    "tests/fixtures/constructor-typeapp/ConstructorTypeApp.purs": "6eb09f16ff19a4db8a09a9b6eedf59aed047e88bfbd202256852bd52776cf7a4",
+    "tests/fixtures/constructor-typeapp/Runtime.fs": "6a14ed3c8b85ce93e8421ecc35c15375748b0acd7a5fdbebf60df5742f298ea7",
+    "tests/fixtures/constructor-typeapp/Support.fs": "3239ceb25328f4110d80ee474232cf446ea0f27ea9b5abe767349ae08c237160",
+    "tests/fixtures/direct-call/DirectCall.js": "a65c966f2e93e9ab31828f2a69a09c443d4005b4d06618e840f59769171a3750",
+    "tests/fixtures/direct-call/DirectCall.purs": "194c83e59ec9e796b23672fbbf49f341ed878b066814590cfb72a9d8bb86ba10",
+    "tests/fixtures/direct-call/DirectRemote.purs": "8f9c24cba67992a68ec892a8b3210bd421806876a198ad7f46efcec0f9f4d3f1",
+    "tests/fixtures/direct-call/Runtime.fs": "4cde184f733e8f94866a18a9c749f508397b933c0b2fd2f5bb9ecedc156e34ab",
+    "tests/fixtures/direct-call/Support.fs": "4a8d9fd459c85fa374fd77b314785475aad8ab33394aa2179abc8369e91d15c8",
+    "tests/fixtures/ffi-support/Both.cs": "53f62df9b10cbae301fa8e898c39cfbdcbcfdbdab4304c6a8e81f39d77c1f0d0",
+    "tests/fixtures/ffi-support/Both.fs": "5e2b18635118466e09f899ccda594362959eeb121c78850ad405f76c9cd7bf8f",
+    "tests/fixtures/ffi-support/Csharp.cs": "3daa2f143230448a4b7fd0c308f6e7ea4a78c272edc9194bc5d28403adfcf791",
+    "tests/fixtures/ffi-support/Fsharp.fs": "d17c6fdd87618caedbd97565ab9fea7bc46a08d048bd6e94625ea6e2fb7808c6",
+    "tests/fixtures/int-arithmetic/IntArithmetic.js": "d3bfa995147f11813706729c5c69b544e2dfed05623dafc768c7317acb3afdbf",
+    "tests/fixtures/int-arithmetic/IntArithmetic.purs": "1ae36040274786ad8dc8098bbfaec0695c3fbdccda450320c8289fe88497202c",
+    "tests/fixtures/int-arithmetic/Runtime.fs": "9c1c85e3db98d04812ebf56e4e8a04c77d9a88882052d74125d8a4cce8d50e4c",
+    "tests/fixtures/int-arithmetic/Support.fs": "7b6889593afccb2393dc42e560b0656e33e55940e27c665557ba1e8d38987f4f",
+    "tests/fixtures/int-comparison/Runtime.fs": "9175eb8ec25a1c9c3e3bd968bdc360841ee401ae3809efa7a952da1a23756a2d",
+    "tests/fixtures/int-comparison/Support.fs": "fe1050f6507297964a642e9ac3dc2789c1ba178b840056c08b7d165d7ba17bf4",
+    "tests/fixtures/local-int-kernel/Runtime.fs": "b97f4de584877640de2ef9a347f47c9d55f49197d400140213149aa48231b871",
+    "tests/fixtures/local-int-kernel/Support.fs": "a2ed384e0f935918f3e786332347d9445cf31f762fddadb70bd1248057a1154c",
+    "tests/fixtures/names/Csharp.cs": "42515f9765f58a693de84909ab95ba7f4f25552fce33c43c432e46f54287d985",
+    "tests/fixtures/names/Csharp.purs": "f3a7b90ae243f9bdab68d9b13b465de32dabdcdb8f4cb0d3dcca8a2a8e681b01",
+    "tests/fixtures/names/Entry.fs": "22f45333008b2dfb07875bfc26f4b68417ff55bd67112d0ff73a3650af036e0e",
+    "tests/fixtures/names/Entry.purs": "6569bf3bf19e3180b8c943f95bd645c728a459b11388dd149d53bed28b85b7bf",
+    "tests/fixtures/names/Missing.purs": "8b8d653165ef0756aeef7ab04e3586ee6542e7a4064b0469203c3eaaaf4b9a0d",
+    "tests/fixtures/names/Native.purs": "4cce5fc13f345114081b12b537be930e853ceb797b3f499423e602c4a627a237",
+    "tests/fixtures/names/Records.purs": "39fbb93be2ff77ae3a2895af242dc3b5bb189ca5bd3ec6f9c738252b38a66fc2",
+    "tests/fixtures/names/Types.purs": "e4d2d4ec2d814f4cbfdc6805ede16d555eb763f0ba1e760d8acc089708fd49c2",
+    "tests/fixtures/names/Values.fs": "9e3c49d18908d6b0aa395ae2b2883be207a1f5728bc35caa7fa9f4f3f6ccc92a",
+    "tests/fixtures/names/Values.purs": "804479b546d36295c3bb0c0a536b020233f1c470db7510222de57474577b144c",
+    "tests/fixtures/printer/Support.fs": "6b25b9cc8e0855c87648212e2efc5131d3c0f746818e3ba3635ebd79bd77c4a7",
+    "tests/fixtures/project/Alpha.cs": "10554290d0c067036111f667a27f2148ba135adf6bb1002ac7f70c0702f99ae9",
+    "tests/fixtures/project/Alpha.purs": "e73c8c3bfa83860e8f2c88ac0ed1bca34e433b958ef53c287aa559d326313e8e",
+    "tests/fixtures/project/Main.fs": "f513854244dd2217d37ff0c177721765d1b0e81796f1fc70c5e231aea75be55c",
+    "tests/fixtures/project/Main.purs": "034842fe5112589e7f5f54da40d6f42c138fc6382d2ef3850cda2a1ab31a06d2",
+    "tests/fixtures/project/Removed.cs": "09e6e321453eb7be531c513f7dfe5845259073767c2825ff3e22c41b683f1a6d",
+    "tests/fixtures/project/Removed.purs": "3c1c570328f73792a2213070f5dbcf85a143b0363fd4fc0482611fa1f44848f5",
+    "tests/fixtures/project/Zebra.cs": "45030777d543c292026e3ae9c813d0f4d7b9e8e367f45b8f240a3c384f00eb4e",
+    "tests/fixtures/project/Zebra.purs": "f48e5c36d211d4ecdb556cdc05cef5cdc4450e63304b7caed7c295c29e54f2bc",
+    "tests/fixtures/project/application/Application.fsproj": "43a4e66865dcc58adedc939c1a9617e13389510afdb9b55368d793e3426eaa55",
+    "tests/fixtures/project/application/Value.fs": "d70c4470e81773a28a3063feb70b72e41840253a1cdbe97c4170ab13a5117f9b",
+    "tests/fixtures/project/fsharp/Alpha.fs": "93479e3f2f8fea6c09c0a21f70c56628c7e93066af35c332d017ac26bfeeb846",
+    "tests/fixtures/project/fsharp/Zebra.fs": "d1bb918c615b924ae07ae11e2d6cbaa9f0511fa37982054a46a3983f8fd3c9d5",
+    "tests/fixtures/project/sharp.packages.props": "82e40405fcafdd6a307ecb40a9a6da96f0af06268ce5afb7ff85a7ac95e5bd89",
+    "tests/fixtures/recursion/Recursion.js": "30605b020af73d01fa2523624111fc51e5d1171176538a3c32ddf81fbd54f9c8",
+    "tests/fixtures/recursion/Recursion.purs": "03cf8ecb528e971e54c932ec08b08319d4a8d51414c518c6e1e29a8d400a3cdd",
+    "tests/fixtures/recursion/Runtime.fs": "c47ccc5595411294c6f62766c6c663ed007f33f26ef18dd679d19e89c224664c",
+    "tests/fixtures/thunk-kernel/Runtime.fs": "1af294441746e9c839f53c97d1e32590040bec890ecb0c91394ddef3476acf92",
+    "tests/fixtures/thunk-kernel/Support.fs": "b7eec7a0be853ddf97b3c12847284289cf4333c696c8b97245c3cdfcd81901b2",
+    "tests/fixtures/thunk-kernel/ThunkExternal.js": "7e13dc0e6499be611f2dbd754a24b9fb0c040b34bc7a97f200a168682d7310f5",
+    "tests/fixtures/thunk-kernel/ThunkExternal.purs": "002a88be88516ecc1387d36f1d2f4a290aa8d8e2dc1b5c898b27c7991f6be2c7",
+    "tests/fixtures/thunk-kernel/TypedThunks.purs": "eb98ab0e7951a5d460e3dd816b521efbc11aa23e3fa92c47706285fc81e58d82",
+    "tests/int-arithmetic.mjs": "d9cb84a7188d3b692567c5f4abef8ca2a0e5bfaa07ba3ebefdbb4b92d70aa366",
+    "tests/int-comparison.mjs": "6e760341c1c3b6fefdf569c227658993dc47aeccb7db0332dd07c4ed7169c022",
+    "tests/int-kernel.fsx": "f3cbdb2dfc72d3a6db80b2a396c597280e7d68affbc9a36b55d0186776821084",
+    "tests/int-kernel.mjs": "04d906493934b856da9e0896e1d4c20b0c8f7e960aa543a3891bf9e99667dd32",
+    "tests/local-int-kernel.mjs": "a385a2b07dba98d35fbc748476d0f5ab6042074b71515ab153f7d0cc09d7f8ac",
+    "tests/names.mjs": "2663564730a9477b84e16e2520e97eab8bfb48b98fc5c372fcdc6249d9c3ca16",
+    "tests/passing/1110.purs": "c8708719dfdbbd15f9bc780254fa2c70867a10bd24b440f8d4a8905ab7633f26",
+    "tests/passing/1185.purs": "5974b18b2141866eaf9f5b6f9bd829697f9bffd2909f34fe1c7f34e0285f0360",
+    "tests/passing/1335.purs": "9039dc78078ece1aa1b3252c234ee178bd338765913cab34662b87fe49df6d5e",
+    "tests/passing/1570.purs": "446d1c215b3a757ac95d2c9cf98c8af2d52756093714d2f544094a14236f0ac9",
+    "tests/passing/1664.purs": "35565e1d0e470fb8401dc68f4f5fbc261962d01fcc320a8a2872a9667217b5fc",
+    "tests/passing/1697.purs": "fb3f42eaa6cc17beee6f0c1b3023472749cee43da58d03cdbb701fd9baa3df99",
+    "tests/passing/1807.purs": "d20bd8e1b4dd4fb0ec36d6050f47accf8b05203d62aa8ff21c117a2328815945",
+    "tests/passing/1881.purs": "90df754cea2af190c6a7e819d55322482fe43816a0c888a5e506565f1d393cbd",
+    "tests/passing/1991.purs": "687deb4e2d1ca1e76cad4fc9c0e5d43a7a1344f2d803df40b13456f9b3eaa321",
+    "tests/passing/2018/A.purs": "8e2843fd3a506995da8084b34d4b56079970be263eeb20ea2ec79ad2c2437475",
+    "tests/passing/2018/B.purs": "fb85d23a0c946d587afe29c6bbb94aae104da8c1adb8148189f6b3fea6db9bd3",
+    "tests/passing/2018.purs": "8a3ca8ad868018d865bfb9c50359fab5dac58fd0beff1482acd22de37d0575e1",
+    "tests/passing/2049.purs": "ec44b1d15b8a82be87bbb77faffe20b86d6306cc035ba0960c2acaa19259e6fc",
+    "tests/passing/2136.purs": "d8a4ac3ee885db03bcf204775b7f5284039c04a46fb9c06aabb82334ddba3399",
+    "tests/passing/2138/Lib.purs": "9d68e2345c741626855a2e67ebb93cf2337be3b088d6207a7c0d07b6980c8d0a",
+    "tests/passing/2138.purs": "a45285fcfba3b749fbe799a6eab2cf0011e8a84cf881d5cb48b628aa24f689a0",
+    "tests/passing/2197-1.purs": "9c883b84812232f83994da1366990e54d8ddd79107fea5043b6678218429d355",
+    "tests/passing/2197-2.purs": "e273ddad4173a222f8a2d4f3a918000445e1661a9cef74e5f8116cbb1b4f5836",
+    "tests/passing/2252.purs": "56c2197de3e865615622018b26254c5ee0b090f4166f37b5cee1a57c3cab755b",
+    "tests/passing/2288.purs": "de4e8a558312bc980c1dab4b1f2b1aaa5936ecf80867b28244f235f30763ae99",
+    "tests/passing/2378.purs": "a64c15be099875100bb9ab91fd49f8bef885b635492f277aa41c8a980511fa50",
+    "tests/passing/2438.purs": "8f0682364cbba14eab676193caa1e5c48a2ffada886c6b05696e03f094f0ec83",
+    "tests/passing/2609/Eg.purs": "fd5d9118f6161b0d87ea3cdbd3452b42c67cb479c23547027c755e781c872e58",
+    "tests/passing/2609.purs": "f56b22ac7eb89aeb56e40c4bae7be46f59f179680cdf283efd39a8422c93f7cc",
+    "tests/passing/2616.purs": "a2271a9de6949a9e08e1689acbd6c03ee5f7f0542cee39ea14c85353e07ee0f8",
+    "tests/passing/2626.purs": "57ff4fee4eef71ca4497ce600ee64145efe115e312a99d3876026d03ad9c8a81",
+    "tests/passing/2663.purs": "2c8459e0631a61946c5533ba88506f65ff9673dd2360b9ffb49dc9d3eee8eb40",
+    "tests/passing/2689.purs": "7410faae505cf062ffa9caccac515b944cab842c5f7d1df23119e4b68bc8e443",
+    "tests/passing/2756.purs": "35dca4cd4a0bc869986b8cb77d6016ebeb600136536798637bcca702119a96ae",
+    "tests/passing/2787.purs": "9f3125d3a9e0adf095d07c7222a6b6e7a27cefaa19817b0d8b0542d9fda0dc02",
+    "tests/passing/2795.purs": "c0445f633b0f447041b3cdd9092a107f503a93995108521c78853b2c2e75e91e",
+    "tests/passing/2803.purs": "49c5f627003c7ca670ad39445ee7eed5865a5211c9c635412d0e108c00a37d9a",
+    "tests/passing/2806.purs": "9df3a2178305b7b817ee25e16cfeacbf4277d852ce370cb31cb28ef21e0b5d8f",
+    "tests/passing/2941.purs": "cc2931155347cfcd28d9c603cf6c95ff0cb0f51a686d72972e61fb9765e6ac36",
+    "tests/passing/2947.purs": "81a9dcfbb592091ef738a04e840bc10f741c8b4c31a374a79c0aaa4927d1dfab",
+    "tests/passing/2958.purs": "fd50a2f928dfce8cc1f39dad3ef57647bfd97c4b4075f46bf4516d45fe37545a",
+    "tests/passing/2972.purs": "e8c0763d7436c372b8f4e741452a6f2ad3880767477c81f30f66a3380eddc02b",
+    "tests/passing/3114/VendoredVariant.purs": "6d03e9505c0d178924eb16c6c681f9da6d543f94e61debb5007a789c3b80bc54",
+    "tests/passing/3114.purs": "849553ac4f0ef2b996917059d0e36977167dd654b549dc099414897643bc97c4",
+    "tests/passing/3125.purs": "f37c839e9a8769948b0dd5ac9f0a327665afdda32ae7e5086994428a68aa9b6b",
+    "tests/passing/3187-UnusedNameClash.purs": "2b1b6e22a6fc52daaad4db18f1c70717d597d2dbacd93259c2620aeaff703fca",
+    "tests/passing/3238.purs": "31ae763f451f43b42b779871f4f5c50b75e66f3883d24c1b8f8a225467c4969e",
+    "tests/passing/3329.purs": "9b0835b22ec71a10730c65309e67c588af7b42ea923cfb3aba83a7b04f83dedf",
+    "tests/passing/3388.purs": "9f5c1187fde9dc97fd1218f311b42d151f93f4cc7f02b6139b0148c0eefc817b",
+    "tests/passing/3410.purs": "bcdede5d09ebec5efdb277669fc6e14788449aedab5e10404d15e56428376758",
+    "tests/passing/3481.purs": "da4946ff29227f032f508b0a64eba1712cc03f03983baa7fbcaaf7cefe858050",
+    "tests/passing/3510.purs": "8ca537b1d635b03bf76931df368fdcf31cac4e060fd6e6a982f0c279867dcd42",
+    "tests/passing/3549.purs": "cba3136a299bfe90ee11b5cbcfd62e8d57cd4766b0422aca30387140c60df326",
+    "tests/passing/3558-UpToDateDictsForHigherOrderFns.purs": "1f3d666c4676058c1acbb1f3e5ff32a47b3c3aec588308ef81aa7eed04779750",
+    "tests/passing/3595.purs": "b3eb6bde6603bd8261f6ccb8b2ecb1ebde568d9efd2ffec969588f2fc8c2543e",
+    "tests/passing/3830.purs": "ec627e60d51d153645b1b15f19e9cbc1b5e80554c239fcb88d4e7cde8c35e4cc",
+    "tests/passing/3941.purs": "b9c602898fe7049ae539221defbf5b211cccd005252bc40899a50f55d465952a",
+    "tests/passing/3957.purs": "5e274fa57de854aba5e07a4839cec602eb7797ce372e4becea3bffca65f33996",
+    "tests/passing/4035/Other.purs": "677fc544c7ee48fe88a039137cf5ded387f615a16d1ff935d3b0c21f425aa29e",
+    "tests/passing/4035.purs": "7ed06a0ae0466113e55981eaf31d70c0e8db62aa774ddfc8879e32352878107d",
+    "tests/passing/4038.purs": "caa5fa359bc6c2fe69d75b8fe913d36e823f34fc58f1d7f58bce5406573ff9c4",
+    "tests/passing/4101/Lib.purs": "f1be2d2725b6df08f85ddf9dfd2e328d9961ad3a9c42818cdd1a599f320b5c41",
+    "tests/passing/4101.purs": "d095902eff75958db73615e6206196776be3b4463e3e13b49041715cc126b09b",
+    "tests/passing/4105/Lib.purs": "2e64c07ed5fee2d9ae27ba0a00595667139a7b845f2afae83221ba37f4426e45",
+    "tests/passing/4105.purs": "b5b5b996254367d92d42dcdec966f37ec994dbefb686a543ef992f91fec97ff5",
+    "tests/passing/4174.purs": "965e19fff7b4f1c8c74d9350e71099841d74aff66425039e4fca80bb2c2473ff",
+    "tests/passing/4179/CustomAssert.js": "bc717d29f7902d237fc2aafe0e8e14d7be1cf471e8a6cfb011b8633070851171",
+    "tests/passing/4179/CustomAssert.purs": "b6c7c6e2aa4a4e2b33b00440b8dc17789d2bbe79e129674d142ff01b6e423024",
+    "tests/passing/4179/InitializationError.purs": "96e9c2531b93956ec3e53e80614bac1266180dca2730b9f638d754c282c345cf",
+    "tests/passing/4179.js": "07f10ea2678b19e42f6be6b4672b892addcaceb8f2969b0803290ddddee8d64a",
+    "tests/passing/4179.purs": "462923f780c361850a892ef5e395f05d21b7e2868d5f750f1fdc3c5d093087b2",
+    "tests/passing/4180.purs": "77c11d5b439aa0e59ac3fce3dd9503aad9fdbe9929b4bd4f6adf4030ca448779",
+    "tests/passing/4194.purs": "d6828363e4e8b7abf1153a30389e69a7a26be8847baf8fa173d2bdc6781581cf",
+    "tests/passing/4200/Lib.purs": "ab4f7aa45b74b0a6749aa184b37a88f1a6d66aaa329eea18a0f7fbb593b24ee4",
+    "tests/passing/4200.purs": "9a84d77f5af208bd8615e95bb91a54bc8fb9eb21e4d195a82f32ab5847977d64",
+    "tests/passing/4229.purs": "2d161b173c2f9c1fa2168ebb8a0b3168b428979fe2c978be162c9feff12e26b9",
+    "tests/passing/4310/Lib.purs": "53a83d9f059c0876b9e5d1369f158434310adced13716e6e540dec8cd0e21cb2",
+    "tests/passing/4310.purs": "69ee1943dae3af30f2fbfd00529bc365f190ffba4473d8483d2edb5e7b12a3b6",
+    "tests/passing/4357.purs": "46b5c101613af5ead19d9cc3f2f1cf92c0d66b4db899f54b53199b207b5e607e",
+    "tests/passing/4376.purs": "c439e14a56ed134274db8b74f2f5ba80e250cc62c1f8b3fe08d05b8f7c329d26",
+    "tests/passing/4431-2.purs": "400d21361a98aa4ca565eb0803ceef0ef2949ccc5d702bfbe79733396b47bf01",
+    "tests/passing/4431.purs": "cb5d9501abbb7a79de18f66e77e9dfa40a9864e40f089d52d2c7dcb0dda63d77",
+    "tests/passing/4483.purs": "132d100b3014beea23a9a0902a1d1d4c154d70b0fa404924ae3a8afb9d6abc86",
+    "tests/passing/4500.purs": "524447740761dd732b368fc9d7c15fbf3ad8d45435bc23af14d6ed291ca7aa4c",
+    "tests/passing/4535.purs": "fb6f5e916a1ed9820ec309f258ca2e793f368178841ef58314954bb9cfd72f56",
+    "tests/passing/652.purs": "4ca2432a88ab9df552f6f76a95d104bdf077074286f05e405dabe7dede50ef9c",
+    "tests/passing/810.purs": "db2cb51e2dffbe032c7c890a0b22cb7c3518bc602a2a29ab8a3997bb06a6d7f9",
+    "tests/passing/862.purs": "c3edfdde4c608161983e6f850ab8c040afcecce4efc23c3852836b5f27ebc52a",
+    "tests/passing/922.purs": "e715c852ab9ae1f24b42197d37098174041ced28d664197c302ea40d7203db5c",
+    "tests/passing/Ado.purs": "f2b8544a9314ac24c411d889d0929ba31b018bc61362e4d4c22ba13df5bad0e0",
+    "tests/passing/AppendInReverse.purs": "9e52b6b883cefdfb7930bb333a494340b5f3ba87388ea933669499f1fefb592e",
+    "tests/passing/Applicative.purs": "80317387558e21b910bbacd553ad71245dd1e95d6e9cb98bc4cc6caa18e707e8",
+    "tests/passing/ArrayType.purs": "226db33d59d8beeef8845d3e5fb77016c7945c0e8ad0a78986d819d45545fb71",
+    "tests/passing/Auto.purs": "7d9811eaada15f26801c1ea9f4fb3ed7ece0461c0792c72659d13db6dcba1746",
+    "tests/passing/AutoPrelude.purs": "6540ffe2406431fe1d35024fcc506747611247c78a3517f977d02d69a38acbb3",
+    "tests/passing/AutoPrelude2.purs": "6773d18240727a25a8c345f3a8435281d8ec1574ea926a1c2834bcab3ffb9264",
+    "tests/passing/BigFunction.purs": "5fb4802baf4db29c65875bfeafc17de9db7c7549bf847838f80c4e8c21dd3b4f",
+    "tests/passing/BindersInFunctions.purs": "c747ae69d399db4a750a1569e5a850d153745ce09af1a03ad401a785361460f4",
+    "tests/passing/BindingGroups.purs": "9dfc910dcad418f39cc3098d85ce9a59d5f924eacaf78ce9f01d35cf5f5f69df",
+    "tests/passing/BlockString.purs": "3d13103f328e6a5fd39ec8ca1ea60d5988000405f4729175d156d20aeccb8a05",
+    "tests/passing/BlockStringEdgeCases.purs": "2efc582ebff4fdb1f7b4e61a3e496775e9f73b15ab8e56076f53b2dc9730cd01",
+    "tests/passing/CSEInitialDigitSymbols.purs": "1c43cba68f094ed7f3761b5ba691b402e1c9e91c9223f09f26f6fd6fbe14fc8c",
+    "tests/passing/CaseInDo.purs": "4669442566a02f586f014dab1407b4cc4a24452dc0c015ab6e0029efc68ab4ec",
+    "tests/passing/CaseInputWildcard.purs": "d6f7fcc17825ad6bc4e23091ceb610a808c5edf18a4de40330a2ba87f731f065",
+    "tests/passing/CaseMultipleExpressions.purs": "06e2132951793f3a1882431ce972e0742ba9b8f0693249d67a5af1eb525f50ce",
+    "tests/passing/CaseStatement.purs": "98eebd69eebfae9d417fe800d80894a053cf23d3fa77b625a94ab862ccf380b0",
+    "tests/passing/CheckFunction.purs": "2623c97d16585150c2ea8762961ba131ad4ab63bf685dda12caea170d68b7661",
+    "tests/passing/CheckSynonymBug.purs": "9c724764f0168207307f9c8dd63940f36f4c313b87e460b58bd70f7dccd5605f",
+    "tests/passing/CheckTypeClass.purs": "bc5cb805c4d0827ed9ccef1c5d433f47e05d98845501c4f8a3b36b798243bfd4",
+    "tests/passing/Church.purs": "3fe9dd21a94518b8ae2ccf308ed6c40f17c3c0923b543b795b4c8d79d2bf2506",
+    "tests/passing/ClassRefSyntax/Lib.purs": "bd9f97b9019182ed1d2cbe81f47b77db295a9562fb281c6a1a3be5ccd360a1e0",
+    "tests/passing/ClassRefSyntax.purs": "9c03573e0bda4da2e325357e02079da7cc56124f7cb394c88c5c8b20f2b62fba",
+    "tests/passing/Coercible/Lib.purs": "d944e4c98a917c94a1965c7c4ef0e464a78eb1ec92f9c6c0bacf404e8958c74d",
+    "tests/passing/Coercible/Lib2.purs": "fdb619d4cc6bf6cc01c73f82e2a2d1f677e27f238d72f0b4880fb12336586ff6",
+    "tests/passing/Coercible.purs": "bc46ea445e8dd7967bb4abafecbd6032f5439723479f4e3050d1e3f6830c6cec",
+    "tests/passing/Collatz.purs": "6d77a9593e87843c64bdb26169316069a2497bd68c3d919e9bc116ae7dab868d",
+    "tests/passing/Comparisons.purs": "673aa3282bb1a0dd00e6517b701decc4639e9790739e9bdaeaffce0edd28ba48",
+    "tests/passing/Conditional.purs": "c578151ebcca820c9678c37ee15b62b77f3a21a206b943c5054e0fccede9a2f2",
+    "tests/passing/Console.purs": "0626a0442d5d4b3c236011b458601c12054db9d1a0e666439131aee32a48b861",
+    "tests/passing/ConstraintInference.purs": "839cb2549be36ec6f7e496b30b7ac0c2467591230f4abe7703066279463e6388",
+    "tests/passing/ConstraintOutsideForall.purs": "aa4a70eccfe63db5c12b575e0a47de0afc2da9e3acfa0ec539dc47f1b90bb8f5",
+    "tests/passing/ConstraintParens.purs": "08ce5047031b72268a8141f04f40e95b1d5b9d8f37ff6215e05ec222ba68034d",
+    "tests/passing/ConstraintParsingIssue.purs": "70a81709d73efa00bdedd82ea49d52f2d5bf9a113a0f5188e0b259e0a2573878",
+    "tests/passing/ContextSimplification.purs": "baaab6ad2a8ee6b7ba3f6729c4f4a383b0d0b5b055cd4af98ce0aa84fd8d9ffd",
+    "tests/passing/CyclicInstances.purs": "aff916e5716ea220fdb45529dcbe85faace5bbbcbd9af92f8ce327a3f48b78c5",
+    "tests/passing/DataAndType.purs": "d5907c2eb19a9e1a1daa96d3315a1a84a802beadb5ce05a46224dcc5d85b6221",
+    "tests/passing/DataConsClassConsOverlapOk.purs": "feac62e1b17b8d62ca3a39973a15b7de272949fd2ae651450ccb67043d2d09e0",
+    "tests/passing/DctorName.purs": "dd7c5e32d2992bc5d18beeda6508287991e075dd488b14f206978a797b940023",
+    "tests/passing/DctorOperatorAlias/List.purs": "ed8ce4227dc013a113b07ce1547d41b5731c10f069cc17f1bf722207b9b6c190",
+    "tests/passing/DctorOperatorAlias.purs": "d36621c71c5c504540144902d55f5450b206789d80bb2faa837a40d3e6ecc420",
+    "tests/passing/DeepArrayBinder.purs": "a287034cf58fe94291104790c7305e44f0f302820ab594745ef6211e4ba0f90e",
+    "tests/passing/DeepCase.purs": "2b81dec321cb9f9295f6686f5845dd656fe8c56811535aac2513b88ed94d9cab",
+    "tests/passing/DeriveNewtype.purs": "554b0d1b857ad96a3d7d7bcb8757a7d63656cd14f714f43432df9b63f9e41c8c",
+    "tests/passing/DeriveWithNestedSynonyms.purs": "627f88104a105469c9cc0c98dda3d51664848e2b87324a84df07318fbbf220ff",
+    "tests/passing/Deriving.purs": "5ccf7f60678c69794610ad550948e79fe698817b97dc7d20068d3bd53e460c8d",
+    "tests/passing/DerivingBifunctor.purs": "158b22e48ebf0fb0b72493e60b9df76727a259138b04f61d9403a205a910be4f",
+    "tests/passing/DerivingClause.purs": "4f6eb1263f6d26e97fdb253db3769d962766ec66424b188f0edfd1153c673e8a",
+    "tests/passing/DerivingContravariant.purs": "a0408b81a14ae186c2d9dac42cd6d1847702298eb74ec398a610a22248de449c",
+    "tests/passing/DerivingFoldable.purs": "06fe97297315568f7aca88a1b8b594a6f2f61e92278721a330a2a37dce0d78bc",
+    "tests/passing/DerivingFunctor.purs": "a61b8d8f9fb1d1a4f3f8fe0bcffb2ee6f96f3ab11322f71a9e4069244062d036",
+    "tests/passing/DerivingFunctorFromBi.purs": "38bb6ecfdd5a6f55b4f20df0a882e4e107572ccdff8b9d5740065f3a817eaa09",
+    "tests/passing/DerivingFunctorFromContra.purs": "f35e10e9a38d3c90f50dfef1d9c0fd6da41f3c48703381884c87d5d972df96dc",
+    "tests/passing/DerivingFunctorFromPro.purs": "b75360dd3981450dfe5c0ed90621790a2cc893f4b09a96f4cd145e8dcd22f78b",
+    "tests/passing/DerivingFunctorPrefersSimplerClasses.purs": "c9f4b4ddda68eebb489e86f3d580a1dc38c299c6d0acfb3d9fe70f522f92ec3d",
+    "tests/passing/DerivingProfunctor.purs": "0aed82b5a52de9e78542e1c0e77f6b8b803dd03ebfbc0384c06da2e77cd2b18b",
+    "tests/passing/DerivingTraversable.purs": "0e3cea531c7ee99680fa993465c296dccfda152039bdfdddc014ea138de9f414",
+    "tests/passing/Do.purs": "24660e3acb78d7aff010871da199b8de3a517c4a8ba9e68c37c8e176f2b3858b",
+    "tests/passing/Dollar.purs": "7237246b2b52cd3f04196788986d324c9ed7db97de4c488cbbafeb68935e6c2b",
+    "tests/passing/DuplicateProperties.purs": "7b44b0576dc5e6662da29ff00f1fe5c8801977c7e1c7769d06688788758c2502",
+    "tests/passing/ESFFIFunctionConst/Main.fs": "e0ee57ef045d512db84d46527dbee34edbd82f96ac68ed480f7dce7b2dae9a95",
+    "tests/passing/ESFFIFunctionConst.js": "04228908752392d2b2cd590118aaef87dbecf4c7a04143d5a1bee19b587cba29",
+    "tests/passing/ESFFIFunctionConst.purs": "63d71322c9eabf14c249a69343932ddc8f3cf418583882cf79e504efc809c54b",
+    "tests/passing/ESFFIFunctionFunction/Main.fs": "e0ee57ef045d512db84d46527dbee34edbd82f96ac68ed480f7dce7b2dae9a95",
+    "tests/passing/ESFFIFunctionFunction.js": "e03a61e3a09d0d5c8b7d3c7aadcc69fb73add64cacf9e66677f2299a030e569d",
+    "tests/passing/ESFFIFunctionFunction.purs": "63d71322c9eabf14c249a69343932ddc8f3cf418583882cf79e504efc809c54b",
+    "tests/passing/ESFFIFunctionVar/Main.fs": "e0ee57ef045d512db84d46527dbee34edbd82f96ac68ed480f7dce7b2dae9a95",
+    "tests/passing/ESFFIFunctionVar.js": "029e0045e730b01d8bd49efedd50d4b234e816569be110d6e6c577caf05cb765",
+    "tests/passing/ESFFIFunctionVar.purs": "63d71322c9eabf14c249a69343932ddc8f3cf418583882cf79e504efc809c54b",
+    "tests/passing/ESFFIValueConst1/Main.fs": "647a9d957a027175ff8d76bfe8284b6342769a746e09c9f4d8ff9d13d0d204bb",
+    "tests/passing/ESFFIValueConst1.js": "5d8f65d2774e206bc9f7a7a4ad39ca2dc563b5c31e46ab57ef4874961237ce29",
+    "tests/passing/ESFFIValueConst1.purs": "88a9c5751a9aefee8a499fef034792e6b939134055630b9a1be2d98f9e5dbe65",
+    "tests/passing/ESFFIValueVar/Main.fs": "647a9d957a027175ff8d76bfe8284b6342769a746e09c9f4d8ff9d13d0d204bb",
+    "tests/passing/ESFFIValueVar.js": "1edae69907a4c08b76b0bb8bb91dc899866bb12309fe358a3a34d94c94d9c03c",
+    "tests/passing/ESFFIValueVar.purs": "88a9c5751a9aefee8a499fef034792e6b939134055630b9a1be2d98f9e5dbe65",
+    "tests/passing/EffFn/Main.fs": "c41ffd184d3e25bc8cd08e2fb4e1db0e03424df90d161980ce33d95b5a5bd5d5",
+    "tests/passing/EffFn.js": "e815c2ff8224fe809466f225fe603411ad8c8d73fb7711fdae4b253fd4d5e654",
+    "tests/passing/EffFn.purs": "5da5149cc42b1f9bc9d15ad9387717ae872939236a1d82f6defeb77721e61029",
+    "tests/passing/EmptyDataDecls.purs": "f54a5aafa53cc5a77cf4855b68682355a778cde18a517c4f85446ff0592642b5",
+    "tests/passing/EmptyDicts.purs": "6693376b67171f98c17dfb8458e799daf12dc27d4c54297660b742e123247372",
+    "tests/passing/EmptyRow.purs": "89e86259e0972d1384431558eb247f1f12b82c773fab13f6884bddd111502849",
+    "tests/passing/EmptyTypeClass.purs": "c5c53e758be5e774fec1659309eef80280849bb094d2faeb8d19e7e6831d43e3",
+    "tests/passing/EntailsKindedType.purs": "e9434fe2a049bbf436db65bec7bee5aa325bf68450249dd4db1ca4c687ec753c",
+    "tests/passing/Eq1Deriving.purs": "0aaab223f7ce66f408f0fb070b52cd9bfe0f79e606fbcb03746f50c43fd5e177",
+    "tests/passing/Eq1InEqDeriving.purs": "f70b570baacaee0f1f150d9f3208d052ed9d8c43c082f5f18a3d815d40b5c6e8",
+    "tests/passing/EqOrd.purs": "248531b01bf7bd4fe0ae0b818625952d3eb853108e87f5b4951ad441807d334f",
+    "tests/passing/ExplicitImportReExport/Bar.purs": "f49f2f5dd51f300934ba9abbd7dd163f9f6c88ac908feb8cd9d22a859ab63c51",
+    "tests/passing/ExplicitImportReExport/Foo.purs": "5d91aaee4000c01d13499b70bca195b384f58bc6eb0b05783c414b70fff584a9",
+    "tests/passing/ExplicitImportReExport.purs": "47ff3108eab016ba0bc3c2225f8b2a48f482fa2df6dc143f56c5216253f5f4bc",
+    "tests/passing/ExplicitOperatorSections.purs": "9f3dfaace0b274d3eafb73d4222c8f5533eb2b99ce0581d553e6ce768dbef1a7",
+    "tests/passing/ExportExplicit/M1.purs": "6c5e9d782a3a73110876a1a6d99fc7ebe226fb314f98dfa1868f13a92588b1af",
+    "tests/passing/ExportExplicit.purs": "2e374d92b4f4cf6bc33d4071c6b7dfb4f139562ab7dd8ef84a834e697822273f",
+    "tests/passing/ExportExplicit2/M1.purs": "dba5cdad23e61523061c8ff1cc6f54bb3bb4c02aa7af1b80437cbc72c0227228",
+    "tests/passing/ExportExplicit2.purs": "5f23d09c8794623d314a2f6175b25e8df4607fc1f68171ce84c141f30c8467a5",
+    "tests/passing/ExportedInstanceDeclarations.purs": "a48e45d7e75a523c995b12d430fc6d9fc792b0ec29ab761ee91a0e7c6a3faf3f",
+    "tests/passing/ExtendedInfixOperators.purs": "f4251f7f84a47efb83fda47705305204037deb960c98769ffba6011ab4647ebf",
+    "tests/passing/FFIConstraintWorkaround/Main.fs": "a1af3af4d41bad89d1049dae78310b002a43566ddcb8e0157d28b15ed590ac2e",
+    "tests/passing/FFIConstraintWorkaround.js": "a8fcf8132cc93f370cfb79cf8eb60edd999601d28804af21f7d06a9803aa429e",
+    "tests/passing/FFIConstraintWorkaround.purs": "26bd77ba23549208a1522c70b1e90677f6dd85284c0a66781a47396f9dd817bf",
+    "tests/passing/FFIDefaultESExport/Main.fs": "6e09462fe816fbbd0ca6b4cdd7797a724c47021f8d2e6226b9682b0d71c0f25a",
+    "tests/passing/FFIDefaultESExport.js": "e0556c2593b47d7b4058b9aa4b525ee927271f5c4964f163404769e68e76c85b",
+    "tests/passing/FFIDefaultESExport.purs": "e09038e9f347414472d5725ed94e2fd052215c8649a5d7b29417cdcac514418b",
+    "tests/passing/Fib.purs": "f5cdcbffab48ba18d63e3c8bd4330e10fccdb127bacce7ce3a8ade999f12fecb",
+    "tests/passing/FieldConsPuns.purs": "4752b2cd9fac260c42762a502d0adede0020773d6c6ed3e206c6050e87e79790",
+    "tests/passing/FieldPuns.purs": "4ca3debbe052825d178b8c1cfcfd7fbd713979fd3c8a746d47ecd1a8d2ad3066",
+    "tests/passing/FinalTagless.purs": "61d8005465865dd1d1bc201614587878f9eecd8f9807db93ff7e895badb8512a",
+    "tests/passing/ForeignDataInKind.purs": "a0fb1f10a0839a791aae6f9078d5c0ac25041e9c46b677f4e18f9372d61d6177",
+    "tests/passing/ForeignKind/Lib.purs": "b5974b73b0ac6f09da5a364c0a914cb2475ffed14e5095990fbf95c1934d429c",
+    "tests/passing/ForeignKind.purs": "fe56f9169d1c7364014acb6e7547a37176cf316be6347e9a4abc8849fcc42827",
+    "tests/passing/FunWithFunDeps/Main.fs": "c37bc6dcea9815e64a32d0364e6eaa6bfea439ff14a023fcfba6d15de96d7e8f",
+    "tests/passing/FunWithFunDeps.js": "8f6200be40e1713d3882224ab32829031cd4abaff3256b74c34b6fbc122f1bb2",
+    "tests/passing/FunWithFunDeps.purs": "ae6a427912c793c63f56edf5a65e81c0f4bca117a88c4acd5ce20f4a3afbd781",
+    "tests/passing/FunctionAndCaseGuards.purs": "45ee0175e78ba5b41333ba212779e3488f6603a63a3dee088c6a90474af8653f",
+    "tests/passing/FunctionScope.purs": "59ac25b0f3868044292d43d19be6f95e938c662569bcf81be16f5e228bbe3baf",
+    "tests/passing/FunctionalDependencies.purs": "c86712f509a80fa7f3d8ece20633efb0d1b02a7bd1f4234e411c57379a40c319",
+    "tests/passing/Functions.purs": "fcf266b5944153233d0c76c5a3caf39ce4eb53c811a810703fc8cdf36964516a",
+    "tests/passing/Functions2.purs": "f85fa7764c578f169206ab7b0e0d6feba3ecfb06eb42fd5fb59434e32a61ae84",
+    "tests/passing/Generalization1.purs": "2a85ca481e740c98632eb3e38b364f11f5bee3f6758006922b6d07c34995b57f",
+    "tests/passing/GenericsRep.purs": "57dd051bc57d516789b9f5b1f22b7754f65ff3fe1ecf227a256df43f33deb778",
+    "tests/passing/Guards.purs": "060a947b5e83c4fccaba7b34fca990b88fbd515bc953490ee0831ebc5a35e0b3",
+    "tests/passing/HasOwnProperty.purs": "e133b43777252a1e86295064e9516d1c8bca0977a5f4bdc7511901ba882117c5",
+    "tests/passing/HoistError.purs": "43532f2a226e0ce2674080967f84879b11b607ec4c6176af39a7192cf52a3042",
+    "tests/passing/IfThenElseMaybe.purs": "3b105b841e345b9432a1992bac60770fbc11f7a8b5d293484db3a05afc9f921c",
+    "tests/passing/IfWildcard.purs": "9c43ef763e3a176b8b31f03f05121600747c3e0b507256ccdf8cf7db5b9021d7",
+    "tests/passing/ImplicitEmptyImport.purs": "85e85c0879013b613edb7962d16a7e042c3a9053c7973ddc419f2052eb1bb9d1",
+    "tests/passing/Import/M1.purs": "972f9b45dbc0555672a4fab0c49123d2925e107fd04ece53844362c81175382d",
+    "tests/passing/Import/M2.purs": "f21e0a285fa771b35111b75fa8d0cb05763a4e3888d8ea1d6594c8c62da778df",
+    "tests/passing/Import.purs": "63e1b648d915a5dfece41009fd43946ceb878519303de4ad4d23df8d538e666c",
+    "tests/passing/ImportExplicit/M1.purs": "90da4cd63df5249202c16ee7e9810d240df7bd331614c353e4ea1ed24c7e8963",
+    "tests/passing/ImportExplicit.purs": "cbafa64c7234105c6326f5960c234ea9330c46e68422af920d1408feab3b53d6",
+    "tests/passing/ImportHiding.purs": "efa633c3d28a46c53e55a31d5867aa281cb1de4d53c3ae21eada63a8690eace0",
+    "tests/passing/ImportQualified/M1.purs": "e421c001d1cd0c286d683d987e4fe5941934d174fc1945cf18664e4b271ba502",
+    "tests/passing/ImportQualified.purs": "c122ee8b570278ce0521a8de33bb6c168358c0732f0183e4017a3f481f0eac34",
+    "tests/passing/InferRecFunWithConstrainedArgument.purs": "7bb5381a20c537526b0c62c4ebcefa4375a5e16ef8972dd7e3392848a03d16e8",
+    "tests/passing/InheritMultipleSuperClasses.purs": "9e6638efda2db95154eb82b3ae6576c3c2d080f4d5aa73a35f8ce0a6de7318c1",
+    "tests/passing/InstanceBeforeClass.purs": "d6f8c15bc13f06b8d0afc4d008aee748b20544f4026eaa069dd762331f302cb9",
+    "tests/passing/InstanceChain.purs": "0b1db11f194e8f006c7187cff221c6fd2f2033aa6be28af8e77587d36b33083b",
+    "tests/passing/InstanceNamesGenerated/Lib.purs": "c34604c93dd27992a3f546f73504639678d0ac29e6d79be3ecac228b189b379a",
+    "tests/passing/InstanceNamesGenerated.purs": "bbda439aa07d72c999eb2d859d32760c85e358af6773c77facfd14183e0e9249",
+    "tests/passing/InstanceSigs.purs": "2db48a36812ec50096c6adcfab19cbcd493d7876cce8e795a9b90a7ee25e6787",
+    "tests/passing/InstanceSigsGeneral.purs": "334a9b099c6e1956f4d14a0e0ed92e8af7e7ce63b695f5b8514dbc37d7e14050",
+    "tests/passing/InstanceUnnamedSimilarClassName/ImportedClassName.purs": "3b2685a50b3d124d13324c5ed1ba597e52cbf36a9da1ed27caf10896f375caf3",
+    "tests/passing/InstanceUnnamedSimilarClassName.purs": "a6962fc1392d04a9aab0e7eb87dcdef398dedffe4779175f8ace3f42019cd81c",
+    "tests/passing/IntAndChar.purs": "56796f66a2c20e48ce7002a72c30e634a29cdad104ec370d8b406a725dc57a5e",
+    "tests/passing/IntToString.purs": "88091d04ed6414b82c03df2badae192fb35a44e4f336cbee1ee0ac01e81ac103",
+    "tests/passing/JSReserved.purs": "a1d906b03f196cacb04048a23a336d4bf4e1b2f5b83a9bdd4bea288178c9a38a",
+    "tests/passing/KindUnificationInSolver.purs": "fcf1fe12bea264a7008b129c23f74dcd6b9c7a0e869212d6d354c4d567f62141",
+    "tests/passing/KindedType.purs": "75416e834412e5959f28bd92429d1dc9cf4dc84167e7edd5b74c48e035fdee47",
+    "tests/passing/LargeSumType.purs": "ac893b17e5aa783f9ac4b8264dace7d6d8665a43890cd096b20fa987deff14b0",
+    "tests/passing/Let.purs": "c1d1bbde1f697d98cbf50bbdddf5d320963c591597a887d4605cc3fe1c9ec04a",
+    "tests/passing/Let2.purs": "b35a81079f4e65a9c35d22ad2df9cada216af25cf7d6b72287fa6eb4fa7b6068",
+    "tests/passing/LetInInstance.purs": "d3a26f2270c707aeb15684523fd0f0403844528aaf84a23b550a9cae75155100",
+    "tests/passing/LetPattern.purs": "b288d879c12cf3f1dd3f433f27fa9e2f383ba13214d19613c9a3c890ecad8a32",
+    "tests/passing/LiberalTypeSynonyms.purs": "d9332c24c5ec581bd9925489da06e001838410cc2c66342d62c7c1cb5c4ce16d",
+    "tests/passing/MPTCs.purs": "906d4d7dc6ceeeb96f9ba790a99212449115feaef6604cbeac31734b74a6a313",
+    "tests/passing/Match.purs": "7bef649f04f2614ecd6b4c2417086e6e02ba47e30968613adc9f312868cdb9e0",
+    "tests/passing/MinusConstructor.purs": "67a23d268c4a934466b1800224b8c4555226be917612c03e46bb2e6777dd4614",
+    "tests/passing/Module/M1.purs": "0128d683cd69a866757e939c6ff8afa6f36d4223bdd02d78317fd5dae3134e5e",
+    "tests/passing/Module/M2.purs": "be862a2ff3ff359857ee806d55b2a235db955b1bd60edc7c3e827f4877fc829e",
+    "tests/passing/Module.purs": "6c7b31998dec5d0fc0864c381b07f339fd2e0cf564b34edfd8fd33af4729ad03",
+    "tests/passing/ModuleDeps/M1.purs": "4ffeb8325cef769247b17795bd9a5ec67fbb8c2bc743154568574a8c74a9d6df",
+    "tests/passing/ModuleDeps/M2.purs": "302a069465b856094d3422e682c6ab0823f53c23482ade3469bdd83b81ae0518",
+    "tests/passing/ModuleDeps/M3.purs": "c77f64889e276bf2ab162ee94365c32bf5e418a13d9de908220df518c9324a77",
+    "tests/passing/ModuleDeps.purs": "d9d00647f2c740960e66515b5126a5c2fbc9a62ddd919a77b78b67c3332b0008",
+    "tests/passing/ModuleExport/A.purs": "e0f905a4045c9a49c221a9cccabc287873ed7b18e03249db3f046ea575d4bf5a",
+    "tests/passing/ModuleExport.purs": "8d3e9d6b2d1cf7cacc7e752d6486a4382a38a6945ebfd3d3164af473b25bda9a",
+    "tests/passing/ModuleExportDupes/A.purs": "e0f905a4045c9a49c221a9cccabc287873ed7b18e03249db3f046ea575d4bf5a",
+    "tests/passing/ModuleExportDupes/B.purs": "cab2de83848e4277f0264fa1b0c48d262e52000c379ab7dabeb31380b8bf86a7",
+    "tests/passing/ModuleExportDupes/C.purs": "d7945fe54d212b4130885273f696178f5b80ff940735d66673d48c0ad66692c9",
+    "tests/passing/ModuleExportDupes.purs": "835fc054c161701fdcc341c29e1c941b60667fd65c20a1758d70ef5fd183da40",
+    "tests/passing/ModuleExportExcluded/A.purs": "7a58ec155af30a8cfe6d4e4e12b4f438831c01079cbc72f56d1fd9ddca4817e6",
+    "tests/passing/ModuleExportExcluded.purs": "3725321c5868f90ff22a0f528a082a5f0c677e7a4431673b889769e3c233e68a",
+    "tests/passing/ModuleExportQualified/A.purs": "e0f905a4045c9a49c221a9cccabc287873ed7b18e03249db3f046ea575d4bf5a",
+    "tests/passing/ModuleExportQualified.purs": "26801466982226cb0aabbcfb180e4739be3a1b4baab09431f26110a0d808c453",
+    "tests/passing/ModuleExportSelf/A.purs": "ddf15a2f0c037cadc81783ae21114f9573651346049243908cfca38fb1cfb822",
+    "tests/passing/ModuleExportSelf.purs": "1689aa32d7b73bddd600b10b654809c9610ef49e4ae0995235fdd764f12216ca",
+    "tests/passing/Monad.purs": "f99bb0b25a008650ab229f45a46284fa945929b0b45f0b9e3e4d2745f31309ab",
+    "tests/passing/MonadState.purs": "9c38949d619a296d4f4a5ad26f15d772df7de0b7c5317d7723993266c9940b21",
+    "tests/passing/MultiArgFunctions.purs": "6e7e83420b25c1b56326670448a57f5133d5073d76f751a5e784b3a3d0ba30c5",
+    "tests/passing/MutRec.purs": "dae096f8934d0a064c3db296acbdfc414cdee01422a198d204159b50d9c7b57b",
+    "tests/passing/MutRec2.purs": "10656d8f842bc54b3d4b71d406f4f04e206330757c43f3038eff042db8dac1cc",
+    "tests/passing/MutRec3.purs": "fe7741060d701c6227759ee58a8d1470ce2331c2190ac7ee179ea07e09152697",
+    "tests/passing/NakedConstraint.purs": "1c1715dc1001363a75da26c148f946f90fc487b1fd23add678810f9755ec1283",
+    "tests/passing/NamedPatterns.purs": "a9098f1c4d5258f4dde3771508377a2959e7a0d96a6ce0235f461abb7c2e14e7",
+    "tests/passing/NegativeBinder.purs": "c02e848721b14310cee1693620814136d8efcf7663bf6fb7dae3f0dbf671a7f2",
+    "tests/passing/NegativeIntInRange.purs": "0c4c59dd223026776a43c573c305361366509002f217e355a4e497d440bc0368",
+    "tests/passing/Nested.purs": "4e62438b60a2cde842ccaeab586dea62dbb225dc56c155eaef6f98a0ef2b1b80",
+    "tests/passing/NestedRecordUpdate.purs": "735e16d86f77800523517b0594c7544b62d1487e506458a58a71aac05549ab1c",
+    "tests/passing/NestedRecordUpdateWildcards.purs": "15ba3205927c1e75b215f3446847788d8663fa59471db8067ae94ac4ac8c7493",
+    "tests/passing/NestedTypeSynonyms.purs": "59ff6bf3ae71748ce82fd1c33c8e9e3e597b05fea2d8b58817f42536684ef784",
+    "tests/passing/NestedWhere.purs": "3aa39a57a566bbd6ae90c6ee430200101ee6ffd31805bd4dd9cc5b439fac7f41",
+    "tests/passing/NewConsClass.purs": "a943ce44c494cd73df0025f19c38eef942a038c9055ced460f4057cce7fdc5b8",
+    "tests/passing/Newtype.purs": "a8f16b3224f8c437df12407d1667bbf9d7948bbabe88d37c061fe59cefa6eff1",
+    "tests/passing/NewtypeClass.purs": "41e762ed1339ad3eb888a07013aebf415663022dd7a6308117fb95958e155a62",
+    "tests/passing/NewtypeEff.purs": "1740b05f24dc7c07f131a5b41c96b84be2b13d12f09f0c564ebbe8083d977895",
+    "tests/passing/NewtypeInstance.purs": "e1e7d10d325a03c4754326d9b7630adeaaa849c2936439d81661c3535764fbb9",
+    "tests/passing/NewtypeWithRecordUpdate.purs": "52d0d7c78d51839594cc6571268566afa8aeda48b8f8f4aa482f5ec56c09ebff",
+    "tests/passing/NonConflictingExports/A.purs": "944cab3bc1de86ffd1fa488303d04c9e9145ddeb1d82006c648728c0a331c0e3",
+    "tests/passing/NonConflictingExports.purs": "8d0a5733c90f1ff54e4185da227d63a051f554e6fe992d3abe29600e8de890ab",
+    "tests/passing/NonOrphanInstanceFunDepExtra/Lib.purs": "1af95de046c436e3bb45d5afa68edb116ac80343826396ec5cdab4b347706d77",
+    "tests/passing/NonOrphanInstanceFunDepExtra.purs": "0b94952d0f7c66f192081fb82e7d2f99baf49fb665980210759cc4974675fbc1",
+    "tests/passing/NonOrphanInstanceMulti/Lib.purs": "820239674e538d4fb184ff3f5de5f91dc03547007fb4d6919188ad921b48c987",
+    "tests/passing/NonOrphanInstanceMulti.purs": "e72c2fb5f659f8a5db9e2a80d56d26719bf4cd3850b9ac13378f5e7334619b6a",
+    "tests/passing/NumberLiterals.purs": "5bdbde754a1841c0947731340c3633d3633bc86d72d589d331c27951f70e8f35",
+    "tests/passing/ObjectGetter.purs": "5149e07a340281c3fa8ec5546e202ed27c021b9dc19b24a57d9e9f165c9e579f",
+    "tests/passing/ObjectSynonym.purs": "c732e671dfe4b3b565cee40b4430133d166999c50e65916fa520be54428c48f1",
+    "tests/passing/ObjectUpdate.purs": "af645fa3179466c33084631e8315f5975fbce56b044166d9a8cc9c141cf201e5",
+    "tests/passing/ObjectUpdate2.purs": "8bcbf4eb9ea82a8bfe7f910ce0fdcf5e1a6b71aa1e5206cbdc7d78e871563973",
+    "tests/passing/ObjectUpdater.purs": "dcd2dbb98e1c38e8de00828b6c9e050163df82f11dca3b58e5ad1cb472397d9e",
+    "tests/passing/ObjectWildcards.purs": "d4cfb8068a88507721ffea98538f30a8290c5bca4c72c4f13b7f73e03b836ca5",
+    "tests/passing/Objects.purs": "041c9ffd84b8d0230779b183c9780a45c63cd7d08af9cd4d11d99303819b38d9",
+    "tests/passing/OneConstructor.purs": "9d05785a9016d228e5cda6c537910ced1f694bd206201bb0304b93cd6cf550b8",
+    "tests/passing/OperatorAlias.purs": "08ef3acab09de48c6a56b85a5679e633814efa4eacb7701b2a17645d6823599e",
+    "tests/passing/OperatorAliasElsewhere/Def.purs": "757b8dda3c021b876d651150b90e0b8eaf4ec158b47f84090856d4659de715be",
+    "tests/passing/OperatorAliasElsewhere.purs": "83288726071d38b739b76404dcdbc79f6630472d02d0e42afc0f24231d479600",
+    "tests/passing/OperatorAssociativity.purs": "2834f6f5f78d141a06c4e0c6fe4082835f7bdc0bf917159738f59fc0dc12f2aa",
+    "tests/passing/OperatorInlining.purs": "0f6b4851ade474246f8b700eeb24907004ab4efe9bb9172baed84ec991ec004e",
+    "tests/passing/OperatorSections.purs": "859c4efd6ca85e6b82b43bf97d56439b7a7485c62ab1b1a2da57e0e8094f1609",
+    "tests/passing/Operators/Other.purs": "ba0e5c2d5eb89cf3d175380f849338a46cd845ef32b9071c98a0759dae8ae464",
+    "tests/passing/Operators.purs": "0152232fc33c8cbb26e7e0614b47791995d9023bb677f96c3c90cfe950cf3bc4",
+    "tests/passing/OptimizerBug.purs": "40e62952e9a66b4ceea207b8db27b6ed1df6b55476206163d95a324094ce023b",
+    "tests/passing/OptionalQualified.purs": "b78ab714d2e6ea1cb9511ffcfbb29c847d14280cc51f03deddfa2ca493d1206f",
+    "tests/passing/Ord1Deriving.purs": "010808f8fc03646e785204bb2d56425245af9a25406dbcc302504d910db7772e",
+    "tests/passing/Ord1InOrdDeriving.purs": "adf4967eb287da4f5123332b64fea1992a1f7bf56be8bd031832b5ebd1a592ef",
+    "tests/passing/ParensInType.purs": "be4ba82e115a48b40d92a386afe0db49d2f85e8f833662fe9ec55bee55ba6cae",
+    "tests/passing/ParensInTypedBinder.purs": "1c5091732e28e6cdb6534b9071e847d9f6c5c6fd9859798feea4223da8ebd2fa",
+    "tests/passing/ParseTypeInt.purs": "847834bd82fdd1186591d1b78d1f8952c430f9540c2a8a67cd8778844845dd30",
+    "tests/passing/PartialFunction.purs": "dbcd1d88346737647f3e0791e0d029f830b18ad4a4ecdc73238c9ece176c5e0d",
+    "tests/passing/PartialTCO.purs": "9d43867ce105efb5a956b94cacd28455c1ff4f34b41382144377c119724060a1",
+    "tests/passing/Patterns.purs": "340641efc1bcc48f805101ccc2276a70d01972af68e59021e2f3e2bb11cd754d",
+    "tests/passing/PendingConflictingImports/A.purs": "944cab3bc1de86ffd1fa488303d04c9e9145ddeb1d82006c648728c0a331c0e3",
+    "tests/passing/PendingConflictingImports/B.purs": "68a7ae5d02717d8dc79b68a2e15e5735199501995fadb4a846efed739a8023b0",
+    "tests/passing/PendingConflictingImports.purs": "195e92d1827525976657f2fc0f746c2bfad9125962d62887bd7156e46d9cb012",
+    "tests/passing/PendingConflictingImports2/A.purs": "944cab3bc1de86ffd1fa488303d04c9e9145ddeb1d82006c648728c0a331c0e3",
+    "tests/passing/PendingConflictingImports2.purs": "7881e2558a7bafc46a88911a9121f2148fd79a0b634eb0c4e0d6a92c76bf615c",
+    "tests/passing/Person.purs": "afc2d75fda793be9667481b4113979e1929e930fbb0deb61d4b20851558067ed",
+    "tests/passing/PolyLabels/Main.fs": "cd55bb64bc74346accdfad7e8e9b1d7eaa8ccf20eabbe8362ebf2736564794f8",
+    "tests/passing/PolyLabels.js": "28e6dfa0eeb7adeece40a417aa930990ebe25693f2770fa520791e2c8bf31654",
+    "tests/passing/PolyLabels.purs": "1bad04f092684c3a559779c3b6b6930236390fb8c13fb6bfa6b443a77eef02b4",
+    "tests/passing/PolykindBindingGroup1.purs": "8e6f629183a5d90f07f6bc02805f614e605f7e91d76bc09163cfd2316911e378",
+    "tests/passing/PolykindBindingGroup2.purs": "d508ff71b9670e52844bc029e0a72a066375476b76c2577dc14ad8c4710d11ff",
+    "tests/passing/PolykindGeneralization.purs": "c15be4ac894771035697a569e3720ca7b698fa25589f29084df7a00eb7142566",
+    "tests/passing/PolykindGeneralizationHygiene.purs": "27876889c95ab374db4012c6f6bfd4a9bdd0ab821c35e028d709f9d7286f8753",
+    "tests/passing/PolykindGeneralizedTypeSynonym.purs": "30801cb7c85c9eefdecb7d410c6d150de0c0d117a7e594d6f430431b54e5d681",
+    "tests/passing/PolykindInstanceDispatch.purs": "93ba41a71181056a672dc5ed05ab26a6c41bc530678cc57332bd6a775d21dbc0",
+    "tests/passing/PolykindInstantiatedInstance.purs": "785f866118284259e74377c6d868f781e43a5211f0cf27018a49df41787a3c8a",
+    "tests/passing/PolykindInstantiation.purs": "ce0011735bf0017dd2f13b9e136eb3b716f901648894fdd662ce43db5aec7afb",
+    "tests/passing/PolykindRowCons.purs": "fcf3d342943f05f7ef86fe258dd782217700a20f1146af1c8f45de31cbdd47d1",
+    "tests/passing/PrimedTypeName.purs": "34e0f0f84b1fd661662c8e448a6a26741992e31524c42193465e197b35ddb512",
+    "tests/passing/QualifiedAdo/IxApplicative.purs": "c12b8766ddac7a44237b195664509d4a2cdbe5c8841441bb97281bc7ec20c65d",
+    "tests/passing/QualifiedAdo.purs": "f3769ca40b86b925a2b2219c9a4d4f637ac8c3fb024163355cb56d44da49d112",
+    "tests/passing/QualifiedDo/IxMonad.purs": "eb4d700dbdcc122dbddc82756078d446aaed2afd0e471502d1689595bf4732a2",
+    "tests/passing/QualifiedDo.purs": "7472e62b595c4f496742777bca4b15fc2ad265763fda449e5d5e095a61b8ecf8",
+    "tests/passing/QualifiedNames/Either.purs": "1b762c7777fdba3f0a72c4dc1b3090a984e212627537d46e98039857ece1d55f",
+    "tests/passing/QualifiedNames.purs": "efe76837e8e23d35301daadf984227da3ae734fdb98e423818db9791eaa53206",
+    "tests/passing/QualifiedOperators/Foo.purs": "6cae94b66b691b5a7f2c7fa2ec2d00b3871385078419c36853afd965f08bbfa2",
+    "tests/passing/QualifiedOperators.purs": "14eabc07f4fe3fc9a54732acd2d551cc68343a3554d10b3876f9d31e7d501c28",
+    "tests/passing/QualifiedQualifiedImports.purs": "8cbe6ee88e82e3b0e1c93f5e56416b5ef328f32bf7766e417d27680cdc5e5d22",
+    "tests/passing/QuantifiedKind.purs": "2c9bb9a7672d7444e2a1a1875d80e078ff13830b1f5cfcb8bf87b31d3f6c4b81",
+    "tests/passing/Rank2Data.purs": "33affe4d45d7b1431abaf0a1db6d86bf38d91e70cc17d4620e7fad48bebd5b8c",
+    "tests/passing/Rank2Kinds.purs": "6322fe138fcf3da235c6a9a073c597bdfcc6ce490b4dff046ea419666ae3140f",
+    "tests/passing/Rank2Object.purs": "3f649a2f51e8af31bb7abc506bcac818a3bb74d5f53ad1bdbd58c6d774737bdb",
+    "tests/passing/Rank2TypeSynonym.purs": "14316a2243a8a42c7275004a18a903d899217592f962cb432932d16810ee156d",
+    "tests/passing/Rank2Types.purs": "56f6c725b93c85bd08191e047f2a88bdc31f3b62befae5fd0cd629cea68d1c4d",
+    "tests/passing/ReExportQualified/A.purs": "5a0dd85114ff2f6fcf0acdff9de862d9544a2acfdbb0c438aed992623e43651d",
+    "tests/passing/ReExportQualified/B.purs": "c637e6ee0556abe2d359b0c13eec8ea2c7085ba7be556cf4eb60e0faac472f01",
+    "tests/passing/ReExportQualified/C.purs": "4b1057dd9c76a53fece0231bdb65ce7a8006001aa137354ec59e774167f04e1a",
+    "tests/passing/ReExportQualified.purs": "0e876439d9046e606477481d555f759d7b7517c2439535c73a8bdc4b0d8f32ad",
+    "tests/passing/ReExportsExported/A.purs": "726824bb2eedc41fbd5d39dff15db566d6cab710a782eff1b2bf241efbcfc8b3",
+    "tests/passing/ReExportsExported/B.purs": "5a2431930237c6c08f0d8f4077ece61a64168538a32631814345b08021725912",
+    "tests/passing/ReExportsExported/C.purs": "8ec9e57b158469c0294acfcd12396edf5c04eb2c403dab041064ef0535fe087e",
+    "tests/passing/ReExportsExported/Main.fs": "3b26a2a5dec4a83ceb492a540be705c58be80917199c7d1ae2256433547d88a1",
+    "tests/passing/ReExportsExported.js": "ff959309a4abf800ccb9b47ca7c220d5af501d27e02469645c75537970081d17",
+    "tests/passing/ReExportsExported.purs": "b2c4de622685daea67b6b4e5903d5aec2958db6d5f8a77ba64f02103e7a0082b",
+    "tests/passing/RebindableSyntax.purs": "6619b59595f44b52711e7e685ac62c6b4eb8e2384e271fea6774b9a20f2e73e5",
+    "tests/passing/Recursion.purs": "7ff42a1610e249da8ac4d457bfe069fd710ae8985564c934e64e895b8ff8f2c1",
+    "tests/passing/RedefinedFixity/M1.purs": "dd60815180394b7633f37fbe9639013492f86d322faf26825d308ceaede48b9e",
+    "tests/passing/RedefinedFixity/M2.purs": "5605c70e19d9aa74c1811ce4803bad3776189a33edeb809168fa9ce474a66b0d",
+    "tests/passing/RedefinedFixity/M3.purs": "f348a3fd8dfd4aceffad89b1269b82fc04a2cd5bc3deb7a2f95ba946aa03fa03",
+    "tests/passing/RedefinedFixity.purs": "83ad62c60fa897008a2bcf4f76dfd5a6ed66c63a618ab2ab517722bd0fa42759",
+    "tests/passing/ReservedWords.purs": "29c26ffee2497c7246126fd7690ac6c1b657823d24290c1a59a6d5992eb09040",
+    "tests/passing/ResolvableScopeConflict/A.purs": "944cab3bc1de86ffd1fa488303d04c9e9145ddeb1d82006c648728c0a331c0e3",
+    "tests/passing/ResolvableScopeConflict/B.purs": "b1b08d5bc466ade6e4b4602d79dc9cb2a4ef674624fb210c9936bc759609f8f6",
+    "tests/passing/ResolvableScopeConflict.purs": "84f00348bf9751009cb07e5066a94bea3869b5daf811a5797e28dde844b4bd26",
+    "tests/passing/ResolvableScopeConflict2/A.purs": "8520adc1c5d983089fe3a8b62918ec5a1e8d51528d3f2d05ea25c06a3cea8a1d",
+    "tests/passing/ResolvableScopeConflict2.purs": "7c0cdb1f7ac17d3806d15785ba7721567cfc042d3011c1b2c499b0affc102d2a",
+    "tests/passing/ResolvableScopeConflict3/A.purs": "944cab3bc1de86ffd1fa488303d04c9e9145ddeb1d82006c648728c0a331c0e3",
+    "tests/passing/ResolvableScopeConflict3.purs": "93f0c46e01a31e69d1afe0c01d995f0168a8f1331a79bc48ed47914ed4f9a47a",
+    "tests/passing/RowConstructors.purs": "7cdf28950ba655b68e344e2eec6073420d9ace3031b9bc007b85449bcbbbfc82",
+    "tests/passing/RowInInstanceHeadDetermined.purs": "53a9e5aaeee0da65ee2fd75459c191bbdd6be0a01308f407a60d59d839e6ca43",
+    "tests/passing/RowLacks.purs": "22f7299bad1e4d22969c417a4d9ff70c93a03862eb580d668c26cc7c0722c9b5",
+    "tests/passing/RowNub.purs": "0776b30febb7f3187e91d27c904f28d31d7bc48cba772d263c3c82d906f7e96d",
+    "tests/passing/RowPolyInstanceContext.purs": "df68c30ae250bc2cf4746e75fc1389077bcd1c854600edf81172002a1a8cde85",
+    "tests/passing/RowUnion/Main.fs": "2c6de23908b5d91cc95ba7b6f3f3c640eeede1ea9cbca5f616d01ce52bf28d5b",
+    "tests/passing/RowUnion.js": "41cfae1349fb085eaf0cda179453b6df88d7549d447caeba97373d6ea252b1f1",
+    "tests/passing/RowUnion.purs": "611aab63126f28944c57aebb785836e306fbfe70b92ee6d790d959d3e5f71fad",
+    "tests/passing/RowsInInstanceContext.purs": "d041f9db9fb14c3b830a09ab4698812e575aab214e56c0c5af4e979d7b548c7b",
+    "tests/passing/RowsInKinds.purs": "b950b34db459f6335f1f5b0b4028809ca923a18545f702f56a444c5fc1a29156",
+    "tests/passing/RowsInKinds2.purs": "6a3b146e7d86bcce552c4e8b7be7553432e8132fc16c0e16751812ad2a03d639",
+    "tests/passing/RunFnInline.purs": "fd9fb68d206fd955e3b6e0e41c2137ebcf15d1548c987b5e84625a460441b4c7",
+    "tests/passing/RuntimeScopeIssue.purs": "a67cef59ebb45de7a9b2d8e9da26254bf35aa1b1053887c0cd38a45fee4fdf6b",
+    "tests/passing/ScopedTypeVariables.purs": "be8f4588f94cf8938787c8dc42959ea3a8b9d78cc9fdd951eb7e36b1cdf6f972",
+    "tests/passing/Sequence.purs": "e238b9d4d2e23a18c7ff475101a3e6a6888e62b7986852b21360e550dc216f04",
+    "tests/passing/SequenceDesugared.purs": "2c9b7b134cc132c99aa60dddb9e2e7a31ffea826896a1b22105a4386dc165c58",
+    "tests/passing/ShadowedModuleName/Test.purs": "563cb62fa972992cac35a2ab411f52e4d1d516a7f11a193aca81120bfa17f359",
+    "tests/passing/ShadowedModuleName.purs": "e3ac67c2efc53044f89071ae81d58a63298e154cdf0293a08effd85ba0331ba0",
+    "tests/passing/ShadowedName.purs": "60524628d10c7b9ccf0e65ad4ee11e95f8d11fded9cb348c501ca8b8260951e9",
+    "tests/passing/ShadowedRename.purs": "09043e65d1f973815cbac9b32fc9125132cb16c1f14419075ee440cd93cd50a7",
+    "tests/passing/ShadowedTCO.purs": "27c4001fa8b39abb612ce03b5032f362dca485a4abd5f2994d3a496452f00b70",
+    "tests/passing/ShadowedTCOLet.purs": "df8fde6706efeb15110aecaeff978ca559a0f5060bb10f2f17b9275bea1b6c16",
+    "tests/passing/SignedNumericLiterals.purs": "38b075b9e2468f62f3502678ddefa1e7e94711bf827811f2b66b5640dac366b8",
+    "tests/passing/SingleInstanceFundep.purs": "0b0b2e6af332660860ce70b6a4afcf8f9500151e77048e154c105bf5b7bb5b30",
+    "tests/passing/SolvingAddInt.purs": "e129d08c4f1d2d7ad73522ec9fb2c2852cbf8a68332feebe0923821819afb71d",
+    "tests/passing/SolvingAppendSymbol.purs": "8de5efc2344126e8a049c9940d6823e4039518140b455c7131f8bde03b5c3ecb",
+    "tests/passing/SolvingCompareInt.purs": "c888f29cd9ce981fb08ca33cbd58fb13c52bd1fcb482c50639e34b08c5c938d8",
+    "tests/passing/SolvingCompareSymbol.purs": "33740de52a4bc0b076773b6859454622dea9752c9255bad7ed7fe2d67fc11c5e",
+    "tests/passing/SolvingIsSymbol/Lib.purs": "b0f15a05894fddde4213170e9fd3e979e05562327ed77c80f4c82d540a5dab3f",
+    "tests/passing/SolvingIsSymbol.purs": "416dde74199acadce5426f7dfd78ff7d15824e7c5f3bfb18077bd40682056121",
+    "tests/passing/SolvingMulInt.purs": "4fbd0f63bcac0d4c39d4db7f23d6b6a542a378d4a9ecf301e6e3c6c308c6f6c2",
+    "tests/passing/SolvingReflectable.purs": "e7664701a0b7017844197e79a33f74c9c84239a7b02cc34132d2a0e4f63abf25",
+    "tests/passing/StandaloneKindSignatures.purs": "f5d6719b38accc68b509f48babb1a5a706a90f09bc5e2d9662f7505c18ef6d98",
+    "tests/passing/Stream.purs": "cb553d801ce31fc2f792eb18da62a9a442c751a5d0f8416c5b95eede8c4334a1",
+    "tests/passing/StringEdgeCases/Records.purs": "c1a50d704c310c3707d228de4ef3924963bd87b9d30624b107a92d337d0a593b",
+    "tests/passing/StringEdgeCases/Symbols.purs": "66420f823b51e93eb8f3573c65d49f7f6c0a32c6c66255e1f512ad8fb72956d3",
+    "tests/passing/StringEdgeCases.purs": "9c4352d563559dc88031b1803b402c4dd1f54564d4f94782ce93db136b568d72",
+    "tests/passing/StringEscapes.purs": "26714632cbd0802c7a9a15dce43c40b3b8851cd3fbfd28784ea5340204009590",
+    "tests/passing/Superclasses1.purs": "6308d19c69b68bae80dfb8625d94fab28175ea5f3919a267034bca9d76051978",
+    "tests/passing/Superclasses3.purs": "0dc3d5935ddd90e9cc470a43a71a071dc79ad8a4d2567671775bd6be9578056c",
+    "tests/passing/TCO.purs": "d0dcf37eaebe5c3e6428ce0c7ce6fe7ee3504a0ee5f20b629cf46d3b4dcfcc0e",
+    "tests/passing/TCOCase.purs": "80c16bf00d88baf00ad9b6d552e37f3cfe458e1d1c96202d531c16ec9daee68d",
+    "tests/passing/TCOFloated.purs": "629b58277dbab00b488e9cb8eaca0ce47fac63b61b0f51e33dd28bcbbf36e7ba",
+    "tests/passing/TCOMutRec.purs": "dc8d9f95ba8495518f5107bc56ccb061500cf8fe5855a27af149a45534b555e6",
+    "tests/passing/TailCall.purs": "92f47c5ac76c80714e7eb3e06c865203e41094039c6ee55355b12684a9fa4ec2",
+    "tests/passing/Tick.purs": "160aab0c96dd069c2c11ebfe94d733d358ca0514b078dde4ebb816f3e0bafdb8",
+    "tests/passing/TopLevelCase.purs": "238643eb03bf022979dae7dabfe70da85dadadee0c6a7c229790e00bec1ed2c4",
+    "tests/passing/TransitiveImport/Middle.purs": "16671b763b62ba64534e0af186d7f1e33f142ed07ac2e3f0c51b1563ebab63ee",
+    "tests/passing/TransitiveImport/Test.purs": "33e8febbc88c8d2d60fb2b278f8bd049a51b8531a21b9b1fd2cc6eff97d727cd",
+    "tests/passing/TransitiveImport.purs": "d9c5929f921500fdd3da3121ec7fe3c40f76e7e8fd9913aee8f2e8d815ec9b21",
+    "tests/passing/TransitiveImportUnnamedInstance/Middle.purs": "16671b763b62ba64534e0af186d7f1e33f142ed07ac2e3f0c51b1563ebab63ee",
+    "tests/passing/TransitiveImportUnnamedInstance/Test.purs": "698ab022082bd99e03ddb7dba0bb7f5c614a4c03ea6d56fe68bd97b5cc125097",
+    "tests/passing/TransitiveImportUnnamedInstance.purs": "d9c5929f921500fdd3da3121ec7fe3c40f76e7e8fd9913aee8f2e8d815ec9b21",
+    "tests/passing/TypeAnnotationPrecedence.purs": "229193e97e8c8f24535dc215067689a630c4cd1c838031fd5bbd7f6b985c33d2",
+    "tests/passing/TypeClassMemberOrderChange.purs": "b2363384c541068dc0b37a740bc991334b687ec6e071e5bb3a92dfb7909ddfeb",
+    "tests/passing/TypeClasses.purs": "98a05bff1d0f0450ee1d02cd0c9a30cc830baac89cc91da3c3a5c5ba50737bd0",
+    "tests/passing/TypeClassesInOrder.purs": "4c85e824b3edbcb057f78c9bf826c9183ce67741b576bdce12ffd6f5701c91bc",
+    "tests/passing/TypeClassesWithOverlappingTypeVariables.purs": "663219203138e3fdc2c6dc300bc93167770ee51676f6ec54dd20e5939bb17beb",
+    "tests/passing/TypeDecl.purs": "1da97325640b42298107183c0fef1e99e0d6b608efd9f081e43a9705359aad20",
+    "tests/passing/TypeOperators/A.purs": "9dc1eb47c59f38e0e5eb77dd2e6e8cbf93ad69cc6610d1e9f465cc088e017798",
+    "tests/passing/TypeOperators.purs": "81438aa9de6ca84fb218b5ed8605fe54d54b9d3a0ff89a208d82b57fb54e99c2",
+    "tests/passing/TypeSynonymInData.purs": "3920a152d62004fff661b3b933717021c1a037af886e088b38ac4826d8dd895a",
+    "tests/passing/TypeSynonymInSuperClass.purs": "ff86ceee826a2853c77a73caf8e8a271934474259bdacfa2f77aa4c6112b5415",
+    "tests/passing/TypeSynonymInstance.purs": "be7336f79f3c1410ba55e0990e068b2186fcc049f29ecbf3be30971a3f4f5f5e",
+    "tests/passing/TypeSynonymInstance2.purs": "db3f45143c1008dd688f992ce49d0fcd788f0a26880bed67b24142e6c17cec7c",
+    "tests/passing/TypeSynonymInstance3.purs": "71cd469545ad8448de54744086e8ae907d0fa82f34b3ddfbb05416d82f9ee29c",
+    "tests/passing/TypeSynonymInstance4.purs": "9f87abbc8f4955b912fafc9f28b4147a764d5e01db3e49e12cd6b2e93dc00968",
+    "tests/passing/TypeSynonymInstance5.purs": "445054784f52883ed26400e7bd20ff4817172f004ca3cd07ee78e1ee8298e3c2",
+    "tests/passing/TypeSynonyms.purs": "74e586433acb46e11baeb2c64a29c09bb2aa3b9f06f634703d5a3ee1a524a2de",
+    "tests/passing/TypeSynonymsInKinds.purs": "fc0fd9cfba0d3fb1a256a995264d0f272398c22afd69a6263e91ab22432e6bb0",
+    "tests/passing/TypeWildcards.purs": "7423e9a0e15c3e52a1f3c0c581e11ab122667c9910243ffb0a2bac9a5ccc0626",
+    "tests/passing/TypeWildcardsRecordExtension.purs": "2abea998f9069689a68944cdcc6f454ec821be2caf1e9fd79db22d3d67af74b3",
+    "tests/passing/TypeWithoutParens/Lib.purs": "5f4ce9b37acb4602e9792a24a2b5eadec2d6912608f1b30220281b2b5bffefa5",
+    "tests/passing/TypeWithoutParens.purs": "e4ad7ca197aff6cd56d5d6f4d238dc88c49920cac52746adc573453a53198b09",
+    "tests/passing/TypedBinders.purs": "61f61053afa5bb04a7049b8667fffb38496e76699ce1a90123c7d650f807ae6c",
+    "tests/passing/TypedWhere.purs": "1e0f8b93eb5392606e99b664a605ec418a13597b7c3237b4d7604cfe9301df1b",
+    "tests/passing/UTF8Sourcefile.purs": "d0bd4bd53d47c606685244ecf1e2b90c572868bf64dd0ea61a364678039ff66f",
+    "tests/passing/UnderscoreIdent.purs": "52429240cf989f0c5c75e6b9dbb0bf307ca79797a03c6448b9daf111512609e5",
+    "tests/passing/UnicodeIdentifier.purs": "8b085615885092353379b5e1514bf77c12907e2c9ceb6105ca374822bc9385f0",
+    "tests/passing/UnicodeOperators.purs": "658cada8f521b288c8310b63d8e631f8afd9393a02c6d8758dc29782f134b7ad",
+    "tests/passing/UnicodeType.purs": "90786de131cc07fa1e759091739847e5b2cc8184ebecbd910d0b18eaa3f98367",
+    "tests/passing/UnifyInTypeInstanceLookup.purs": "05dfb4c31ce4144f5cc1d665c5f981ca0c3783c5dec5731e5f0afa4924b99c63",
+    "tests/passing/Unit.purs": "021c0767e198c6a7938327896769113ddb0c38763f57edf6403c17ad2f95bb00",
+    "tests/passing/UnknownInTypeClassLookup.purs": "0a0fa6239dda122a2e1b23d7796cb3d5e809759cd7d04de2eb4ff0a23e20a7d4",
+    "tests/passing/UnsafeCoerce.purs": "b2c04ad57e0958c76795ad15bcc4cc2f0918f440a3bd74804042af081174335a",
+    "tests/passing/UntupledConstraints.purs": "d53d06abe60654039c94291f9ba3ed92f8d6434f48fab11f7e613609376aea98",
+    "tests/passing/UsableTypeClassMethods.purs": "8168af504ca2b44920c425a2488c7b66409cc3b58f51e38552c2aa03cde19952",
+    "tests/passing/VTAsClassHeads.purs": "dab59d28a0e63a9e6c9808951e1e471fe559a4fd40d93a680b410f7c66f29afc",
+    "tests/passing/VisibleTypeApplications.purs": "c268cb97b431f864efa98e6afd5e390802b4bb164129be07538a59f309b683b3",
+    "tests/passing/Where.purs": "9efadb8d1ddabed93f55e351b57c46dd088738d944d96642ed0fe8b8002e024d",
+    "tests/passing/WildcardInInstance.purs": "bd120fdd4f34cf85537bd92ce44c40488cddce6757472b1659e02cd25b8f035a",
+    "tests/passing/WildcardType.purs": "7704f23a1f40bb94a36235c9339c958f4cf2edaa956cbba3998abbdc753c8746",
+    "tests/passing/iota.purs": "0c2ed8ef469f82c3b20633488af0c5ea891b911b3dc14ab019b297eff2c0823f",
+    "tests/passing/s.purs": "c034082f4687f75015678e91f09153427b2381296d68258821f95d4ed2bc3c85",
+    "tests/printer.mjs": "9dde67e02724e9dbe506414e22b9a0f6baf0801dded237bceb30843bc970f5ab",
+    "tests/project.mjs": "8879059c43f7849aba7a63dd9da4114c4fcd5efcfdb7ad9c46885cdf8d73a192",
+    "tests/recursion.mjs": "063ccb86309830873d2c6bfa2bc9c929bd39b5d744314c131ae7b7c7c97c479b",
+    "tests/run.mjs": "80d8249aae40995892315ea07604854dad11b8443f9ebd7aec5f8f058f1404b8",
+    "tests/runtime-apply.fsx": "aa34a4b5ecf758430cef38400050d0d96e6d263057b762af1ec1fb102827e41f",
+    "tests/runtime-apply.mjs": "124c9b0534a0332b97795eb36d1b2ab4f7862db80282b9e47992ee66c40eabe0",
+    "tests/selection.mjs": "ed84213ab9946a6904f81a2cfdd148f1213b8bf0c5ed658ac7c5252cf3590b0a",
+    "tests/support/adt-lowering-api.mjs": "318aa6f8209c5acaa94916d906a23acfe1f127c8bd4e3f013a2257dc4157512d",
+    "tests/support/ast.mjs": "fbb8dca6a001eef415de5b6ea439744f9b1f468f287e789b8d5a25dda5a75de0",
+    "tests/support/corefn.mjs": "4ca4aa07d9bed86c66f4fa426fef2372db4187187664d28e190a356e811949bb",
+    "tests/support/fixtures.mjs": "1d4e2dde09806e3d48abac3fa02d75344683108639c25b47a7f9ff1ac65623b7",
+    "tests/support/fsharp.mjs": "53efa14f9d01ad89cebecca171341abb8e67dd27b908a854f1603060c5575707",
+    "tests/support/project-io.mjs": "13c180f859c6ef4609c9d78494c6fe43dc4bab65f42224187aac169b7b022cd4",
+    "tests/thunk-kernel.mjs": "1e4c3d4951aa6a2832b4bf73e4805aa2ca068e45d99b9f727ce855fadfa7b018",
+    "tests/tools.mjs": "f1c9a44ce509d3b6b161f03c28e318eceed56e1378c1f0e55bf3857219b0e9f3",
+    "tools/modtest-runner.mjs": "2dbc6952318096d7f1931c51c762f14f27ef3b2209f22b7d2f31393f1a8e3197"
+  },
+  "checks": {
+    "distinctAggregateStepsPassed": 18,
+    "primaryAggregateSteps": 13,
+    "supplementalAggregateSteps": 6,
+    "correctedThunkReplayIncludedInSupplement": true,
+    "selectedSuites": 15,
+    "availableSuites": 23,
+    "pureScriptAssertions": 49,
+    "fixtureSupportTests": 8,
+    "runtimeChecks": 3262,
+    "converterJsSelectionChecks": 881,
+    "steps": [
+      {
+        "name": "build",
+        "command": [
+          "spago",
+          "build"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 2146,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/after-checks/build.log"
+      },
+      {
+        "name": "bundle",
+        "command": [
+          "spago",
+          "bundle",
+          "--module",
+          "Main",
+          "--platform",
+          "node",
+          "--outfile",
+          "bin/sharpurs.js",
+          "--bundle-type",
+          "app"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 563,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/after-checks/bundle.log"
+      },
+      {
+        "name": "purescript",
+        "command": [
+          "spago",
+          "test"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 571,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/after-checks/purescript.log"
+      },
+      {
+        "name": "test:direct-call",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/direct-call.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 1230,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/after-checks/test-direct-call.log"
+      },
+      {
+        "name": "test:int-arithmetic",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/int-arithmetic.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 1219,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/after-checks/test-int-arithmetic.log"
+      },
+      {
+        "name": "test:adt-multi",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/adt-multi.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 3310,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/after-checks/test-adt-multi.log"
+      },
+      {
+        "name": "test:int-comparison",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/int-comparison.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 1110,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/after-checks/test-int-comparison.log"
+      },
+      {
+        "name": "test:adt-kernel",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/adt-kernel.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 1381,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/after-checks/test-adt-kernel.log"
+      },
+      {
+        "name": "test:adt-interop",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/adt-interop.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 1747,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/after-checks/test-adt-interop.log"
+      },
+      {
+        "name": "test:adt-unary",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/adt-unary.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 1621,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/after-checks/test-adt-unary.log"
+      },
+      {
+        "name": "test:thunk-kernel",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/thunk-kernel.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 3994,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/after-checks/test-thunk-kernel.log"
+      },
+      {
+        "name": "test:constructor-typeapp",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/constructor-typeapp.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 1695,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/after-checks/test-constructor-typeapp.log"
+      },
+      {
+        "name": "test:fixture-support",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "--test",
+          "tests/fixture-support.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 92,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/after-checks/test-fixture-support.log"
+      },
+      {
+        "name": "test:selection",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/selection.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 73,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/after-extra-checks/test-selection.log"
+      },
+      {
+        "name": "test:local-kernel",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/local-int-kernel.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 715,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/after-extra-checks/test-local-kernel.log"
+      },
+      {
+        "name": "test:printer",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/printer.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 787,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/after-extra-checks/test-printer.log"
+      },
+      {
+        "name": "test:recursion",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/recursion.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 905,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/after-extra-checks/test-recursion.log"
+      },
+      {
+        "name": "test:case-patterns",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/case-patterns.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 900,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/after-extra-checks/test-case-patterns.log"
+      },
+      {
+        "name": "test:thunk-kernel",
+        "command": [
+          "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+          "tests/thunk-kernel.mjs"
+        ],
+        "code": 0,
+        "signal": null,
+        "timedOut": false,
+        "cancelled": false,
+        "ok": true,
+        "durationMs": 3975,
+        "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/after-extra-checks/test-thunk-kernel.log"
+      }
+    ]
+  },
+  "testEquivalence": {
+    "success": true,
+    "suites": [
+      {
+        "suite": "direct-call",
+        "counts": [
+          "direct-call runtime: 130 checks passed",
+          "direct-call converter: 67 checks passed"
+        ],
+        "assembledHashes": {
+          "direct-call.fsx": "0c5eff50aae8cb3256cde76ddc6f5a5acebbb94c5dc0b0974c728df91b54d6e4"
+        },
+        "generatedHashes": {
+          "DirectFallback.fs": "776d8b013f67fdf61487f6c78d3d7da987b4645494a27bf54fdfdea75a171acb",
+          "DirectCall.fs": "cabb2e33444afd997577670202a64b06c56a9c42b70c7112a88f842d5135417c"
+        },
+        "mutationInputs": [
+          {
+            "label": "binding: missing declaration annotation",
+            "file": "000.json",
+            "sha256": "0ee590f2f6ce7c7e7d3557d0697a5b8fea751971b5d4b88e16503dbed640f342"
+          },
+          {
+            "label": "binding: contradictory declaration signature",
+            "file": "001.json",
+            "sha256": "6402257c963c16dbd385e722b15369c3b11180d7a20c7265f6a9860c2e921041"
+          },
+          {
+            "label": "binding: missing first lambda annotation",
+            "file": "002.json",
+            "sha256": "29842e57d31139e45226d8dec9390e0f0c4fa2c8f24ad7d3d51984825886603e"
+          },
+          {
+            "label": "binding: missing inner lambda annotation",
+            "file": "003.json",
+            "sha256": "725750b4fb9c10cbb4337c1ebcd2209a309d1351d559ad9ac38916d8531e1273"
+          },
+          {
+            "label": "binding: contradictory lambda suffix",
+            "file": "004.json",
+            "sha256": "e49c3495c35c4a3bbbb6bb5397053a1ea787894796c434e25eefc777241f97b6"
+          },
+          {
+            "label": "binding: missing body annotation",
+            "file": "005.json",
+            "sha256": "c33b082987943ed9c62a0d23820fdc557e9c8bfe71e2c5a8a661cc39624ec1cf"
+          },
+          {
+            "label": "binding: contradictory body result",
+            "file": "006.json",
+            "sha256": "ba8a212f8bd2bc13cbf6e0f56f34455a76cf65cf3ba232d6a1fcfbb454f604b0"
+          },
+          {
+            "label": "binding: explicit polymorphic declaration",
+            "file": "007.json",
+            "sha256": "59ad0fe03531e903deb220c963c2bf5ee4d7eb37f05b705993fb107af2faef60"
+          },
+          {
+            "label": "binding: duplicate sanitized argument names",
+            "file": "008.json",
+            "sha256": "ac08955a78426b936eb3ed55a925287c7cbb181a02553064503a59209b3322f6"
+          },
+          {
+            "label": "call: missing call result annotation",
+            "file": "009.json",
+            "sha256": "337f78c4ac1cbed0c7648850b4575cbc435bfd6e3b2e1d7965ed77323447554a"
+          },
+          {
+            "label": "call: contradictory call result",
+            "file": "010.json",
+            "sha256": "c7eeed5e55cb871441c9e89f2dfe3ae9c91c20750f0afddea64a4b40eb0b5a25"
+          },
+          {
+            "label": "call: missing argument type",
+            "file": "011.json",
+            "sha256": "38d934f157ae7954d2f2cf59b9c7c4eebf760927be24edff0801b4ff575057a5"
+          },
+          {
+            "label": "call: contradictory argument type",
+            "file": "012.json",
+            "sha256": "40645e36e4d3d2b55e4912937332a5201790306c2646ca775360b7717c56aaf1"
+          },
+          {
+            "label": "call: missing callee signature",
+            "file": "013.json",
+            "sha256": "1087c606bace197f39ce8f10a084d149d1ba449cbb09c64bed54fddecfb6a75e"
+          },
+          {
+            "label": "call: contradictory callee signature",
+            "file": "014.json",
+            "sha256": "32a7b9a17b14e322e945c4aa29ef0e4964cd0bab2d6880e2080fc1b95c2bf7b6"
+          },
+          {
+            "label": "call: missing intermediate application type",
+            "file": "015.json",
+            "sha256": "3debed1e54f11c96fb5d639ad5668625eb434a1e412a5fbc2194cf10110f9d65"
+          },
+          {
+            "label": "call: contradictory intermediate signature",
+            "file": "016.json",
+            "sha256": "4f418dd4ee9750303affd16095fa10245333de71b802aee4bb3cead4c20d8897"
+          },
+          {
+            "label": "call: unqualified local shadow",
+            "file": "017.json",
+            "sha256": "e5b4a11d66b11e6e61e5aadc23c106ed78fb13427263c8384aefbdbfe8c16462"
+          },
+          {
+            "label": "call: imported owner",
+            "file": "018.json",
+            "sha256": "1353b83111fee4533d45f6d596f803a630ad025748ce00d8e1725c2bc2cfb5c9"
+          },
+          {
+            "label": "call: different function",
+            "file": "019.json",
+            "sha256": "7b83d31a461aecdbfce4f2daa26d50d72149fa1e40e5417405da7169499b5998"
+          },
+          {
+            "label": "call: explicit TypeApp boundary",
+            "file": "020.json",
+            "sha256": "9d1e18e85d06c24820af5435833725f83f6d84e4002f5c8823e4b31b6e674130"
+          }
+        ],
+        "beforeArtifacts": "before-trace-tests/direct-call",
+        "afterArtifacts": "after-tests/direct-call"
+      },
+      {
+        "suite": "int-arithmetic",
+        "counts": [
+          "int-arithmetic runtime: 1648 checks passed",
+          "int-arithmetic converter: 317 checks passed"
+        ],
+        "assembledHashes": {
+          "arithmetic.fsx": "7e127a5303cbd4839bfc04b26ef85a6f5a8981565b5333f709d9309281f9cc8f"
+        },
+        "generatedHashes": {
+          "ArithmeticFallback.fs": "d3c2215247ad23b30e877a0ec872e96da7699070fa01daf32e44a729a9e5bd61",
+          "IntArithmetic.fs": "ae64ff5471888ca15a8e174b0f17a5430c235ef7d9b32333ab9512199f17abff"
+        },
+        "mutationInputs": [
+          {
+            "label": "addInt: missing result type",
+            "file": "000.json",
+            "sha256": "fdd57ea3a46ef0e596e2d32318e2d22e6269de791dfddd5701c03a298933ffd4"
+          },
+          {
+            "label": "addInt: wrong result type",
+            "file": "001.json",
+            "sha256": "3b897df7202df05c8fb74c7cf8ae7a14026948360e1c5232c78b1cc92c5fe9b7"
+          },
+          {
+            "label": "addInt: missing operand type",
+            "file": "002.json",
+            "sha256": "d74647d0eb93f296340b28ddd0255ce8284d3ce62d55015e97005f2310fe2e4c"
+          },
+          {
+            "label": "addInt: wrong operand type",
+            "file": "003.json",
+            "sha256": "4815909821cb4af10ad7a767fa3028a6ccd18add14fe89549400a15f47518168"
+          },
+          {
+            "label": "addInt: contradictory partial signature",
+            "file": "004.json",
+            "sha256": "57e0b889de5c4b0d3d3e5b479ad84ba7b06326c8bec48d901a45d5eb6c8796fd"
+          },
+          {
+            "label": "addInt: missing dictionary application type",
+            "file": "005.json",
+            "sha256": "febed7ec049e75b016a34e7085d6fa6e42ff8b16f43fba2f48f3d4757bc97fb9"
+          },
+          {
+            "label": "addInt: contradictory dictionary application",
+            "file": "006.json",
+            "sha256": "472545b8f3532d375a6d1c14596ce7d9983b468a44454986dfe3506682da548a"
+          },
+          {
+            "label": "addInt: local dictionary",
+            "file": "007.json",
+            "sha256": "d8caa360c6e2592fcfe6ea73a323696dd3d4e020f810146a90cf9a61b9688ed6"
+          },
+          {
+            "label": "addInt: custom Int dictionary",
+            "file": "008.json",
+            "sha256": "8e05120691002ea497177836ae14f11d0534222b5a5ca9afe7c82fe6d933e926"
+          },
+          {
+            "label": "addInt: wrong dictionary owner",
+            "file": "009.json",
+            "sha256": "ce5897fb952c4aa93db034bdee4dafa15862e63e047e90e629175903e1271167"
+          },
+          {
+            "label": "addInt: missing dictionary type",
+            "file": "010.json",
+            "sha256": "9a4bc1c5c7a1c5d4e05a66b06a4c0ea2624ad6c3429694a35934443ac1965354"
+          },
+          {
+            "label": "addInt: inconsistent dictionary path",
+            "file": "011.json",
+            "sha256": "24a34f16fc9d863766356a7474ee0b8a3e62ae6576052982e2957b29d9108715"
+          },
+          {
+            "label": "addInt: local function shadow",
+            "file": "012.json",
+            "sha256": "f4d0954187791bf256206c48ddd536ee801ce46fec3f086f283391d2c06e822d"
+          },
+          {
+            "label": "addInt: wrong function owner",
+            "file": "013.json",
+            "sha256": "f3abe264cedcd18a6a9b96b342c089fa1a274cdc420cfcddd7dddaa6bae96ecd"
+          },
+          {
+            "label": "addInt: unsupported numeric operation",
+            "file": "014.json",
+            "sha256": "a86ae36feed42353b8c3340eec072812ea93cf2c0d63728c368ae86f11b5fd37"
+          },
+          {
+            "label": "addInt: wrong TypeApp argument",
+            "file": "015.json",
+            "sha256": "f8e3067a4e2ca2b10dbdda90f67f150eb66f4442974a81e54c13c10801253825"
+          },
+          {
+            "label": "addInt: contradictory instantiated signature",
+            "file": "016.json",
+            "sha256": "6ac9a19e97da42d808eaa209780d79e586992fa4e6751f003d7692a55a70765c"
+          },
+          {
+            "label": "addInt: missing polymorphic signature",
+            "file": "017.json",
+            "sha256": "5d21983c29e90345f6709b371c9e43d8adf5840c83d31ae3f922399380e291be"
+          },
+          {
+            "label": "addInt: extra TypeApp",
+            "file": "018.json",
+            "sha256": "494dc349e347c19f9a803c0d6376bf5ebd92fa7bbcc0b66ca97af4e20147800c"
+          },
+          {
+            "label": "subInt: missing result type",
+            "file": "019.json",
+            "sha256": "65b051f98379798dee43dae6267403d683007224e6f7eb42e88d3a32d35891d8"
+          },
+          {
+            "label": "subInt: wrong result type",
+            "file": "020.json",
+            "sha256": "c61a4d263638354e666c52f6d207a1e5ffa8059127bea9b5a9524f4d73a88d52"
+          },
+          {
+            "label": "subInt: missing operand type",
+            "file": "021.json",
+            "sha256": "ce2bbe818b3818258f5fe35adefb6451e2767c0b3ff42613b99675f585f9b095"
+          },
+          {
+            "label": "subInt: wrong operand type",
+            "file": "022.json",
+            "sha256": "57b645afb04f86d994501a6807e6d267e88ad41b85be84e0b429c22eb4ff2e79"
+          },
+          {
+            "label": "subInt: contradictory partial signature",
+            "file": "023.json",
+            "sha256": "3e75ca0b351cebca57393d37573a9a1093eb783a599927a8a4e16121d4cfd29c"
+          },
+          {
+            "label": "subInt: missing dictionary application type",
+            "file": "024.json",
+            "sha256": "b4babe55b07919e5e9f4ea46e57609305715e607959cb86f8ae2899ec138f8d6"
+          },
+          {
+            "label": "subInt: contradictory dictionary application",
+            "file": "025.json",
+            "sha256": "8912f78d744a0ed8a07ea90cfe3ddab9c43cc13dbc1e0f5e403bb71440dbd616"
+          },
+          {
+            "label": "subInt: local dictionary",
+            "file": "026.json",
+            "sha256": "4dd4ae27de12096dd4bd6ca269bf096d447ed28a8748f2c1d4b966d8321454f3"
+          },
+          {
+            "label": "subInt: custom Int dictionary",
+            "file": "027.json",
+            "sha256": "f732b1332e569c6c08255562e5ad6b31a6a439fe47c41f0b08f42b91731709b1"
+          },
+          {
+            "label": "subInt: wrong dictionary owner",
+            "file": "028.json",
+            "sha256": "ba8d54b66f844fb049d386942edf237a09edfc16aaaed373bbf9237d7a421d2a"
+          },
+          {
+            "label": "subInt: missing dictionary type",
+            "file": "029.json",
+            "sha256": "f73197345c71a9dcf35b8164a92734e418fb5e6a6c2aa694ccbef37e10b52071"
+          },
+          {
+            "label": "subInt: inconsistent dictionary path",
+            "file": "030.json",
+            "sha256": "216df3e1a03fca80e9d464e2e6830f1bdd32c462135828e62fc399b626d91a3a"
+          },
+          {
+            "label": "subInt: local function shadow",
+            "file": "031.json",
+            "sha256": "d241c49642f1f75928e5e1698630fd14ac13c8b7f60e864ec5027743c9a49b4f"
+          },
+          {
+            "label": "subInt: wrong function owner",
+            "file": "032.json",
+            "sha256": "4be20330901a7ea51f9cba18366b930f7f13b3c3c0851fdbed007a2cb5060adf"
+          },
+          {
+            "label": "subInt: unsupported numeric operation",
+            "file": "033.json",
+            "sha256": "c0446a28cb7f914a39d93e0bf655671ecd120148e38f6dc09a7b26f4be32fc98"
+          },
+          {
+            "label": "subInt: wrong TypeApp argument",
+            "file": "034.json",
+            "sha256": "0fd84507e2795a1380b3a1eaf90def9759e3d3ea59a07b130a570b0382bde91e"
+          },
+          {
+            "label": "subInt: contradictory instantiated signature",
+            "file": "035.json",
+            "sha256": "2adbf6ad5109a4eeccfb3cff1c24666897f14ad6144e5456e0c4434b103746d4"
+          },
+          {
+            "label": "subInt: missing polymorphic signature",
+            "file": "036.json",
+            "sha256": "6d494d275bb3ddcc426fe71e6c615ebde849644eb102fbcafae3872d80cc0fd6"
+          },
+          {
+            "label": "subInt: extra TypeApp",
+            "file": "037.json",
+            "sha256": "3e0707f302c106adc3894616d324fd0b48f420a123f763ddc3e5ddb28973b5ea"
+          }
+        ],
+        "beforeArtifacts": "before-trace-tests/int-arithmetic",
+        "afterArtifacts": "after-tests/int-arithmetic"
+      },
+      {
+        "suite": "adt-multi",
+        "counts": [
+          "adt-multi runtime: 301 checks passed",
+          "adt-multi converter: 93 checks passed"
+        ],
+        "assembledHashes": {
+          "adt-multi.fsx": "a2914116c4ea68bdfa4d22faf08b08d606426fea7b2a2ee84d7c6a60a1976631"
+        },
+        "generatedHashes": {
+          "Oracle.fs": "05b372639bb2c912a9b7986d7b477c96a692f2740fb045713e6108aac4bab8b9",
+          "InjectedNative.fs": "f74632af1edd613a4323b0c34ea0e7a811bc9e9096d7edb9a922d734af1ce408",
+          "AdtMultiConsumer.fs": "caa39dafe65357899f739a01d8b8f0f1bb53f2e7b3ab004bc05bbbb89a49b2be",
+          "AdtMultiExternal.fs": "47049d833063f79dbb063a392712725e331b3ef32350eb44016533c81e0ab398",
+          "InjectedOracle.fs": "0269056f50b32b195fce6e36c2ad4a00b9108d4a33f9f2f568dc3b1f2ea90564",
+          "AdtMulti.fs": "2979e6a7ceba3947b098beddc67301133eb11daccf16490d3c8913fbe09a99c6"
+        },
+        "mutationInputs": [
+          {
+            "label": "polymorphic layout rejected",
+            "file": "000.json",
+            "sha256": "54878d831b5dc72a0f5a43838022fe44ca657db1753f5d7401ff59f4dc4b6083"
+          },
+          {
+            "label": "missing constructor wrapper rejected",
+            "file": "001.json",
+            "sha256": "82ff184b858493a613256f297d11871fa4f69c33afb2cf3ed084ace9b5b0adcb"
+          },
+          {
+            "label": "native apply helper collision rejected",
+            "file": "002.json",
+            "sha256": "f3e58e2a01aa52574115b3dc676a1e84af5b9911362232e06e759af9c8f42774"
+          },
+          {
+            "label": "foreign module retains generic code",
+            "file": "003.json",
+            "sha256": "442f367b878a69d686d78bf472e78a160bae4340b47f08b5d1859bdddd1c0641"
+          },
+          {
+            "label": "assemble: missing source type rejects function",
+            "file": "004.json",
+            "sha256": "7039328c30c63b2b1ab5d71c4ef44ed2ab02c4a7e8e6a4c220c5971d6939ccf3"
+          },
+          {
+            "label": "assemble: missing inner lambda type rejects function",
+            "file": "005.json",
+            "sha256": "005ada6a156bb622f3a668896e6aef7eba6c468cff35133bd7199f35f9030a38"
+          },
+          {
+            "label": "assemble: contradictory inner lambda type rejects function",
+            "file": "006.json",
+            "sha256": "f7947e3c142da5144352af65d53005b5e9c314ac6584bed7736488e2e002d1d5"
+          },
+          {
+            "label": "assemble: missing source body type rejects function",
+            "file": "007.json",
+            "sha256": "dc5537b5585c3a0de7626c8a469fff89671d4cd2c9dc02376db767ba7b670dce"
+          },
+          {
+            "label": "assemble: ForAll signature retains generic function",
+            "file": "008.json",
+            "sha256": "bcfd9347ee9a61d346ec0dce5a0ff00ec3c00b8b1b901c9380a17d96367adb73"
+          },
+          {
+            "label": "assemble: constrained signature retains generic dictionary ABI",
+            "file": "009.json",
+            "sha256": "62dc2e89a7a0a82e1218cfa8787739272b60038b2d39e66f20efc8d7012f92ad"
+          },
+          {
+            "label": "assemble: contradictory optimized signature rejected",
+            "file": "010.json",
+            "sha256": "83541e945f50f4c4c50a4cd64c66843e4934913de5995378211ec95c2eeda62e"
+          },
+          {
+            "label": "assemble: unsupported TypeApp retains function",
+            "file": "011.json",
+            "sha256": "cf74e64ac4beb156595ac21653d92c711ebe5ba80d1a79becafae42522023830"
+          },
+          {
+            "label": "assemble: missing optimized annotation rejected",
+            "file": "012.json",
+            "sha256": "4a4647a3f477a3b59cb7dc7cc3676a376eaab659c79dfb0ff8498776072d961b"
+          },
+          {
+            "label": "assemble: source lambda arity contradiction rejected",
+            "file": "013.json",
+            "sha256": "35565a35bfc430b0641ac314d1b278716038b6b9290151c99ac2b6685d6629dd"
+          },
+          {
+            "label": "insert: mutual source recursion retained",
+            "file": "014.json",
+            "sha256": "a176e420969332db449f7dc70f85de16f5b0c86d804944be70a0d323e7e19119"
+          },
+          {
+            "label": "assemble: duplicate optimized parameter levels rejected",
+            "file": "015.json",
+            "sha256": "c4e7deb81e75718a70d3ca0753e2f1d68061ba64efdaa12b8f2e3a383b4525a7"
+          },
+          {
+            "label": "shortAndSafe: Boolean primitive rejects contradictory operand annotation",
+            "file": "016.json",
+            "sha256": "6feac3a873732dcdc5ec727253f2f979bcbad806914120ff906b4ed6d857b2ca"
+          }
+        ],
+        "beforeArtifacts": "before-trace-tests/adt-multi",
+        "afterArtifacts": "after-tests/adt-multi"
+      },
+      {
+        "suite": "int-comparison",
+        "counts": [
+          "int-comparison runtime: 396 checks passed",
+          "int-comparison converter: 32 checks passed"
+        ],
+        "assembledHashes": {
+          "comparison.fsx": "00fc7640ee4481bc5f9cf41e76eb3b5434549bbf88ee7206603c91bbde6a5dc4"
+        },
+        "generatedHashes": {
+          "IntCompare.fs": "349a271b01bf2d9da62407364ed5951ffc273fe0553587b3c95325b4b1854195"
+        },
+        "mutationInputs": [
+          {
+            "label": "missing result type",
+            "file": "000.json",
+            "sha256": "1505a8b5c9c0a3e8dab8dc1340fb9daa1ef2f6e0753676e2f80d64f154d746ee"
+          },
+          {
+            "label": "wrong result type",
+            "file": "001.json",
+            "sha256": "c370c29aa8bb3a74418a0232200edf353c59233ff2f07d29cd11504312ce2988"
+          },
+          {
+            "label": "missing operand type",
+            "file": "002.json",
+            "sha256": "d6c5bda5cd02e178a6b8530ac5921b8104681a51837cba7ce971f59cf05cb247"
+          },
+          {
+            "label": "wrong operand type",
+            "file": "003.json",
+            "sha256": "8baaa583291c0ba1c26560f057581639a60c90af08613b61bcf50c5619755740"
+          },
+          {
+            "label": "contradictory partial signature",
+            "file": "004.json",
+            "sha256": "3a68c342576b232297ac014a77a3cd2793568de31d8fc48b9406ff7c5c379e50"
+          },
+          {
+            "label": "contradictory dictionary application",
+            "file": "005.json",
+            "sha256": "da948de660fa55765649b33c38681fbec95ecb37813053a037af25aeb6617874"
+          },
+          {
+            "label": "local dictionary",
+            "file": "006.json",
+            "sha256": "61a36b2976e1e22c850b141d210d88400a8acf8bfb1c8ba6d9fe547d15939df8"
+          },
+          {
+            "label": "custom Int dictionary",
+            "file": "007.json",
+            "sha256": "b67b743b426f9a931977e26e108c5c2ab5ad501610771f1fc40da29c22469e39"
+          },
+          {
+            "label": "wrong dictionary owner",
+            "file": "008.json",
+            "sha256": "cfd75ea96da9518a615280195c5199c3f1f6e01c6b53c289b2bca4546f86f282"
+          },
+          {
+            "label": "missing dictionary type",
+            "file": "009.json",
+            "sha256": "cb7f94839fd180c1fddc0c67baeeae291c8ce60fb0ada1e8463aa154b1c65b63"
+          },
+          {
+            "label": "inconsistent dictionary path",
+            "file": "010.json",
+            "sha256": "c670c458c0f80671de9969d4182081640fc3cc2d22d2aead527cbc2c48b189cf"
+          },
+          {
+            "label": "local function shadows lessThan",
+            "file": "011.json",
+            "sha256": "edfedf4b56a2be250fb60fe1a53399f9614d6669ce8c4d2949a91512f02ecc81"
+          },
+          {
+            "label": "wrong function owner",
+            "file": "012.json",
+            "sha256": "f1a0581d945c31f7a3f545f27254a9e3541c99a5abc4ff78291fc55b2714839d"
+          },
+          {
+            "label": "wrong TypeApp argument",
+            "file": "013.json",
+            "sha256": "bdde55589fa38536db64e22ef2607f8c0f9e3ec29e976556abeadc391f964de4"
+          },
+          {
+            "label": "contradictory instantiated signature",
+            "file": "014.json",
+            "sha256": "e41ec4a542edfb95cdd40ec9d1fad9c66ab8ce4c302e5322088fc4bcd09854d2"
+          },
+          {
+            "label": "missing polymorphic signature",
+            "file": "015.json",
+            "sha256": "a19823a2fe68b6aab5f4031323cd15dcbf249debf0e3f8ff02168ee287ad80c1"
+          },
+          {
+            "label": "extra TypeApp",
+            "file": "016.json",
+            "sha256": "7c068a1e59fe687a86058cf3d4805cc9bc74b5b050df627b9d809ec48de7af3d"
+          }
+        ],
+        "beforeArtifacts": "before-trace-tests/int-comparison",
+        "afterArtifacts": "after-tests/int-comparison"
+      },
+      {
+        "suite": "adt-kernel",
+        "counts": [
+          "adt-kernel runtime: 32 checks passed",
+          "adt-kernel converter: 33 checks passed"
+        ],
+        "assembledHashes": {
+          "adt-kernel.fsx": "808dbe03b938ec3db5a424c2d1e966c56a11f0763fdb8b99bfa8152d867fdd74"
+        },
+        "generatedHashes": {},
+        "mutationInputs": [
+          {
+            "label": "absent layout",
+            "file": "000.json",
+            "sha256": "f2da1037a4692670954d877b78a9af882603aa1d5e3c7bfebe60e27f4b8c3c18"
+          },
+          {
+            "label": "polymorphic data declaration",
+            "file": "001.json",
+            "sha256": "d1a579abcb5f509189cbbdbaf42300a69d7c0a8657a35604632e9d35e20dffe8"
+          },
+          {
+            "label": "external ADT field",
+            "file": "002.json",
+            "sha256": "ee181d3fbedba1cb0122d3786b846716df3ca33192349a13c8aec0b7229f5a6b"
+          },
+          {
+            "label": "missing local ADT",
+            "file": "003.json",
+            "sha256": "3dc2f6466277f78da0c5652aa06e2d9e7b1f937cc00a1f21f65f66a3c7fbb0c5"
+          },
+          {
+            "label": "incorrect qualified type path",
+            "file": "004.json",
+            "sha256": "3bf085660d817339958df058edb46a90bacc134da9892a1ba42391d3b7b7ad5f"
+          },
+          {
+            "label": "polymorphic type application in layout",
+            "file": "005.json",
+            "sha256": "49029ba2517546eeda2bd692e6ec9d7587fa5a0220aad17185a9603dc06df5c5"
+          },
+          {
+            "label": "unsupported field type",
+            "file": "006.json",
+            "sha256": "86a80efdac21d5494bdb5d43a08b7bb3b7963e209d2b60a64b122bdfca179b5a"
+          },
+          {
+            "label": "contradictory source and optimized layouts",
+            "file": "007.json",
+            "sha256": "09b272e56cad7a20a708c5df4992b607bbce9d1157b220f1eb0c7d8362325c16"
+          },
+          {
+            "label": "duplicate type names",
+            "file": "008.json",
+            "sha256": "4656c158cdee96b3e01ecb2ea176f50e0d0314bc68a022fb8db2dde688ad722c"
+          },
+          {
+            "label": "duplicate constructor names",
+            "file": "009.json",
+            "sha256": "b471a516cd5c116c07872d059c5424797d6ac9a2141243b53f083dfc8c38d554"
+          },
+          {
+            "label": "type name collides with emitted constructor",
+            "file": "010.json",
+            "sha256": "0473d4852aa12290ca22a8959c05bdfb029287f5418fe770764a0da67c893d8e"
+          },
+          {
+            "label": "sanitized public binding names collide",
+            "file": "011.json",
+            "sha256": "8d927e5b44b357ab9a9dbb904ab958b08773611cb6e4cbe13ed1284fd1348f25"
+          },
+          {
+            "label": "module names must agree",
+            "file": "012.json",
+            "sha256": "df4e2b30be1b202206a631ed0db8172d78acc5c5bcbbf5116bd7e17209cae2d1"
+          },
+          {
+            "label": "stale binding annotation",
+            "file": "013.json",
+            "sha256": "88110cd261e472bea0eeed4a910218ca539f5577bc2406f9d86dcc581b3dbc9d"
+          },
+          {
+            "label": "contradictory body annotation",
+            "file": "014.json",
+            "sha256": "d203282b8877ddc92daba74d2985ef19c05f56378746b4816147ff11a1209d45"
+          },
+          {
+            "label": "unknown local level",
+            "file": "015.json",
+            "sha256": "84eec365a10316a419df15d54447ad6d8a99c7aa5ef9c2d0a069d64f80c50591"
+          },
+          {
+            "label": "duplicate parameter levels",
+            "file": "016.json",
+            "sha256": "69fe3d93e657226c04495215604e5885dd7f736fa41246e69baad4c0cde10417"
+          },
+          {
+            "label": "invalid constructor field index",
+            "file": "017.json",
+            "sha256": "7aaea1a9857dd5022f3e49be6483e13639f521d8e4224a34c078f300fa4141ed"
+          },
+          {
+            "label": "constructor field label must match its index",
+            "file": "018.json",
+            "sha256": "cf874aa51e96a9bcc5ae96ead64dac4a6f3bf8214e0a1b1147f579bdd4203482"
+          },
+          {
+            "label": "constructor projection type must agree",
+            "file": "019.json",
+            "sha256": "dd8def5096d6824ad70be8873b903b16defe45af1c26c5de77a12bcb0e67c2b6"
+          },
+          {
+            "label": "constructor field annotation must agree",
+            "file": "020.json",
+            "sha256": "8de7d6dd9ed8e979be93a40ebef4ba5f3bd7aa3f6ee95339ee868be33231e3bf"
+          },
+          {
+            "label": "constructor application must be saturated",
+            "file": "021.json",
+            "sha256": "5c89fd905f1a9f51876837d6102e43975e8f89361398bee28b199d3acc1b0313"
+          },
+          {
+            "label": "constructor argument order must match metadata",
+            "file": "022.json",
+            "sha256": "a5bf291ab8293db09154d93e7beb258939131e5bf7d5bd292d1b1577df0f1979"
+          },
+          {
+            "label": "native recursive call cannot be partial",
+            "file": "023.json",
+            "sha256": "0422d6089cf390b932b6f8f1304f345df9addc3d9643fea1530ae41014a0b949"
+          },
+          {
+            "label": "native recursive call cannot be over-applied",
+            "file": "024.json",
+            "sha256": "12927f941fd76bc6d92469aaa05f0f644694ea9f9cd58679c3d6433fee1a6190"
+          },
+          {
+            "label": "unresolved TypeApp",
+            "file": "025.json",
+            "sha256": "630755ec5c71111d3d1cf32cdd2022b930e2846b41bebd98bbc64fb022fc09d4"
+          },
+          {
+            "label": "foreign binding requires the general backend",
+            "file": "026.json",
+            "sha256": "b677808da56cd595df89fababd1e473278fc5400e2e0da769fad6a64356fd989"
+          }
+        ],
+        "beforeArtifacts": "before-trace-tests/adt-kernel",
+        "afterArtifacts": "after-tests/adt-kernel"
+      },
+      {
+        "suite": "adt-interop",
+        "counts": [
+          "adt-interop runtime: 62 checks passed",
+          "adt-interop converter: 13 checks passed"
+        ],
+        "assembledHashes": {
+          "adt-interop.fsx": "2fcf3cb1bca0441a7198168d3edcf09e06ce665f93da0e08c13d5e61687adadd"
+        },
+        "generatedHashes": {
+          "AdtConsumer.fs": "a42d0ac9a34350a0203d7e91af08ae75710fcb96e3381b8aab3f03dd20f79734",
+          "AdtPilot.fs": "903753cddca3bde4171992a1fad6408c2afe568502ba3e69cb7c7e6c2df42a1c"
+        },
+        "mutationInputs": [
+          {
+            "label": "absent layout",
+            "file": "000.json",
+            "sha256": "f2da1037a4692670954d877b78a9af882603aa1d5e3c7bfebe60e27f4b8c3c18"
+          },
+          {
+            "label": "absent wrapper",
+            "file": "001.json",
+            "sha256": "d29a12c457f1a3cddb24945ba1496ea594cde368d7e3739c06723ff6b89a4d69"
+          }
+        ],
+        "beforeArtifacts": "before-trace-tests/adt-interop",
+        "afterArtifacts": "after-tests/adt-interop"
+      },
+      {
+        "suite": "adt-unary",
+        "counts": [
+          "adt-unary runtime: 63 checks passed",
+          "adt-unary converter: 11 checks passed"
+        ],
+        "assembledHashes": {
+          "adt-unary.fsx": "3e35269daf1c8d5d64bab6b6430229910939b55f08b357ddad2fcaf00e7eb54b"
+        },
+        "generatedHashes": {
+          "AdtUnary.fs": "8300d2a631f9a1f5359719cdebc138572df98edac05810aa8331aee281a08a14",
+          "AdtConsumer.fs": "a5da43c31c538520415427b2d2051d8de191d23da04e3ab5ea00debf2823862b"
+        },
+        "mutationInputs": [
+          {
+            "label": "polymorphic layout",
+            "file": "000.json",
+            "sha256": "1251f5bb03ffbf7732ff2186b4f2ecaead87eedde3f119ab557a838c819a993f"
+          },
+          {
+            "label": "missing constructor wrapper",
+            "file": "001.json",
+            "sha256": "e9a39ef6936f3eae476b8de1ad59de3080500130fc5346e2765c65d6b8b03847"
+          },
+          {
+            "label": "native name collides with a retained binding",
+            "file": "002.json",
+            "sha256": "30f986b963c5f9d0827fab6a365744094267c73b789f15be1895033127a61047"
+          },
+          {
+            "label": "foreign declarations remain conservative",
+            "file": "003.json",
+            "sha256": "3a74d0f1e272db6b8268c22f0b50a45f27fb1c3e916fbdb6aaab9872c3fa7bfb"
+          },
+          {
+            "label": "unsupported TypeApp retains only that function",
+            "file": "004.json",
+            "sha256": "1e0401ba47b2e30b4460d17771b048dc177825713d65d99ef95e16e126a5cd3b"
+          },
+          {
+            "label": "contradictory signature retains only that function",
+            "file": "005.json",
+            "sha256": "d1c9e5df6d1e4558c1a169eeddde027b9360aff904b559a9800ca63376d38eda"
+          },
+          {
+            "label": "mutual source recursion is not partially replaced",
+            "file": "006.json",
+            "sha256": "a810315fcc4169ca8e70e3491779118c2274e7f55e48119d0258656018224427"
+          }
+        ],
+        "beforeArtifacts": "before-trace-tests/adt-unary",
+        "afterArtifacts": "after-tests/adt-unary"
+      },
+      {
+        "suite": "thunk-kernel",
+        "counts": [
+          "thunk-kernel runtime: 258 checks passed",
+          "thunk-kernel converter/JS: 86 checks passed"
+        ],
+        "assembledHashes": {
+          "thunk-kernel.fsx": "4df72b9ee5c0ae37a29417242c97232e78fdda5475c4ac9a7125a60a8d7a3c50"
+        },
+        "generatedHashes": {
+          "oracle.fs": "c7811e98162e00ab679699415d4fdf09f2e1200b76624cc8f7d9a6efc676e18d",
+          "generated.fs": "ef82716c2b9a86933d24199011a18f5845a056406d5d998809a5cfdf8325e9f5"
+        },
+        "mutationInputs": [
+          {
+            "label": "missing call type",
+            "file": "000.json",
+            "sha256": "99000887128f33e2e101cb54f8da4eba543eb7e37a0974b86330fd4458c2e6e7"
+          },
+          {
+            "label": "contradictory call type",
+            "file": "001.json",
+            "sha256": "bba473014e4fe99d6ef0ae69ec12f8f0cbaec354d9a5a0da3221e66edc552450"
+          },
+          {
+            "label": "missing argument type",
+            "file": "002.json",
+            "sha256": "d91e7600be8a381fc250e7317c742f4e4f9e1ff8ac92639cd57e1bba89a8b1d2"
+          },
+          {
+            "label": "function argument type does not prove closure provenance",
+            "file": "003.json",
+            "sha256": "c2610d3cad9d38330987865ad51fa974ba3edfa4d7dbff9f6442b36d9479dd9d"
+          },
+          {
+            "label": "wrong helper TypeApp",
+            "file": "004.json",
+            "sha256": "c096f21b56f32401f4278dee506478c820c65e6080cc8aa1a731680006292adb"
+          },
+          {
+            "label": "contradictory polymorphic helper type",
+            "file": "005.json",
+            "sha256": "d3278fe565942f728ae6bd49124a106569b9da7fbf0ababbdf9e2204e5df6a91"
+          },
+          {
+            "label": "missing worker suffix type",
+            "file": "006.json",
+            "sha256": "f9fcc758c895a2c6c0dc58568a65aa392e97d6beb26791cb951780dd152b88e3"
+          },
+          {
+            "label": "wrong worker suffix type",
+            "file": "007.json",
+            "sha256": "1935a7bd9ac7dc1ec51b28606b529bf10704cc681e6a937f9e8288cc70c3e8ba"
+          },
+          {
+            "label": "partial worker is not a thunk",
+            "file": "008.json",
+            "sha256": "62c4a2092918a42dea4b9693370b3a6bae64681261edda3a39ee9e074ce9377d"
+          },
+          {
+            "label": "extra worker argument",
+            "file": "009.json",
+            "sha256": "c93753456e2227bff3ced11b50e7af3339eaa801cfb8e63dde7f623b2eacdb3d"
+          },
+          {
+            "label": "missing source function type",
+            "file": "010.json",
+            "sha256": "91ffad45e815a1b29434dec84039d1868ac5228f435ee9ff4b95e129dd2618cb"
+          },
+          {
+            "label": "contradictory source function type",
+            "file": "011.json",
+            "sha256": "6e4d5e1849440b8e671bcd742246d7127f6b39636f10c0ba4116108c5936e406"
+          },
+          {
+            "label": "returned Unit is not a source argument",
+            "file": "012.json",
+            "sha256": "e6810fb0354a8239b0202b2b131a7d982164b61fc6d5478eb986afabc8b64fde"
+          },
+          {
+            "label": "missing inner source lambda type",
+            "file": "013.json",
+            "sha256": "58a8499151d468413017e1bfd23d8ad3c46e983e3b20b5d5b944f0f4f28b3fa0"
+          },
+          {
+            "label": "contradictory optimized signature",
+            "file": "014.json",
+            "sha256": "2cd70224414d107e57aeb964491a4825e101259e5c9b594b58789647913ebd73"
+          },
+          {
+            "label": "native helper name collision",
+            "file": "015.json",
+            "sha256": "241d974971d7006e686341f5b7b83114f1c1ac4c95e66d84aa498276ef1137b2"
+          },
+          {
+            "label": "native worker cannot shadow a source-local binder",
+            "file": "016.json",
+            "sha256": "e533098232038cca175c7b64748508b28a25912b7623e1c006a93593b53fa94e"
+          },
+          {
+            "label": "helper needs source type evidence",
+            "file": "017.json",
+            "sha256": "b0e8302d6ae4d3513c2215be4cc2b4f43bceed806fcac6781b2392eb5d828d7c"
+          },
+          {
+            "label": "helper checks nested optimized annotations",
+            "file": "018.json",
+            "sha256": "536cace635be99e21f791c0cf956c77f119f42d227c55059fcae2f541d9ebdb6"
+          },
+          {
+            "label": "optimized helper shape cannot erase an opaque source dependency",
+            "file": "019.json",
+            "sha256": "6b38955cf451304721fc7a5b43ecb18ff4c5486fa6609da5579be3d821945263"
+          }
+        ],
+        "beforeArtifacts": "before-trace-tests/thunk-kernel",
+        "afterArtifacts": "after-extra-tests/thunk-kernel"
+      },
+      {
+        "suite": "constructor-typeapp",
+        "counts": [
+          "constructor-typeapp runtime: 133 checks passed",
+          "constructor-typeapp converter/JS: 61 checks passed"
+        ],
+        "assembledHashes": {
+          "constructor-typeapp.fsx": "39b7c39761dca8fea35e1da61964bdbec54eab2f0c1f0a97966f61b5c2d61c1e"
+        },
+        "generatedHashes": {
+          "oracle.fs": "eba5319b4236ed25e54cf089a3d93f667a51ef242fd81893877eb6fadc847b77",
+          "imported.fs": "26612e2768ced2e428385bdafef6527acfad04a7fb965e7ddb6d0e59070df4ea",
+          "producer.fs": "60711ebea86abaed4010700f1489ef1d0c06e2c0170211482924b55f7fa8553d",
+          "generated.fs": "ecda9ab258780813288bc070ba29b4957a46b8301a55ddb7c2a1e2c6f8f14ffa"
+        },
+        "mutationInputs": [
+          {
+            "label": "missing constructor metadata",
+            "file": "000.json",
+            "sha256": "576c0222065c0803079ab20e3c080182db060c5871e2a010a492d1bc752a7c17"
+          },
+          {
+            "label": "newtype metadata is not ordinary constructor metadata",
+            "file": "001.json",
+            "sha256": "e4bdb4eb0c56061690d8ec888f7eea6d8c8e2209153234cdafc33dfd9a746882"
+          },
+          {
+            "label": "constructor metadata arity disagrees",
+            "file": "002.json",
+            "sha256": "6e96730d9c341c41aec0b81dd38e3276ebe04e4814719a05db96fc214a927beb"
+          },
+          {
+            "label": "local shadow is not a qualified constructor",
+            "file": "003.json",
+            "sha256": "c6f002ab5dad2ea89c2d7e782b76a8e2f42b47b050956a4db8d0dab4cd6a54d7"
+          },
+          {
+            "label": "unregistered qualified owner",
+            "file": "004.json",
+            "sha256": "ab359fe804130f9267241cd2893d9d3342c4687aa5bcb6690e84a2c4840ceb90"
+          },
+          {
+            "label": "unregistered constructor name",
+            "file": "005.json",
+            "sha256": "c3f10fda7d2d346f92afb66ff88e70b4a45d2241a2c73f6d72c43059e7b497a4"
+          }
+        ],
+        "beforeArtifacts": "before-trace-tests/constructor-typeapp",
+        "afterArtifacts": "after-tests/constructor-typeapp"
+      },
+      {
+        "suite": "selection",
+        "counts": [
+          "selection: 100 registration/emission checks passed"
+        ],
+        "assembledHashes": {},
+        "generatedHashes": {},
+        "mutationInputs": [
+          {
+            "label": "missing type",
+            "file": "000.json",
+            "sha256": "d688cf3c1bb4e77a1699fe000381a02c189ef18f5b3f4387257fe04184b77d4c"
+          },
+          {
+            "label": "unqualified call",
+            "file": "001.json",
+            "sha256": "4ba9893652358cf2ff8cbcbc1e0214662c8a4c79601df9000538cd4600506df7"
+          },
+          {
+            "label": "imported call",
+            "file": "002.json",
+            "sha256": "aee5a9d77d271871ec0e94449f3597582637421fc907f7d7c9da024e172b8053"
+          }
+        ],
+        "beforeArtifacts": "before-extra-tests/selection",
+        "afterArtifacts": "after-extra-tests/selection"
+      },
+      {
+        "suite": "local-int-kernel",
+        "counts": [
+          "local-int-kernel runtime: 43 checks passed",
+          "local-int-kernel converter: 68 checks passed"
+        ],
+        "assembledHashes": {
+          "local-int-kernel.fsx": "f978722332b35a7e07194fd265c7a1a58e6a6196d18d50839a95d11767458f50"
+        },
+        "generatedHashes": {},
+        "mutationInputs": [],
+        "beforeArtifacts": "before-extra-tests/local-int-kernel",
+        "afterArtifacts": "after-extra-tests/local-int-kernel"
+      },
+      {
+        "suite": "printer",
+        "counts": [
+          "printer: 67 runtime checks passed"
+        ],
+        "assembledHashes": {
+          "Sharpurs_Prelude.fs": "67bffaebedb2434a00851f982e8399df976ba6f529a41d9ff65e1f19c0506dd2",
+          "printer.fsx": "128d40f0093d440c704496b23dab918fe4b66359cf7579973ac67825f83ba08b"
+        },
+        "generatedHashes": {},
+        "mutationInputs": [],
+        "beforeArtifacts": "before-extra-tests/printer",
+        "afterArtifacts": "after-extra-tests/printer"
+      },
+      {
+        "suite": "recursion",
+        "counts": [
+          "recursion: 41 runtime checks passed against JavaScript"
+        ],
+        "assembledHashes": {
+          "Sharpurs_Prelude.fs": "67bffaebedb2434a00851f982e8399df976ba6f529a41d9ff65e1f19c0506dd2",
+          "recursion.fsx": "97baef93490ec99879caaa552aa8199dbf3fd151207a4e905b13080a7f85501f"
+        },
+        "generatedHashes": {},
+        "mutationInputs": [],
+        "beforeArtifacts": "before-extra-tests/recursion",
+        "afterArtifacts": "after-extra-tests/recursion"
+      },
+      {
+        "suite": "case-patterns",
+        "counts": [
+          "case-patterns: 88 runtime checks passed"
+        ],
+        "assembledHashes": {
+          "Sharpurs_Prelude.fs": "67bffaebedb2434a00851f982e8399df976ba6f529a41d9ff65e1f19c0506dd2",
+          "case-patterns.fsx": "0dcf16a9dcd08c26b47bae2b5aa38fd9cf2f19476dbfb130828fb90ab6e9ad91"
+        },
+        "generatedHashes": {},
+        "mutationInputs": [],
+        "beforeArtifacts": "before-extra-tests/case-patterns",
+        "afterArtifacts": "after-extra-tests/case-patterns"
+      }
+    ],
+    "cloneCopiesReplaced": [
+      "tests/adt-interop.mjs",
+      "tests/adt-kernel.mjs",
+      "tests/adt-multi.mjs",
+      "tests/adt-unary.mjs",
+      "tests/constructor-typeapp.mjs",
+      "tests/direct-call.mjs",
+      "tests/int-arithmetic.mjs",
+      "tests/int-comparison.mjs",
+      "tests/thunk-kernel.mjs"
+    ],
+    "mutationInputs": 158,
+    "assembledFsharpFiles": 16,
+    "assembledScripts": 13,
+    "generatedFragments": 21
+  },
+  "missingTarget": {
+    "command": [
+      "node",
+      "--import",
+      "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/capture.mjs",
+      "--import",
+      "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/missing-target.mjs",
+      "tests/direct-call.mjs"
+    ],
+    "expectedExitCode": 1,
+    "exitCode": 1,
+    "diagnostic": "source binding lostOrdinal: expected exactly one target, found 0",
+    "negativeAssertionPrevented": true,
+    "runtimeNotReached": true,
+    "artifactsRetained": true
+  },
+  "generation": {
+    "b8x": {
+      "artifacts": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/b8x-generation-retry",
+      "sourceWorkspace": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/b8x-input/sandbox/workspace",
+      "main": "Test.Main",
+      "node": {
+        "version": "v24.8.0",
+        "executable": "/opt/homebrew/Cellar/node/24.8.0/bin/node"
+      },
+      "runs": [
+        {
+          "phase": "before",
+          "command": [
+            "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+            "--expose-gc",
+            "--stack-size=65536",
+            "--max-old-space-size=16384",
+            "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/b8x-generation-retry/compiler-before.mjs",
+            "--main",
+            "Test.Main"
+          ],
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "cancelled": false,
+          "ok": true,
+          "durationMs": 56771,
+          "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/b8x-generation-retry/before.log"
+        },
+        {
+          "phase": "after-incremental",
+          "command": [
+            "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+            "--expose-gc",
+            "--stack-size=65536",
+            "--max-old-space-size=16384",
+            "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/b8x-generation-retry/compiler-after.mjs",
+            "--main",
+            "Test.Main"
+          ],
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "cancelled": false,
+          "ok": true,
+          "durationMs": 54212,
+          "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/b8x-generation-retry/after-incremental.log"
+        },
+        {
+          "phase": "after-clean",
+          "command": [
+            "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+            "--expose-gc",
+            "--stack-size=65536",
+            "--max-old-space-size=16384",
+            "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/b8x-generation-retry/compiler-after.mjs",
+            "--main",
+            "Test.Main"
+          ],
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "cancelled": false,
+          "ok": true,
+          "durationMs": 55447,
+          "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/b8x-generation-retry/after-clean.log"
+        }
+      ],
+      "success": true,
+      "beforeCompiler": {
+        "path": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/compiler-before.mjs",
+        "sha256": "8cc32482e7eb290cf9c8d8110e8045a70c45a32cf2e88044af8874fd865535eb"
+      },
+      "afterCompiler": {
+        "path": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/compiler-after.mjs",
+        "sha256": "e55d7ccc0a7f6927de34401aab19547fa8b4c28e6571d408b27c2894994743ee"
+      },
+      "modules": 2685,
+      "incremental": {
+        "filesBefore": 2741,
+        "filesAfter": 2741,
+        "added": [],
+        "removed": [],
+        "changed": [],
+        "rewrittenUnchanged": []
+      },
+      "clean": {
+        "filesBefore": 2741,
+        "filesAfter": 2741,
+        "added": [],
+        "removed": [],
+        "changed": []
+      },
+      "inputsUnchanged": true
+    },
+    "native": {
+      "artifacts": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/native-generation-retry",
+      "sourceWorkspace": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/native-input/sandbox/workspace",
+      "main": "DirectCall",
+      "node": {
+        "version": "v24.8.0",
+        "executable": "/opt/homebrew/Cellar/node/24.8.0/bin/node"
+      },
+      "runs": [
+        {
+          "phase": "before",
+          "command": [
+            "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+            "--expose-gc",
+            "--stack-size=65536",
+            "--max-old-space-size=16384",
+            "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/native-generation-retry/compiler-before.mjs",
+            "--main",
+            "DirectCall"
+          ],
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "cancelled": false,
+          "ok": true,
+          "durationMs": 568,
+          "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/native-generation-retry/before.log"
+        },
+        {
+          "phase": "after-incremental",
+          "command": [
+            "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+            "--expose-gc",
+            "--stack-size=65536",
+            "--max-old-space-size=16384",
+            "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/native-generation-retry/compiler-after.mjs",
+            "--main",
+            "DirectCall"
+          ],
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "cancelled": false,
+          "ok": true,
+          "durationMs": 601,
+          "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/native-generation-retry/after-incremental.log"
+        },
+        {
+          "phase": "after-clean",
+          "command": [
+            "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+            "--expose-gc",
+            "--stack-size=65536",
+            "--max-old-space-size=16384",
+            "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/native-generation-retry/compiler-after.mjs",
+            "--main",
+            "DirectCall"
+          ],
+          "code": 0,
+          "signal": null,
+          "timedOut": false,
+          "cancelled": false,
+          "ok": true,
+          "durationMs": 582,
+          "log": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/native-generation-retry/after-clean.log"
+        }
+      ],
+      "success": true,
+      "beforeCompiler": {
+        "path": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/compiler-before.mjs",
+        "sha256": "8cc32482e7eb290cf9c8d8110e8045a70c45a32cf2e88044af8874fd865535eb"
+      },
+      "afterCompiler": {
+        "path": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/h06/compiler-after.mjs",
+        "sha256": "e55d7ccc0a7f6927de34401aab19547fa8b4c28e6571d408b27c2894994743ee"
+      },
+      "modules": 69,
+      "incremental": {
+        "filesBefore": 73,
+        "filesAfter": 73,
+        "added": [],
+        "removed": [],
+        "changed": [],
+        "rewrittenUnchanged": []
+      },
+      "clean": {
+        "filesBefore": 73,
+        "filesAfter": 73,
+        "added": [],
+        "removed": [],
+        "changed": []
+      },
+      "inputsUnchanged": true
+    }
+  },
+  "development": [
+    "Exact F# comparison caught an extraction typo: the imported thunk exception oracle called partialRun. Restored importedRun and replayed the thunk suite; final assembled files are byte-identical.",
+    "Rebuild integrated committed sibling PBO Cache/Builder changes; the H05 bundle and old runtime remain immutable. Dependency sources, changed runtime hashes and bundle diff are retained.",
+    "The first b8x comparison hit ENOSPC while snapshotting after-clean output/final report. With disk space available, the entire comparison was repeated in a fresh artifact directory; only the complete retry is validated."
+  ],
+  "b8x": {
+    "input": "M11 2685-module TAST graph and H01 native snapshots, frozen again before H06",
+    "freshTastCompilation": false,
+    "h06ApplicationProcesses": 0,
+    "h06BenchmarkProcesses": 0,
+    "latestBuild": "H04 Release: zero errors, 378 FS0026 warnings",
+    "latestApplicationRuntime": "H02: 286/286 in one fresh process, no temporary databases before/after"
+  },
+  "nextMilestone": "H07: complete suite/CLI/native-library inventory, freshly compiled b8x TAST, ten application processes, three benchmark processes",
+  "evidenceHashes": {
+    "after-checks/build.log": "fb464cab268c402e8a6f32ed6f9aaeea768195f600ef3ab9db65f42f8ee8a458",
+    "after-checks/bundle.log": "6cd2b75e5bbda41414ba6835f08b56d3975457d12252a5a320b55008c9cb4293",
+    "after-checks/purescript.log": "6eec0b6fdb919bb3e5cd1468a0d6f0524f0f3e3b4cd7dcd039e729f8ed6e749a",
+    "after-checks/results.json": "28bf78547276019703f975f330bacc9bc9cf5747f6f293caeaa791d20b620d66",
+    "after-checks/test-adt-interop.log": "834e27c230987e052a943bfc75b4d6191da8d9c1282bde1bb105b096a23e1e8b",
+    "after-checks/test-adt-kernel.log": "baf294cc24bd07e4ba4de57c5b4979f0355c7f7443fa4296c099dd0ffc55cd37",
+    "after-checks/test-adt-multi.log": "bee6101c076b7d2315cafc19ff0dca0dbbb92152de931407571237513e6ded6c",
+    "after-checks/test-adt-unary.log": "dc7a6564aebde0316bca06eb0cb0d08433621ad9ed520abad9e3b3ac7bd7612e",
+    "after-checks/test-constructor-typeapp.log": "6ce240f493808e2f07676ef66799566a2be69c6e8576b7fada944c6e9fd3cece",
+    "after-checks/test-direct-call.log": "316ae0f39fc37cbe354bf5266c015d6caf6065e857b7b440e2c7d4ed53be8c96",
+    "after-checks/test-fixture-support.log": "c5068ddab700702722aee2f7a6bb5f42f707bff111862bc4fb9a91c73ff6c3b1",
+    "after-checks/test-int-arithmetic.log": "a0490185af1f0a53cf2a58cbba216b95d5fa2aea78f879e4f5eb7fe0dd45f7b0",
+    "after-checks/test-int-comparison.log": "5fbebc04b5488dbc5c555845c491379cb3795399bef39269fb8f7a44f8a205d3",
+    "after-checks/test-thunk-kernel.log": "b87421567440b07cf02e45403f83531f05b7ff144d5470d72da2814b32f14b9b",
+    "after-extra-checks/results.json": "5fcfeb8f5324fc566c5b9929933c0863a4f9793efdeab0c536715369cf87ff93",
+    "after-extra-checks/test-case-patterns.log": "b93db5aacd08c2dffc99e05d522d9f5af89f8f06820382f7ba6792a171bb426c",
+    "after-extra-checks/test-local-kernel.log": "93e26295d8896e7458779a8bbf82f7648c3c86689f03b3675112b6f5f815d043",
+    "after-extra-checks/test-printer.log": "67d41d2bb7fc823b9bd56dc1bc731b742794bd3a114040102db88610bfea8748",
+    "after-extra-checks/test-recursion.log": "75f4de4e84b62d8a4fc1a756224c6fc48f8ea24fbb6199238a9daec1af7a7afa",
+    "after-extra-checks/test-selection.log": "2525233d04932c3d3cbd345a72a769afb89ae969f1e943f7b993edeb3d571d06",
+    "after-extra-checks/test-thunk-kernel.log": "b87421567440b07cf02e45403f83531f05b7ff144d5470d72da2814b32f14b9b",
+    "archive.py": "f981563666379a3897b5370e23009d10e7f2987a03634782e00978d5cda71c83",
+    "b8x-comparison-retry.json": "8273147cbeb4a281511ca14fc43b6f72931e332109d4dbe7eca43d0c5b0f95d4",
+    "b8x-comparison-retry.log": "8a2fe9c43ffc004bb3c6d99dc9a677d181278f57951ee8fa8e82309f43fcbe43",
+    "b8x-comparison.log": "bf49e9ead0e626e6bfa7b1db1c56b682368de6336f2651d8cf569cfec1f471dd",
+    "b8x-generation-retry/after-clean.json": "53f1f3f66436c2447e45e6482e364d71905c8349dc3b4db8768c85f1a891f776",
+    "b8x-generation-retry/after-clean.log": "becb2dec337de28c48c350a2c5d00d54dd2d2b03d895a17f30112ae80740dd4d",
+    "b8x-generation-retry/after-incremental.json": "9c0cf3c6c7b070f5a638ed4fd88408898efea3e486d5cb6261a4a96f8186958c",
+    "b8x-generation-retry/after-incremental.log": "8431fca4ce1b97b569bc883843e915ac281a364ce34afc1f7c443da8ea7f2f88",
+    "b8x-generation-retry/before.json": "9c0cf3c6c7b070f5a638ed4fd88408898efea3e486d5cb6261a4a96f8186958c",
+    "b8x-generation-retry/before.log": "6149bb1891256424a0e1a73af57e5aa5cb26877f1a1315ceed53b3671093d7b1",
+    "b8x-generation-retry/comparison.json": "365053e5110151cebd01ed94ac3322605da656ca5f4c9d80739c6c886c24b6ae",
+    "b8x-generation-retry/input-origins.json": "f63c514eb800ec7ce36ded1fbfde45c336b66ebfe69f8ff9d960842e7ce37fc8",
+    "b8x-generation-retry/inputs.json": "0aa5e84766f64e28a41e6b9bb42c2ed2070c70f8e1a5a2e45f8645638d184093",
+    "before-extra-checks/results.json": "2afa698d652cf5297c2f5bc7434bcee382adec9bc7fa0796656503f65362a8eb",
+    "before-extra-checks/test-case-patterns.log": "b93db5aacd08c2dffc99e05d522d9f5af89f8f06820382f7ba6792a171bb426c",
+    "before-extra-checks/test-local-kernel.log": "93e26295d8896e7458779a8bbf82f7648c3c86689f03b3675112b6f5f815d043",
+    "before-extra-checks/test-printer.log": "67d41d2bb7fc823b9bd56dc1bc731b742794bd3a114040102db88610bfea8748",
+    "before-extra-checks/test-recursion.log": "75f4de4e84b62d8a4fc1a756224c6fc48f8ea24fbb6199238a9daec1af7a7afa",
+    "before-extra-checks/test-selection.log": "2525233d04932c3d3cbd345a72a769afb89ae969f1e943f7b993edeb3d571d06",
+    "before-trace-checks/results.json": "195042fd934b1482438593649038e5b189025b86d0f5c46f9771df3dc80472a6",
+    "before-trace-checks/test-adt-interop.log": "834e27c230987e052a943bfc75b4d6191da8d9c1282bde1bb105b096a23e1e8b",
+    "before-trace-checks/test-adt-kernel.log": "baf294cc24bd07e4ba4de57c5b4979f0355c7f7443fa4296c099dd0ffc55cd37",
+    "before-trace-checks/test-adt-multi.log": "bee6101c076b7d2315cafc19ff0dca0dbbb92152de931407571237513e6ded6c",
+    "before-trace-checks/test-adt-unary.log": "dc7a6564aebde0316bca06eb0cb0d08433621ad9ed520abad9e3b3ac7bd7612e",
+    "before-trace-checks/test-constructor-typeapp.log": "6ce240f493808e2f07676ef66799566a2be69c6e8576b7fada944c6e9fd3cece",
+    "before-trace-checks/test-direct-call.log": "316ae0f39fc37cbe354bf5266c015d6caf6065e857b7b440e2c7d4ed53be8c96",
+    "before-trace-checks/test-int-arithmetic.log": "a0490185af1f0a53cf2a58cbba216b95d5fa2aea78f879e4f5eb7fe0dd45f7b0",
+    "before-trace-checks/test-int-comparison.log": "5fbebc04b5488dbc5c555845c491379cb3795399bef39269fb8f7a44f8a205d3",
+    "before-trace-checks/test-thunk-kernel.log": "b87421567440b07cf02e45403f83531f05b7ff144d5470d72da2814b32f14b9b",
+    "before.json": "b92b0fea21a554aecd9077973a011f3ed715194ffafb9c33ab5f8f4e95600528",
+    "capture.mjs": "fd69f02a1ab45853ecc80c6f943905d2fd93de517a583ae837cbed90d1d557a9",
+    "check-missing-target.py": "4ca3647cd35fc867d635ad7a008e07b54f3d7b4a58dda3d2127c4e2253f33695",
+    "compiler-after.mjs": "e55d7ccc0a7f6927de34401aab19547fa8b4c28e6571d408b27c2894994743ee",
+    "compiler-before.mjs": "8cc32482e7eb290cf9c8d8110e8045a70c45a32cf2e88044af8874fd865535eb",
+    "compiler-bundle.diff": "420ab82cdb2b5d2cb9a4aa5466b89c7d12250356aa080fd1caa8ae4afc0bcb70",
+    "dependency-rebuild.json": "5b7f9e02db35ce9ae510cefcb5c123fa30784275ea29341cead301fd55976b26",
+    "disk-retry.json": "65dbc257ce66d642ed581989bc251df16f23dbaac3d007a2092b58ad8f0a6f31",
+    "extra-checks.py": "659afe57550faa82143edd362c1f4e06098093d3db1a784beeb48d0c217a3a3f",
+    "finalize.py": "cbed959bff162e0d080f9760c99b22479675e70d15ac8dad27c99b64b221c923",
+    "missing-target/process.log": "a2d77268dd827842c3598651731e22ea2df217f1b61b193f072e6a488981a674",
+    "missing-target/validation.log": "c359da05b336e5813413be58ae9c30083fa3529eef4108dec2847d99ff714a3a",
+    "missing-target.json": "05ce993cbeca547d0b2021a766b6b837fcc28b3b5305ffb4788b902a1e98c541",
+    "missing-target.mjs": "ae67a4e4da3d295b0cd6169fc48da940393d85986d46b0e8fe30646bb903059b",
+    "native-comparison-retry.json": "056e9d404d64c4780c26197c44b2be305a8b4caa0072abcfb79b28c13a527a6d",
+    "native-comparison-retry.log": "fe20846f66cf1a663ea31252100803eb00828177a9128f2f891f7ed773bc48f4",
+    "native-generation-retry/after-clean.json": "42ca0d5be0e6891d6b30e70649710f5fc431a7fe50986e66dea21c92ee38c9ed",
+    "native-generation-retry/after-clean.log": "1b3e4a0146edce146d515c2bb256c38e92878af36c51a7bec650eccd99bb5613",
+    "native-generation-retry/after-incremental.json": "a60a87c0a3742d89574f4f2977beca837a6eac1d242444689c34391f8a2cb9ef",
+    "native-generation-retry/after-incremental.log": "0e94021f200767180da4a1c3ca9af1a147e9203aabd413672a20cd31888a48ef",
+    "native-generation-retry/before.json": "a60a87c0a3742d89574f4f2977beca837a6eac1d242444689c34391f8a2cb9ef",
+    "native-generation-retry/before.log": "9e8209bb63f06b21a6325537d0250d40194544ecc7ca06277b40e3d6d37e51e1",
+    "native-generation-retry/comparison.json": "757eb7e95938bcd46279d4e869046fbc447fcf9e6af1d2d0cc356a5cf4477cc0",
+    "native-generation-retry/input-origins.json": "e12355743cc5d09257db07c7845728cf8054f738db958e078ea782cf5bdac4c3",
+    "native-generation-retry/inputs.json": "d25dc25e128c727b10cb36b5e23ac360faac210e776d00bfa912f7cfed16994e",
+    "qualify.py": "adb5f8ecd5b26acdbaa16523671666c1ae566c706d11369c7f4f28ee43c6a2f9",
+    "replay.py": "f75b62f3516a549083ae4e7b3a5ed84327cc5c10fe72e54c45becae7ca2ee1c5",
+    "snapshot.py": "1b99408de50ba3db4a4362898ae6f25fdf00eeb0552fccccb3da033536af799a",
+    "static-check.py": "75cb4318b2bb1be25e6b1088dfceab50d011577dee2f98c79b24c32eb587b381",
+    "test-equivalence.json": "19cb706cf48a3a5870a6ac6ae532de6870f83641e8194a58be73e5dfc26bf042",
+    "trace-inputs.mjs": "da3be6924f3422c727b53535129cc6d36a17fedd8338545943951529201825f3",
+    "verify-tests.py": "82b4214486640fab41331c3a6e376b2fdb3d0cd62556078b8bfab3c6269cb9d0"
+  }
+}

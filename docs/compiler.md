@@ -49,8 +49,29 @@ The input is the enriched typed CoreFn produced by the compiler fork. `Module An
 | Source force-call eligibility, closed seeds and capture-value resolution | [`Sharpurs/ThunkKernel/Call.purs`](../src/Sharpurs/ThunkKernel/Call.purs) |
 | Native thunk definitions, closures, captures and boxed force results | [`Sharpurs/ThunkKernel/Emit.purs`](../src/Sharpurs/ThunkKernel/Emit.purs) |
 | Typed integer, direct-call and constructor subsets | `IntKernel`, `Optimized`, `DirectCall`, `ConstructorCall` and integer-operation modules |
+| Checked fixture selection, prototype-preserving copies and live mutation views | [`tests/support/ast.mjs`](../tests/support/ast.mjs) |
+| Suite-owned F# fragments and exactly-once insertion slots | [`tests/support/fsharp.mjs`](../tests/support/fsharp.mjs), [`tests/fixtures/`](../tests/fixtures/) |
+| Aggregate orchestration and immutable generation comparisons | [`tests/run.mjs`](../tests/run.mjs), [`scripts/support/`](../scripts/support/) |
 
 `Ffi.loadModule` returns wrapper text and optional C# source. `Project.writeModule` owns the writes. This keeps foreign-source selection independent of output paths. Runtime templates are pure strings, also imported by the focused tests through the compiled `Sharpurs.Runtime` module.
+
+### A small contribution, end to end
+
+Start with the boundary being changed, then choose the corresponding checks:
+
+| Change | Short example and owner | Verification |
+| --- | --- | --- |
+| Call construction | `boxedNativeCall "nativeAdd" [ FsLitInt 20, FsLitInt 22 ]` adapts boxed operands to a typed target; `directCall "objectAdd"` passes them unchanged. Choose in the translator, render in `Printer`. | `printer`, then `direct-call` and the affected selection/kernel suites; preserve partial calls and exception boundaries. |
+| ADT template | `Emit.binary { operation: IntAdd, left: "20", right: "22" }` renders `"(20 + 22)"`. Syntax belongs to `Emit`; `Analysis` admits the operation and `Lower` proves operand/result types. | `adt-lowering`, the affected ADT suites and the [frozen lowering oracle](testing.md#adt-lowering-differential-replay). |
+| FFI name | `Names.inModule "Example" "base"` produces `Example_base`; `Names.nativeMember "base"` produces the F# spelling ``base`` with double backticks. Keep the captured native casing when changing recognition in `FfiSupport`. | `names` and `ffi-support`, including the actual mixed F#/C# project. |
+| Fixture mutation | `sourceBinding(clone(core), "assemble")` must find exactly one binding before editing its live view. The suite owns the violated contract and rejection assertion. | `fixture-support` and the affected suite; follow the [complete mutation example](testing.md#contributing-a-structural-mutation). |
+
+The detailed [call](#constructing-a-call), [ADT](#changing-an-adt-body-template)
+and [naming](#naming-a-generated-symbol) sections describe the surrounding contracts.
+For an emission refactor, save a self-contained compiler **before** editing, then
+compare complete generated inventories, bytes and incremental timestamps. Keep
+the recognizer's positive/negative evidence and runtime oracles in the affected
+suite; a shared selector or renderer does not decide native eligibility.
 
 ## Command-line boundary
 

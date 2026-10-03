@@ -88,6 +88,13 @@ and clears the runner's Spago/output caches. If an unhandled termination leaves 
 lock, its `pid` identifies the owning process; remove the lock after that process
 has ended. A cache restoration failure prints the retained backup location.
 
+After diagnosing an infrastructure failure, `./bin/test --skip-before=FixtureName`
+resumes inclusively at that fixture. Retain the failed attempt and verify the
+combined successful names against the complete expected inventory, including the
+exclusions. Bash's glob order follows its locale; compare inventory membership
+independently of a language's default string sort, and retain actual execution
+order. A resumed qualification must identify both attempts and their exit codes.
+
 ### Shared focused-test support
 
 - [tests/support/fixtures.mjs](../tests/support/fixtures.mjs) handles fixture copying,
@@ -216,6 +223,8 @@ variable is set.
 When refactoring these tests, compare the complete assembled F# files and the
 mutated recognizer inputs with a frozen baseline, as well as the suite results.
 Matching check counts alone would not detect an accidentally changed oracle call.
+The [H06 report](validation/h06-2026-10-03.md) records the exact mutation/program
+comparison and the deliberately missing-target failure replay.
 
 ### CLI contract and Spago transport
 
@@ -434,6 +443,25 @@ input mutation and process errors) using isolated child processes.
 
 ## Full integration replay
 
+### Pin the run before building
+
+Create a fresh evidence directory and record the compiler/dependency revisions,
+working-tree status, source hashes, lockfiles, executable paths/versions and the
+self-contained current compiler bundle. Include uncommitted maintained inputs.
+Record application target links and the bytes/mtimes of the caches and working
+outputs being preserved. Use separate copies for library scripts with cross-sibling
+cleanup, and isolated output directories for application compilation.
+
+The cycle-2 inventory is **23 focused suites**, **49 PureScript assertions**,
+**359 active CLI fixtures**, **seven exclusions** and **19 native test modules**.
+The complete aggregate therefore has **27 steps**: build, bundle, PureScript
+assertions, the 23 suites, and one sequential CLI-fixture selection. Capture the
+actual inventories from `package.json`, `tests/passing/`, `bin/test` and
+`bin/modtest --list`; compare the executed names and exclusions, not just totals.
+Relative to M11, the five additional suites are `fixture-support`, `cli`,
+`project`, `names` and `adt-lowering`; the vendored CLI/native inventories are the
+same. A future added or removed case should appear explicitly in the run report.
+
 ### Compiler and native libraries
 
 ```bash
@@ -450,6 +478,9 @@ siblings' generated outputs and dependency caches. Include all local dependency
 overrides, the compiler wrapper/bundle and `tools/modtest-runner.mjs` in that copy.
 The selected module list, library source hashes and final exit code identify the
 tested scope. `--skip-before NAME` resumes inclusively after a diagnosed failure.
+After the aggregate, compare the runner's `.purmeta` existence, file inventory,
+contents and nanosecond mtimes with the pre-run snapshot. An initially absent
+cache must remain absent. Recheck the original library inputs after `modtest`.
 
 ### Application integration: b8x `Test.Main`
 
@@ -475,8 +506,10 @@ Set these for the test services; the host replay uses the published PostgreSQL
 port and the `store`/`edge` root databases. RabbitMQ configuration uses
 `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER` and `RABBITMQ_PASS`.
 
-Require both a zero process exit code and the expected **286/286** summary. Run
-each repetition in a fresh process, recording its assembly hash and complete log.
+Require both a zero process exit code and the expected **286/286** summary in
+**ten successive fresh processes**, recording the same Release assembly hash and
+a separate complete log for each execution. Finish this application series before
+replaying the benchmark entrypoint.
 The fixtures own creation, connection teardown and deletion of their temporary
 databases. Check their database selector before and after execution:
 
@@ -486,15 +519,17 @@ docker exec "$POSTGRES_CONTAINER" sh -lc \
   "SELECT datname FROM pg_database WHERE datname LIKE 'store_test_%' OR datname LIKE 'edge_test_%' ORDER BY datname"
 ```
 
-The qualified baseline has an empty result before and after each run. Retain the
-observed names if cleanup fails so they can be attributed to the failing execution.
+The qualified baseline has an empty result before the series and after **every**
+run, including a failed process. Retain the observed names if cleanup fails so they
+can be attributed to the failing execution. Recheck source/typed-input hashes,
+original output/cache contents and mtimes, and application target links afterward.
 
 ### Benchmark results
 
 The reference CPU workloads live in `altbak.pub-sharpurs` and run through its real
 `App.main`. Compile that entrypoint's source dependencies with the TAST toolchain,
-generate with `--main App`, build the .NET project, and execute its DLL in fresh
-processes. Keep the existing workload sources, warm-ups, result consumption and
+generate with `--main App`, build the .NET project, and execute its DLL in **three
+successive fresh processes**. Keep the existing workload sources, warm-ups, result consumption and
 measurement driver intact.
 
 Compare all **14 output values, names and their order** with the archived reference
@@ -503,7 +538,19 @@ displayed total agrees with the sum of the individual scores within their printe
 rounding precision. Source, typed-input and assembly hashes identify the executed
 program. A result-validation replay establishes output preservation; a timing
 comparison additionally needs identical workloads, separate processes and all
-builds completed before the measurement series.
+builds completed before the measurement series. Record the protocol before
+execution: entrypoint, immutable source/input/assembly identities, reference
+outputs, repetition count and total-rounding check. For a timing comparison,
+also define the before/after versions, process order and aggregation in advance.
+
+### Close with checked evidence
+
+Retain commands, exit codes, complete logs, compiler and application diagnostics,
+source/input/output manifests, generation comparisons and assembly hashes. Link a
+human-readable report to a machine-readable summary and a durable archive with a
+SHA-256 checksum; verify every archive member against its recorded bytes. A final
+source/cache check ties the results to the actual validated inputs. Record failed
+attempts and their diagnosed retries alongside the successful evidence.
 
 The [2 October 2026 replay report](validation/m11-2026-10-02.md) records the concrete
 toolchain, source revisions, application outputs and evidence for the maintenance
