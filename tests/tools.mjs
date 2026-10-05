@@ -2,9 +2,9 @@
 // Compiler semantics are covered by the focused suites, not reimplemented here.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { runChecks } from './run.mjs';
 import { runLogged, toolEnvironment } from '../scripts/support/process.mjs';
@@ -41,13 +41,109 @@ test('tool lookup prefers local tools then PATH over ancestor npm bins', async t
   const script = value => '#!/bin/sh\necho ' + value + '\n';
   await writeFile(join(directory, 'node_modules/.bin/spago'), script('legacy'), { mode: 0o755 });
   await writeFile(join(directory, 'tools/spago'), script('selected'), { mode: 0o755 });
-  const env = toolEnvironment(root, { ...process.env, PATH: [join(directory, 'node_modules/.bin'), join(directory, 'tools'), '/usr/bin', '/bin'].join(':') });
+  await symlink(join(directory, 'node_modules/.bin'), join(directory, 'legacy-bin-alias'));
+  const env = toolEnvironment(root, { ...process.env, PATH: [join(directory, 'legacy-bin-alias'), join(directory, 'node_modules/.bin'), join(directory, 'tools'), '/usr/bin', '/bin'].join(delimiter) });
   const log = join(directory, 'lookup.log');
   assert.equal((await runLogged('spago', [], { env, log })).ok, true);
   assert.match(await readFile(log, 'utf8'), /selected/);
   await writeFile(join(root, 'node_modules/.bin/spago'), script('local'), { mode: 0o755 });
   assert.equal((await runLogged('spago', [], { env, log })).ok, true);
   assert.match(await readFile(log, 'utf8'), /local/);
+});
+
+async function buildFixture(t) {
+  const directory = await sandbox(t);
+  const root = join(directory, 'compiler with spaces');
+  for (const path of ['scripts/support', 'node_modules/.bin', 'tools', 'bin']) await mkdir(join(root, path), { recursive: true });
+  for (const path of ['node_modules/.bin', 'tools']) await mkdir(join(directory, path), { recursive: true });
+  for (const path of ['scripts/build.mjs', 'scripts/support/process.mjs']) await cp(new URL('../' + path, import.meta.url), join(root, path));
+  const { scripts } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  await writeFile(join(root, 'package.json'), JSON.stringify({ type: 'module', scripts: { build: scripts.build, prepare: scripts.prepare } }));
+  const trace = join(directory, 'commands.jsonl');
+  const installTool = async (path, name) => writeFile(path, `#!/usr/bin/env node
+import { appendFileSync } from 'node:fs';
+const args = process.argv.slice(2);
+appendFileSync(process.env.BUILD_TRACE, JSON.stringify({ tool: ${JSON.stringify(name)}, args, cwd: process.cwd() }) + '\\n');
+if (${JSON.stringify(name)} === 'legacy') process.exit(81);
+if (args[0] === process.env.FAIL_STAGE) { console.error('stage failed: ' + args[0]); process.exit(Number(process.env.FAIL_CODE)); }
+`, { mode: 0o755 });
+  await installTool(join(directory, 'node_modules/.bin/spago'), 'legacy');
+  await installTool(join(directory, 'tools/spago'), 'selected');
+  const env = { ...process.env, BUILD_TRACE: trace,
+    PATH: [join(directory, 'node_modules/.bin'), join(directory, 'tools'), dirname(process.execPath), process.env.PATH].join(delimiter) };
+  delete env.SPAGO;
+  const invoke = async (program, args, extraEnv = {}) => {
+    await writeFile(trace, '');
+    const result = await runLogged(program, args, { cwd: root, env: { ...env, ...extraEnv }, log: join(directory, 'build.log') });
+    const calls = (await readFile(trace, 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
+    return { result, calls };
+  };
+  return { directory, root, installTool, invoke };
+}
+
+const bundleArgs = ['bundle', '--module', 'Main', '--platform', 'node', '--outfile', 'bin/sharpurs.js', '--bundle-type', 'app'];
+
+test('npm build and nested prepare select PATH, local and explicit Spago over ancestor bins', async t => {
+  const { directory, root, installTool, invoke } = await buildFixture(t);
+  const cwd = await realpath(root);
+  for (const command of ['build', 'prepare']) {
+    const { result, calls } = await invoke('npm', ['run', command]);
+    assert.equal(result.code, 0, await readFile(result.log, 'utf8'));
+    assert.deepEqual(calls, [['build'], bundleArgs].map(args => ({ tool: 'selected', args, cwd })));
+  }
+  await installTool(join(root, 'node_modules/.bin/spago'), 'local');
+  const local = await invoke('npm', ['run', 'build']);
+  assert.equal(local.result.code, 0);
+  assert.deepEqual(local.calls.map(call => call.tool), ['local', 'local']);
+  const explicit = join(directory, 'tools/custom spago');
+  await installTool(explicit, 'explicit');
+  const selected = await invoke('npm', ['run', 'prepare'], { SPAGO: explicit });
+  assert.equal(selected.result.code, 0);
+  assert.deepEqual(selected.calls.map(call => call.tool), ['explicit', 'explicit']);
+});
+
+test('npm build propagates compile/bundle failures and stops before dependent steps', async t => {
+  const { root, invoke } = await buildFixture(t);
+  for (const [stage, code, commands] of [['build', 7, [['build']]], ['bundle', 9, [['build'], bundleArgs]]]) {
+    const { result, calls } = await invoke('npm', ['run', 'build'], { FAIL_STAGE: stage, FAIL_CODE: String(code) });
+    assert.equal(result.code, code);
+    assert.deepEqual(calls.map(call => call.args), commands);
+    assert.match(await readFile(result.log, 'utf8'), new RegExp('stage failed: ' + stage));
+  }
+  const missing = await invoke('npm', ['run', 'build'], { SPAGO: join(root, 'missing spago') });
+  assert.equal(missing.result.code, 1);
+  assert.deepEqual(missing.calls, []);
+  assert.match(await readFile(missing.result.log, 'utf8'), /ENOENT/);
+});
+
+test('module clean builds use the public build entrypoint and selected toolchain', async t => {
+  const { directory, root, invoke } = await buildFixture(t);
+  const cwd = await realpath(root);
+  await cp(new URL('../tools/modtest-runner.mjs', import.meta.url), join(root, 'tools/modtest-runner.mjs'));
+  await mkdir(join(directory, 'sharpurs-example/bin'), { recursive: true });
+  await writeFile(join(directory, 'sharpurs-example/bin/test'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  const { result, calls } = await invoke(process.execPath, ['tools/modtest-runner.mjs', '--all', '-c']);
+  assert.equal(result.code, 0, await readFile(result.log, 'utf8'));
+  assert.deepEqual(calls, [['build'], bundleArgs].map(args => ({ tool: 'selected', args, cwd })));
+  assert.match(await readFile(result.log, 'utf8'), /Summary: 1 modules passed/);
+});
+
+test('CLI clean builds reach fixture compilation only after the public build succeeds', async t => {
+  const { root, installTool, invoke } = await buildFixture(t);
+  await installTool(join(root, 'node_modules/.bin/spago'), 'local');
+  await cp(new URL('../bin/test', import.meta.url), join(root, 'bin/test'));
+  await writeFile(join(root, 'bin/pkg'), 'CORE_PACKAGES=()\n');
+  await writeFile(join(root, 'bin/sharpurs.js'), '// bundle marker');
+  await writeFile(join(root, 'bin/sharpurs'), '#!/bin/sh\necho fixture-generation-reached\nexit 23\n', { mode: 0o755 });
+  await mkdir(join(root, 'tests/passing'), { recursive: true });
+  await writeFile(join(root, 'tests/passing/Fixture.purs'), 'module Main where\n');
+  const failed = await invoke('bash', ['bin/test', 'Fixture', '-c'], { FAIL_STAGE: 'build', FAIL_CODE: '7' });
+  assert.equal(failed.result.code, 1);
+  assert.deepEqual(failed.calls.map(call => call.args), [['build']]);
+  const built = await invoke('bash', ['bin/test', 'Fixture', '-c']);
+  assert.equal(built.result.code, 1);
+  assert.deepEqual(built.calls.map(call => call.args), [['build'], bundleArgs, ['build', '-q']]);
+  assert.match(await readFile(built.result.log, 'utf8'), /fixture-generation-reached/);
 });
 
 test('timeouts and cancellation cannot report success', async t => {

@@ -1,17 +1,26 @@
 import { open, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir, homedir } from 'node:os';
 import { delimiter, dirname, join, resolve } from 'node:path';
+
+function toolPath(path) {
+  const absolute = resolve(path);
+  try { return realpathSync(absolute); } catch (error) {
+    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return absolute;
+    throw error;
+  }
+}
 
 export function toolEnvironment(root, env = process.env) {
   // npm injects ancestor package bins as well. An unrelated legacy Spago there
   // must not shadow the toolchain chosen on PATH for this spago.yaml project.
   const ancestors = new Set();
   for (let parent = dirname(root); ; parent = dirname(parent)) {
-    ancestors.add(join(parent, 'node_modules/.bin'));
+    ancestors.add(toolPath(join(parent, 'node_modules/.bin')));
     if (parent === dirname(parent)) break;
   }
-  const path = (env.PATH || '').split(delimiter).filter(entry => !ancestors.has(resolve(entry)));
+  const path = (env.PATH || '').split(delimiter).filter(entry => !ancestors.has(toolPath(entry)));
   return { ...env, PATH: [join(root, 'node_modules/.bin'), join(homedir(), '.dotnet'), ...path].join(delimiter) };
 }
 

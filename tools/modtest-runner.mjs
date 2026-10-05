@@ -3,7 +3,7 @@
 // build, caches and cleanup; -c rebuilds the compiler once beforehand.
 import { accessSync, constants, readdirSync, statSync } from "node:fs";
 import { spawn } from "node:child_process";
-import { basename, delimiter, join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -119,14 +119,9 @@ function run(label, command, args, { cwd, env = process.env }) {
   });
 }
 
-// Rebuild the compiler once. `npm run build` would prepend every ancestor
-// node_modules/.bin to PATH, where an unrelated legacy spago (0.20.x,
-// dhall-based) can shadow the spago.yaml toolchain this project needs; the
-// project bin directory still has to come first for the bundler's esbuild.
+// Rebuild once through the same tool selection and commands as npm/prepare.
 async function buildCompiler() {
-  const env = { ...process.env, PATH: `${join(root, "node_modules", ".bin")}${delimiter}${process.env.PATH ?? ""}` };
-  await run("build-sharpurs", "spago", ["build"], { cwd: root, env });
-  await run("build-sharpurs", "spago", ["bundle", "--module", "Main", "--platform", "node", "--outfile", "bin/sharpurs.js", "--bundle-type", "app"], { cwd: root, env });
+  await run("build-sharpurs", process.execPath, [join(root, "scripts/build.mjs")], { cwd: root });
 }
 
 const usage = `Usage: ./bin/modtest [modules...] [--all] [--skip-before NAME] [--list] [-c]

@@ -92,6 +92,14 @@ npm run build
 
 `npm install` runs `prepare`, which invokes `npm run build`. The build compiles the PureScript sources and bundles `Main` into `bin/sharpurs.js` for Node.js. The checked-in `bin/sharpurs` wrapper invokes that bundle with larger Node stack and heap limits.
 
+`scripts/build.mjs` owns those two build commands, also used by the aggregate
+checks and the CLI/native-library clean-build entrypoints. It selects the
+repository-local tools before the caller's `PATH` and removes npm-injected
+ancestor `node_modules/.bin` directories, including symlink aliases. This keeps an
+ancestor's legacy Spago from replacing the toolchain for `spago.yaml`.
+`SPAGO=/absolute/path/to/spago npm run build` explicitly selects the build tool;
+the executable path is passed as one argument, including spaces.
+
 Each backend invocation reports monotonic elapsed times to stderr, in milliseconds, for `load TAST + sort`, `prepare`, `optimize + emit`, `finalize`, and `backend total`. The total includes these phases; it excludes the earlier `purs` compilation and target-language compilation or execution. Each phase waits for its asynchronous callbacks and file writes to finish. Failed phases and the total are marked `(failed)`, and the original error is rethrown.
 
 ### Compile and run an application

@@ -43,10 +43,13 @@ npm test -- --skip-build --skip-assertions --suite adt-multi --suite thunk-kerne
 npm test -- --all-fixtures
 ```
 
-[tests/run.mjs](../tests/run.mjs) invokes Spago directly, then runs each suite in a
-separate process. It puts repository-local tools first and removes npm-injected
-ancestor `node_modules/.bin` paths, which can contain an unrelated legacy Spago.
-`SPAGO=/absolute/path/to/spago` selects the aggregate build/assertion executable.
+[tests/run.mjs](../tests/run.mjs) uses the build steps exported by
+[scripts/build.mjs](../scripts/build.mjs), then runs each suite in a separate
+process. The same entrypoint serves `npm run build`, `prepare`, `bin/test -c` and
+`bin/modtest -c`. Tool selection puts repository-local tools first and removes
+npm-injected ancestor `node_modules/.bin` paths, including symlink aliases, which
+can contain an unrelated legacy Spago. `SPAGO=/absolute/path/to/spago` selects
+the compiler build/assertion executable.
 Focused suites accept `PURS` and `DOTNET`; the shell CLI runner uses `PATH`.
 `PRELUDE_SRC` overrides the focused fixtures' prelude source directory when needed.
 
@@ -441,6 +444,12 @@ with identical workloads and no concurrent build.
 and cache restoration, and comparison failures (content, removed outputs, mtimes,
 input mutation and process errors) using isolated child processes.
 
+Its build regressions invoke real `npm run build` and nested `prepare` processes
+in isolated projects with a deliberately failing ancestor Spago. They check
+caller-selected, local and explicit tools (including paths with spaces), compile
+and bundle failure propagation, missing executables, and delegation from both
+clean-build runners. The PATH checks also cover an ancestor-bin symlink alias.
+
 ## Full integration replay
 
 ### Pin the run before building
@@ -475,7 +484,8 @@ npm test -- --all-fixtures --artifacts /absolute/path/to/new-check-report
 `bin/test` and runs their scripts sequentially. Use an isolated copy of the
 checkout layout for this replay: library scripts clear both their own and their
 siblings' generated outputs and dependency caches. Include all local dependency
-overrides, the compiler wrapper/bundle and `tools/modtest-runner.mjs` in that copy.
+overrides, the compiler wrapper/bundle, `scripts/build.mjs`,
+`scripts/support/process.mjs` and `tools/modtest-runner.mjs` in that copy.
 The selected module list, library source hashes and final exit code identify the
 tested scope. `--skip-before NAME` resumes inclusively after a diagnosed failure.
 After the aggregate, compare the runner's `.purmeta` existence, file inventory,

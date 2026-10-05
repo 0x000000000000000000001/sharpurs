@@ -3,6 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { artifactDirectory, runLogged, toolEnvironment, writeJson } from '../scripts/support/process.mjs';
+import { buildSteps } from '../scripts/build.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -19,9 +20,7 @@ export async function runChecks({ directory = root, artifacts, suites = [], fixt
   });
   if (allFixtures && fixtures.length) throw new Error('Choose named fixtures or --all-fixtures');
   if (assertions) tasks.unshift({ name: 'purescript', program: env.SPAGO || 'spago', args: ['test'] });
-  if (build) tasks.unshift(
-    { name: 'build', program: env.SPAGO || 'spago', args: ['build'], prerequisite: true },
-    { name: 'bundle', program: env.SPAGO || 'spago', args: ['bundle', '--module', 'Main', '--platform', 'node', '--outfile', 'bin/sharpurs.js', '--bundle-type', 'app'], prerequisite: true });
+  if (build) tasks.unshift(...buildSteps(env).map(task => ({ ...task, prerequisite: true })));
   if (allFixtures || fixtures.length) tasks.push({ name: 'cli-fixtures', program: join(directory, 'bin/test'), args: fixtures });
   const destination = await artifactDirectory(artifacts, 'sharpurs-check-');
   const results = [];
