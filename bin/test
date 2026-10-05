@@ -42,33 +42,43 @@ for pkg in "${CORE_PACKAGES[@]}"; do
   fi
 done
 
-mkdir -p "$RUNNER_DIR/src"
-
 passed=0
 failed=0
 
-SKIP_BEFORE="" # E.g. "TCO" to run tests after TCO.purs
+SKIP_BEFORE="" # Inclusive start, e.g. "TCO" or "TCO.purs".
 UNTIL="" # E.g. "ExtendedInfixOperators" to stop after that test
 TEST_FILES=()
 CLEAN_CACHE=0
 
+selection_error() {
+  echo "Invalid fixture selection: $1" >&2
+  exit 1
+}
+
+is_blacklisted() {
+  local excluded
+  for excluded in "${BLACKLIST[@]}"; do
+    if [ "$1" = "$excluded" ]; then return 0; fi
+  done
+  return 1
+}
+
 if [ $# -gt 0 ]; then
   for arg in "$@"; do
-    if [[ "$arg" == skip_before=* ]]; then
-      SKIP_BEFORE="${arg#skip_before=}"
-    elif [[ "$arg" == --skip-before=* ]]; then
-      SKIP_BEFORE="${arg#--skip-before=}"
-    elif [[ "$arg" == until=* ]]; then
-      UNTIL="${arg#until=}"
-    elif [[ "$arg" == --until=* ]]; then
-      UNTIL="${arg#--until=}"
+    if [[ "$arg" == skip_before=* || "$arg" == --skip-before=* ]]; then
+      SKIP_BEFORE="${arg#*=}"
+      [ -n "$SKIP_BEFORE" ] || selection_error "--skip-before needs a fixture name."
+    elif [[ "$arg" == until=* || "$arg" == --until=* ]]; then
+      UNTIL="${arg#*=}"
+      [ -n "$UNTIL" ] || selection_error "--until needs a fixture name."
     elif [[ "$arg" == "-c" || "$arg" == "--clean" ]]; then
       CLEAN_CACHE=1
     else
       if [ -f "$ROOT_DIR/$arg" ]; then
         TEST_FILES+=("$ROOT_DIR/$arg")
       elif [ -f "$arg" ]; then
-        TEST_FILES+=("$arg")
+        # Resolve caller-relative inputs before changing to the shared runner.
+        TEST_FILES+=("$(cd "$(dirname "$arg")" && pwd)/$(basename "$arg")")
       elif [ -f "$PASSING_DIR/$arg" ]; then
         TEST_FILES+=("$PASSING_DIR/$arg")
       elif [ -f "$PASSING_DIR/$arg.purs" ]; then
@@ -80,6 +90,46 @@ if [ $# -gt 0 ]; then
     fi
   done
 fi
+
+# Resolve the range before creating, locking or cleaning the shared workspace.
+# Keep Bash's glob order, or the caller's explicit file order.
+if [ ${#TEST_FILES[@]} -eq 0 ]; then
+  TEST_FILES=("$PASSING_DIR"/*.purs)
+fi
+for test_file in "${TEST_FILES[@]}"; do
+  [ -f "$test_file" ] || selection_error "No fixture found at $test_file."
+done
+
+bound_index() {
+  local target="$1" option="$2" found=-1 index name
+  for index in "${!TEST_FILES[@]}"; do
+    name="${TEST_FILES[$index]##*/}"
+    if [[ "$name" == "$target" || "$name" == "$target.purs" ]]; then
+      [ "$found" -eq -1 ] || selection_error "$option target '$target' is ambiguous in the selected fixtures."
+      found=$index
+    fi
+  done
+  [ "$found" -ne -1 ] || selection_error "$option target '$target' is not in the selected fixtures."
+  echo "$found"
+}
+
+start_index=0
+end_index=$((${#TEST_FILES[@]} - 1))
+if [ -n "$SKIP_BEFORE" ]; then
+  start_index=$(bound_index "$SKIP_BEFORE" --skip-before) || exit 1
+fi
+if [ -n "$UNTIL" ]; then
+  end_index=$(bound_index "$UNTIL" --until) || exit 1
+fi
+[ "$start_index" -le "$end_index" ] || selection_error "--until precedes --skip-before in the selected fixture order."
+TEST_FILES=("${TEST_FILES[@]:$start_index:$((end_index - start_index + 1))}")
+runnable=0
+for test_file in "${TEST_FILES[@]}"; do
+  if ! is_blacklisted "${test_file##*/}"; then runnable=$((runnable + 1)); fi
+done
+[ "$runnable" -gt 0 ] || selection_error "The selected range contains no runnable fixtures (all are blacklisted)."
+
+mkdir -p "$RUNNER_DIR/src"
 
 # One invocation owns the shared runner. Preserve its pre-existing compiler
 # metadata, including untracked cache entries, even when a fixture fails.
@@ -140,37 +190,10 @@ if [ $CLEAN_CACHE -eq 1 ]; then
   rm -rf .spago/* output-es/* output/*
 fi
 
-if [ ${#TEST_FILES[@]} -eq 0 ]; then
-  # Use an array to store files safely
-  TEST_FILES=("$PASSING_DIR"/*.purs)
-fi
-
-skipping_until=0
-if [ -n "$SKIP_BEFORE" ]; then
-  skipping_until=1
-fi
-
 for test_file in "${TEST_FILES[@]}"; do
-  test_name=$(basename "$test_file")
-  
-  if [ $skipping_until -eq 1 ]; then
-    if [[ "$test_name" == "$SKIP_BEFORE" || "$test_name" == "$SKIP_BEFORE.purs" ]]; then
-      skipping_until=0
-    else
-      continue
-    fi
-  fi
-  
-  # Check blacklist
-  skip_test=0
-  for b in "${BLACKLIST[@]}"; do
-    if [ "$test_name" = "$b" ]; then
-      skip_test=1
-      break
-    fi
-  done
-  
-  if [ $skip_test -eq 1 ]; then
+  test_name="${test_file##*/}"
+
+  if is_blacklisted "$test_name"; then
     echo "=> Skipping $test_name (blacklisted)"
     continue
   fi
@@ -250,9 +273,6 @@ for test_file in "${TEST_FILES[@]}"; do
     break
   fi
 
-  if [ -n "$UNTIL" ] && [[ "$test_name" == "$UNTIL" || "$test_name" == "$UNTIL.purs" ]]; then
-    break
-  fi
 done
 
 echo ""

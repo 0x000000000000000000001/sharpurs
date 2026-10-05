@@ -92,7 +92,22 @@ lock, its `pid` identifies the owning process; remove the lock after that proces
 has ended. A cache restoration failure prints the retained backup location.
 
 After diagnosing an infrastructure failure, `./bin/test --skip-before=FixtureName`
-resumes inclusively at that fixture. Retain the failed attempt and verify the
+resumes inclusively at that fixture. `--until=FixtureName` sets an inclusive end:
+
+```bash
+./bin/test --skip-before=PartialFunction --until=PartialTCO.purs
+```
+
+Bounds are fixture basenames, with or without `.purs`; `skip_before=` and `until=`
+remain supported aliases. Explicit fixture arguments retain their given order;
+otherwise the selection uses Bash's glob order. Bounds must each identify exactly
+one fixture in that inventory, and the end must follow or equal the start. An
+excluded endpoint still delimits the range. Empty, missing or ambiguous bounds,
+reversed ranges, empty inventories and all-excluded selections exit 1 before any
+runner creation, locking, cache changes or `-c` build. Caller-relative fixture
+paths are resolved before entering the runner, preserving spaces and Unicode.
+
+Retain the failed attempt and verify the
 combined successful names against the complete expected inventory, including the
 exclusions. Bash's glob order follows its locale; compare inventory membership
 independently of a language's default string sort, and retain actual execution
@@ -449,6 +464,15 @@ in isolated projects with a deliberately failing ancestor Spago. They check
 caller-selected, local and explicit tools (including paths with spaces), compile
 and bundle failure propagation, missing executables, and delegation from both
 clean-build runners. The PATH checks also cover an ancestor-bin symlink alias.
+
+Fixture-selection regressions check invalid bounds without runner/cache writes,
+inclusive ranges in glob and explicit order, excluded endpoints, empty inventories
+and caller-relative paths containing spaces and Unicode. To characterize an older
+runner against these same expectations, set
+`FIXTURE_RUNNER_ORACLE=/absolute/path/to/older/bin/test` and use
+`node --test --test-name-pattern='CLI fixture|CLI caller-relative|CLI empty fixture' tests/tools.mjs`.
+The [fixture-selection report](validation/post-h07-fixture-selection-2026-10-05.md)
+records the historical failures and bounded real-fixture replay.
 
 ## Full integration replay
 

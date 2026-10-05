@@ -8,7 +8,7 @@ import { delimiter, dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { runChecks } from './run.mjs';
 import { runLogged, toolEnvironment } from '../scripts/support/process.mjs';
-import { compareGeneration } from '../scripts/support/generation.mjs';
+import { compareGeneration, fileManifest } from '../scripts/support/generation.mjs';
 
 const quiet = () => {};
 async function sandbox(t) {
@@ -240,6 +240,104 @@ test('CLI runner rejects stale success, restores caches and serializes invocatio
   await mkdir(join(directory, 'tests/runner/.sharpurs-test.lock'));
   assert.equal((await run(['Fixture'])).ok, false);
   assert.match(await readFile(join(directory, 'cli.log'), 'utf8'), /already in use/);
+});
+
+async function fixtureSelection(t, names = ['A', 'B', 'C', 'TCOMutRec']) {
+  const directory = await sandbox(t);
+  for (const path of ['bin', 'node_modules/.bin', 'tests/passing']) await mkdir(join(directory, path), { recursive: true });
+  await cp(process.env.FIXTURE_RUNNER_ORACLE || new URL('../bin/test', import.meta.url), join(directory, 'bin/test'));
+  await writeFile(join(directory, 'bin/pkg'), 'CORE_PACKAGES=()\n');
+  await writeFile(join(directory, 'bin/sharpurs.js'), '// bundle marker');
+  await writeFile(join(directory, 'bin/sharpurs'), '#!/bin/sh\nmkdir -p output/Main\necho project > output/Main/Program.fsproj\n', { mode: 0o755 });
+  await writeFile(join(directory, 'node_modules/.bin/spago'), `#!/usr/bin/env node
+import { appendFileSync, readFileSync } from 'node:fs';
+appendFileSync(process.env.FIXTURE_TRACE, JSON.stringify(readFileSync('src/Main.purs', 'utf8')) + '\\n');
+`, { mode: 0o755 });
+  await writeFile(join(directory, 'node_modules/.bin/dotnet'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  for (const name of names) await writeFile(join(directory, 'tests/passing', name + '.purs'), `module ${name} where\n`);
+  const trace = join(directory, 'compiled.jsonl');
+  const run = async (args, cwd = directory) => {
+    await writeFile(trace, '');
+    const result = await runLogged('bash', [join(directory, 'bin/test'), ...args], {
+      cwd, env: { ...process.env, FIXTURE_TRACE: trace }, log: join(directory, 'selection.log'),
+    });
+    const sources = (await readFile(trace, 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
+    return { result, sources, log: await readFile(result.log, 'utf8') };
+  };
+  return { directory, run };
+}
+
+test('CLI fixture bounds reject invalid ranges before touching the shared runner', async t => {
+  const { directory, run } = await fixtureSelection(t);
+  const runner = join(directory, 'tests/runner');
+  await mkdir(join(runner, '.purmeta'), { recursive: true });
+  await writeFile(join(runner, '.purmeta/old'), 'preserve cache');
+  await writeFile(join(runner, 'spago.yaml'), 'preserve configuration');
+  await mkdir(join(directory, 'other'));
+  await writeFile(join(directory, 'other/A.purs'), 'module Other where\n');
+  const before = await fileManifest(runner);
+  for (const [args, diagnostic] of [
+    [['--skip-before=Missing'], /--skip-before.*not in the selected fixtures/],
+    [['--until=Missing'], /--until.*not in the selected fixtures/],
+    [['--skip-before='], /--skip-before needs a fixture name/],
+    [['skip_before='], /--skip-before needs a fixture name/],
+    [['--until='], /--until needs a fixture name/],
+    [['until='], /--until needs a fixture name/],
+    [['--skip-before=C', '--until=A'], /--until precedes --skip-before/],
+    [['A', '--skip-before=B'], /not in the selected fixtures/],
+    [['A', '--until=B'], /not in the selected fixtures/],
+    [['A', 'other/A.purs', '--skip-before=A'], /ambiguous/],
+    [['A', 'other/A.purs', '--until=A.purs'], /ambiguous/],
+    [['TCOMutRec'], /no runnable fixtures/],
+    [['--skip-before=TCOMutRec', '--until=TCOMutRec'], /no runnable fixtures/],
+    [['--skip-before=Missing', '-c'], /not in the selected fixtures/],
+  ]) {
+    const actual = await run(args);
+    assert.equal(actual.result.code, 1, JSON.stringify(args));
+    assert.match(actual.log, diagnostic);
+    assert.deepEqual(actual.sources, []);
+    assert.deepEqual(await fileManifest(runner), before, 'invalid selection preserves cache bytes and mtimes');
+    await assert.rejects(stat(join(runner, 'src')), { code: 'ENOENT' });
+    await assert.rejects(stat(join(runner, '.sharpurs-test.lock')), { code: 'ENOENT' });
+  }
+});
+
+test('CLI fixture ranges preserve order and inclusive excluded boundaries', async t => {
+  const { run } = await fixtureSelection(t);
+  for (const [args, expected, excluded] of [
+    [[], ['A', 'B', 'C'], true],
+    [['--skip-before=B', '--until=C.purs'], ['B', 'C'], false],
+    [['skip_before=B.purs', 'until=B'], ['B'], false],
+    [['C', 'A', 'B', '--skip-before=C', '--until=A'], ['C', 'A'], false],
+    [['A', 'TCOMutRec', 'B', '--until=TCOMutRec'], ['A'], true],
+    [['A', 'TCOMutRec', 'B', '--skip-before=TCOMutRec.purs'], ['B'], true],
+  ]) {
+    const actual = await run(args);
+    assert.equal(actual.result.code, 0, actual.log);
+    assert.deepEqual(actual.sources, expected.map(name => `module ${name} where\n`));
+    assert.equal(actual.log.includes('=> Skipping TCOMutRec.purs (blacklisted)'), excluded);
+    assert.equal((actual.log.match(/\[OK\]/g) || []).length, expected.length);
+  }
+});
+
+test('CLI caller-relative fixture paths retain spaces and Unicode after entering the runner', async t => {
+  const { directory, run } = await fixtureSelection(t);
+  const caller = join(directory, 'caller');
+  await mkdir(join(caller, 'fixtures with spaces'), { recursive: true });
+  const name = 'fixtures with spaces/Entrée.purs';
+  await writeFile(join(caller, name), 'module Chosen where\n');
+  const actual = await run([name, '--skip-before=Entrée', '--until=Entrée.purs'], caller);
+  assert.equal(actual.result.code, 0, actual.log);
+  assert.deepEqual(actual.sources, ['module Chosen where\n']);
+});
+
+test('CLI empty fixture inventories fail without creating a runner', async t => {
+  const { directory, run } = await fixtureSelection(t, []);
+  const actual = await run([]);
+  assert.equal(actual.result.code, 1);
+  assert.match(actual.log, /No fixture found/);
+  assert.deepEqual(actual.sources, []);
+  await assert.rejects(stat(join(directory, 'tests/runner')), { code: 'ENOENT' });
 });
 
 async function comparisonFixture(t) {
