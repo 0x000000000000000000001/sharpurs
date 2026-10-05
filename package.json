@@ -10,7 +10,7 @@
     "build": "node scripts/build.mjs",
     "test": "node tests/run.mjs",
     "compare:generation": "node scripts/compare-generation.mjs",
-    "test:tools": "node --test tests/tools.mjs",
+    "test:tools": "node --test tests/tools.mjs tests/runner-lifecycle.mjs",
     "test:fixture-support": "node --test tests/fixture-support.mjs",
     "test:cli": "node tests/cli.mjs",
     "test:runtime": "node tests/runtime-apply.mjs",
