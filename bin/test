@@ -3,7 +3,7 @@
 # Test runner for sharpurs
 # Compiles and runs PureScript passing tests via .NET / F#
 
-ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
+ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd) || exit 1
 TEST_DIR="$ROOT_DIR/tests"
 PASSING_DIR="$TEST_DIR/passing"
 RUNNER_DIR="$TEST_DIR/runner"
@@ -32,7 +32,7 @@ if [ -d "$HOME/.dotnet" ]; then
 fi
 export PATH="$ROOT_DIR/node_modules/.bin:$PATH"
 
-source "$(dirname "$0")/pkg"
+source "$ROOT_DIR/bin/pkg" || exit 1
 
 for pkg in "${CORE_PACKAGES[@]}"; do
   if [ ! -d "$ROOT_DIR/../sharpurs-$pkg" ]; then
@@ -78,7 +78,8 @@ if [ $# -gt 0 ]; then
         TEST_FILES+=("$ROOT_DIR/$arg")
       elif [ -f "$arg" ]; then
         # Resolve caller-relative inputs before changing to the shared runner.
-        TEST_FILES+=("$(cd "$(dirname "$arg")" && pwd)/$(basename "$arg")")
+        fixture_dir=$(cd "$(dirname "$arg")" && pwd) || selection_error "Cannot resolve $arg."
+        TEST_FILES+=("$fixture_dir/${arg##*/}")
       elif [ -f "$PASSING_DIR/$arg" ]; then
         TEST_FILES+=("$PASSING_DIR/$arg")
       elif [ -f "$PASSING_DIR/$arg.purs" ]; then
@@ -129,156 +130,225 @@ for test_file in "${TEST_FILES[@]}"; do
 done
 [ "$runnable" -gt 0 ] || selection_error "The selected range contains no runnable fixtures (all are blacklisted)."
 
-mkdir -p "$RUNNER_DIR/src"
-
-# One invocation owns the shared runner. Preserve its pre-existing compiler
-# metadata, including untracked cache entries, even when a fixture fails.
 LOCK_DIR="$RUNNER_DIR/.sharpurs-test.lock"
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-  echo "Fixture runner is already in use: $LOCK_DIR" >&2
-  exit 1
-fi
-echo "$$" > "$LOCK_DIR/pid"
-CACHE_SNAPSHOT=$(mktemp -d "${TMPDIR:-/tmp}/sharpurs-runner-cache.XXXXXX") || { rm -rf "$LOCK_DIR"; exit 1; }
-cleanup_runner() {
-  rm -rf "$RUNNER_DIR/.purmeta"
-  if [ -d "$CACHE_SNAPSHOT/.purmeta" ]; then
-    cp -pR "$CACHE_SNAPSHOT/.purmeta" "$RUNNER_DIR/.purmeta" || {
-      echo "Cache restoration failed; saved copy: $CACHE_SNAPSHOT" >&2
-      rm -rf "$LOCK_DIR"
-      exit 1
-    }
-  fi
-  rm -rf "$CACHE_SNAPSHOT" "$LOCK_DIR"
+LOCK_OWNED=0
+CACHE_SNAPSHOT=""
+CACHE_READY=0
+RUN_STARTED=0
+
+runner_error() {
+  printf '   [FAILED] %s\n' "$1" >&2
+  return 1
 }
-if [ -d "$RUNNER_DIR/.purmeta" ]; then
-  cp -pR "$RUNNER_DIR/.purmeta" "$CACHE_SNAPSHOT/.purmeta" || { rm -rf "$CACHE_SNAPSHOT" "$LOCK_DIR"; exit 1; }
-fi
-trap cleanup_runner EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
 
-if [ $CLEAN_CACHE -eq 1 ]; then
-  echo "Building sharpurs compiler..."
-  cd "$ROOT_DIR"
-  node scripts/build.mjs || { echo -e "\n\033[0;31m[FAILED]\033[0m sharpurs build failed!"; exit 1; }
-fi
+# Callers explicitly stop after errors, including when a function is used in an
+# if/|| condition. Do not rely on Bash's context-dependent errexit behavior.
+runner_io() {
+  local operation="$1" status
+  shift
+  if "$@"; then return 0; else status=$?; fi
+  runner_error "$operation (exit $status)"
+}
 
-cd "$RUNNER_DIR"
-
-if [ ! -f spago.yaml ]; then
-  echo "package:" > spago.yaml
-  echo "  name: runner" >> spago.yaml
-  echo "  dependencies:" >> spago.yaml
-  for pkg in "${CORE_PACKAGES[@]}"; do
-    echo "    - $pkg" >> spago.yaml
-  done
-  echo "workspace:" >> spago.yaml
-  echo "  packageSet:" >> spago.yaml
-  echo "    registry: 77.10.1" >> spago.yaml
-  echo "  extraPackages:" >> spago.yaml
-  for pkg in "${CORE_PACKAGES[@]}"; do
-    echo "    $pkg:" >> spago.yaml
-    echo "      path: \"../../../sharpurs-$pkg\"" >> spago.yaml
-  done
-fi
-
-echo "Running tests from $PASSING_DIR..."
-
-if [ $CLEAN_CACHE -eq 1 ]; then
-  echo "=> Cleaning Spago and output cache..."
-  rm -rf .spago/* output-es/* output/*
-fi
-
-for test_file in "${TEST_FILES[@]}"; do
-  test_name="${test_file##*/}"
-
-  if is_blacklisted "$test_name"; then
-    echo "=> Skipping $test_name (blacklisted)"
-    continue
+acquire_runner() {
+  runner_io "Create runner $RUNNER_DIR" mkdir -p "$RUNNER_DIR" || return 1
+  if ! mkdir "$LOCK_DIR"; then
+    if [ -d "$LOCK_DIR" ]; then
+      runner_error "Fixture runner is already in use: $LOCK_DIR"
+    else
+      runner_error "Create runner lock $LOCK_DIR"
+    fi
+    return 1
   fi
+  LOCK_OWNED=1
+  printf '%s\n' "$$" > "$LOCK_DIR/pid" || { runner_error "Write lock owner $LOCK_DIR/pid"; return 1; }
+}
 
-  echo "=> Testing $test_name"
-  
-  rm -rf src/* output/Test* output/Main/bin output/Main/obj
-  # Drop modules compiled from a previous test's src (Main and companion modules).
+snapshot_cache() {
+  CACHE_SNAPSHOT=$(mktemp -d "${TMPDIR:-/tmp}/sharpurs-runner-cache.XXXXXX") || {
+    runner_error "Create runner cache snapshot"; return 1;
+  }
+  if [ -d "$RUNNER_DIR/.purmeta" ]; then
+    runner_io "Save cache $RUNNER_DIR/.purmeta" cp -pR "$RUNNER_DIR/.purmeta" "$CACHE_SNAPSHOT/.purmeta" || return 1
+  elif [ -e "$RUNNER_DIR/.purmeta" ] || [ -L "$RUNNER_DIR/.purmeta" ]; then
+    runner_error "Expected a cache directory at $RUNNER_DIR/.purmeta"
+    return 1
+  fi
+  # An incomplete snapshot must never replace the untouched original cache.
+  CACHE_READY=1
+}
+
+restore_cache() {
+  # Stop before copying if removal fails: cp would otherwise nest .purmeta
+  # inside the failed destination and leave the mutated cache in place.
+  runner_io "Remove invocation cache $RUNNER_DIR/.purmeta" rm -rf "$RUNNER_DIR/.purmeta" || return 1
+  if [ -d "$CACHE_SNAPSHOT/.purmeta" ]; then
+    runner_io "Restore cache from $CACHE_SNAPSHOT/.purmeta" cp -pR "$CACHE_SNAPSHOT/.purmeta" "$RUNNER_DIR/.purmeta" || return 1
+  fi
+}
+
+release_runner() {
+  local status=0 keep_snapshot=0
+  if [ "$CACHE_READY" -eq 1 ] && ! restore_cache; then
+    echo "Cache restoration failed; saved copy: $CACHE_SNAPSHOT" >&2
+    keep_snapshot=1
+    status=1
+  fi
+  if [ -n "$CACHE_SNAPSHOT" ] && [ "$keep_snapshot" -eq 0 ]; then
+    runner_io "Remove cache snapshot $CACHE_SNAPSHOT" rm -rf "$CACHE_SNAPSHOT" || status=1
+  fi
+  if [ "$LOCK_OWNED" -eq 1 ]; then
+    runner_io "Release runner lock $LOCK_DIR" rm -rf "$LOCK_DIR" || status=1
+  fi
+  return "$status"
+}
+
+finish_runner() {
+  local status="$1"
+  trap - EXIT
+  # Complete restoration once, including after a handled interruption.
+  trap '' INT TERM
+  release_runner || status=1
+  if [ "$RUN_STARTED" -eq 1 ]; then
+    echo ""
+    if [ "$status" -eq 0 ]; then
+      echo -e "Summary: \033[0;32m$passed passed\033[0m, 0 failed."
+    elif [ "$failed" -gt 0 ]; then
+      echo -e "Summary: \033[0;32m$passed passed\033[0m, \033[0;31m$failed failed\033[0m."
+    else
+      echo "Summary: $passed passed; runner failed (exit $status)." >&2
+    fi
+  fi
+  exit "$status"
+}
+
+write_config() {
+  local pkg
+  local lines=("package:" "  name: runner" "  dependencies:")
+  for pkg in "${CORE_PACKAGES[@]}"; do
+    lines+=("    - $pkg")
+  done
+  lines+=("workspace:" "  packageSet:" "    registry: 77.10.1" "  extraPackages:")
+  for pkg in "${CORE_PACKAGES[@]}"; do
+    lines+=("    $pkg:" "      path: \"../../../sharpurs-$pkg\"")
+  done
+  printf '%s\n' "${lines[@]}"
+}
+
+prepare_workspace() {
+  runner_io "Create fixture source directory $RUNNER_DIR/src" mkdir -p "$RUNNER_DIR/src" || return 1
+  runner_io "Enter runner $RUNNER_DIR" cd "$RUNNER_DIR" || return 1
+  if [ ! -f spago.yaml ]; then
+    if [ -e spago.yaml ] || [ -L spago.yaml ]; then
+      runner_error "Expected a configuration file at $RUNNER_DIR/spago.yaml"
+      return 1
+    fi
+    write_config > "$LOCK_DIR/spago.yaml" || { runner_error "Write runner configuration $LOCK_DIR/spago.yaml"; return 1; }
+    runner_io "Publish runner configuration $RUNNER_DIR/spago.yaml" mv "$LOCK_DIR/spago.yaml" "$RUNNER_DIR/spago.yaml" || return 1
+  fi
+}
+
+prepare_fixture() {
+  local test_file="$1" stale status sibling_js test_dir
+  local companions=()
+  runner_io "Clean previous fixture sources and build outputs" rm -rf src/* output/Test* output/Main/bin output/Main/obj || return 1
+  # Drop modules compiled from a previous fixture's src (Main and companions).
   for stale in output/*/corefn.json; do
-    if grep -q '"modulePath":"src/' "$stale" 2>/dev/null; then
-      rm -rf "$(dirname "$stale")"
+    [ -e "$stale" ] || [ -L "$stale" ] || continue
+    if grep -q '"modulePath":"src/' "$stale"; then
+      runner_io "Remove stale fixture module ${stale%/*}" rm -rf "${stale%/*}" || return 1
+    else
+      status=$?
+      [ "$status" -eq 1 ] || { runner_error "Inspect fixture provenance $stale (exit $status)"; return 1; }
     fi
   done
-  
-  cp "$test_file" "src/Main.purs"
+  runner_io "Copy fixture $test_file" cp "$test_file" src/Main.purs || return 1
   # purs needs the JS implementation to typecheck a module with foreign imports.
   sibling_js="${test_file%.purs}.js"
   if [ -f "$sibling_js" ]; then
-    cp "$sibling_js" "src/Main.js"
+    runner_io "Copy fixture foreign implementation $sibling_js" cp "$sibling_js" src/Main.js || return 1
   fi
-  
   test_dir="${test_file%.purs}"
   if [ -d "$test_dir" ]; then
-    cp -r "$test_dir"/* "src/"
+    companions=("$test_dir"/*)
+    if [ -e "${companions[0]}" ] || [ -L "${companions[0]}" ]; then
+      runner_io "Copy fixture companions $test_dir" cp -r "${companions[@]}" src/ || return 1
+    fi
   fi
-  
-  # 1. Compile PureScript to CoreFn
-  if out=$(spago build -q 2>&1); then
-    # 2. Generate F# / C# code via sharpurs
-    if [ -f "../../bin/sharpurs.js" ]; then
-      rm -f output/Main/Program.fsproj
-      if ! backend_out=$(../../bin/sharpurs --main Main 2>&1); then
-        echo "   [FAILED] sharpurs generation failed"
-        echo "$backend_out"
-        failed=$((failed+1))
-        break
-      fi
-    else
-      echo "   [FAILED] bin/sharpurs.js is missing; build sharpurs first"
-      failed=$((failed+1))
-      break
-    fi
-    
-    # 3. Compile and run via dotnet
-    if [ -f "output/Main/Program.fsproj" ]; then
-      if command -v dotnet >/dev/null 2>&1; then
-        output_run=$(dotnet run -c Release -v q --nologo --project output/Main/Program.fsproj 2>&1)
-        exit_code=$?
-      else
-        echo "   [FAILED] dotnet SDK not found. Please install it."
-        output_run=""
-        exit_code=1
-      fi
-      
-      if [ -n "$output_run" ]; then
-        echo "$output_run"
-      fi
-      
-      if [ $exit_code -eq 0 ] && ! echo "$output_run" | grep -q "Fail"; then
-        echo -e "   \033[0;32m[OK]\033[0m"
-        passed=$((passed+1))
-      else
-        echo -e "   \033[0;31m[FAILED]\033[0m Execution error"
-        failed=$((failed+1))
-        break
-      fi
-    else
-      echo -e "   \033[0;31m[FAILED]\033[0m sharpurs did not generate Main project"
-      echo "$backend_out" | tail -20
-      failed=$((failed+1))
-      break
-    fi
-  else
-    echo -e "   \033[0;31m[FAILED]\033[0m PureScript Compilation error"
+}
+
+run_fixture() {
+  local test_file="$1" out backend_out output_run exit_code
+  echo "=> Testing ${test_file##*/}"
+  prepare_fixture "$test_file" || return 1
+
+  # Each phase depends on the preceding phase's actual exit status.
+  if ! out=$(spago build -q 2>&1); then
+    runner_error "PureScript Compilation error"
     echo "$out"
-    failed=$((failed+1))
-    break
+    return 1
   fi
+  if [ ! -f "$ROOT_DIR/bin/sharpurs.js" ]; then
+    runner_error "bin/sharpurs.js is missing; build sharpurs first"
+    return 1
+  fi
+  runner_io "Remove previous Main project" rm -f output/Main/Program.fsproj || return 1
+  if ! backend_out=$("$ROOT_DIR/bin/sharpurs" --main Main 2>&1); then
+    runner_error "sharpurs generation failed"
+    echo "$backend_out"
+    return 1
+  fi
+  if [ ! -f output/Main/Program.fsproj ]; then
+    runner_error "sharpurs did not generate Main project"
+    echo "$backend_out"
+    return 1
+  fi
+  command -v dotnet >/dev/null 2>&1 || { runner_error "dotnet SDK not found. Please install it."; return 1; }
+  output_run=$(dotnet run -c Release -v q --nologo --project output/Main/Program.fsproj 2>&1)
+  exit_code=$?
+  if [ -n "$output_run" ]; then echo "$output_run"; fi
+  if [ "$exit_code" -ne 0 ] || [[ "$output_run" == *Fail* ]]; then
+    runner_error "Execution error"
+    return 1
+  fi
+  echo -e "   \033[0;32m[OK]\033[0m"
+}
 
-done
+run_tests() {
+  local test_file test_name
+  acquire_runner || return 1
+  snapshot_cache || return 1
+  if [ "$CLEAN_CACHE" -eq 1 ]; then
+    echo "Building sharpurs compiler..."
+    runner_io "Enter compiler $ROOT_DIR" cd "$ROOT_DIR" || return 1
+    node scripts/build.mjs || { runner_error "sharpurs build failed!"; return 1; }
+  fi
+  prepare_workspace || return 1
+  echo "Running tests from $PASSING_DIR..."
+  if [ "$CLEAN_CACHE" -eq 1 ]; then
+    echo "=> Cleaning Spago and output cache..."
+    runner_io "Clean Spago and output cache" rm -rf .spago/* output-es/* output/* || return 1
+  fi
+  RUN_STARTED=1
+  for test_file in "${TEST_FILES[@]}"; do
+    test_name="${test_file##*/}"
+    if is_blacklisted "$test_name"; then
+      echo "=> Skipping $test_name (blacklisted)"
+      continue
+    fi
+    if run_fixture "$test_file"; then
+      passed=$((passed + 1))
+    else
+      failed=$((failed + 1))
+      return 1
+    fi
+  done
+}
 
-echo ""
-if [ $failed -eq 0 ]; then
-  echo -e "Summary: \033[0;32m$passed passed\033[0m, 0 failed."
-else
-  echo -e "Summary: \033[0;32m$passed passed\033[0m, \033[0;31m$failed failed\033[0m."
-  exit 1
-fi
+# The lock and a complete snapshot are tracked separately. Even failures while
+# acquiring ownership or saving the cache reach this single finalization path.
+trap 'finish_runner $?' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+run_tests
+exit $?

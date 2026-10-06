@@ -161,6 +161,21 @@ test('timeouts and cancellation cannot report success', async t => {
   assert.equal(cancelled.cancelled, true);
 });
 
+test('an already cancelled step cannot start a command with side effects', async t => {
+  const directory = await sandbox(t);
+  const marker = join(directory, 'unexpected');
+  const controller = new AbortController();
+  controller.abort('SIGINT');
+  const result = await runLogged(process.execPath, ['-e', `require('fs').writeFileSync(${JSON.stringify(marker)}, 'started')`], {
+    signal: controller.signal, log: join(directory, 'cancelled.log'),
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.cancelled, true);
+  assert.equal(result.code, null);
+  assert.equal(result.signal, null);
+  await assert.rejects(stat(marker), { code: 'ENOENT' });
+});
+
 test('cancellation also stops descendants that ignore SIGTERM', async t => {
   const directory = await sandbox(t);
   const pidFile = join(directory, 'descendant.pid');

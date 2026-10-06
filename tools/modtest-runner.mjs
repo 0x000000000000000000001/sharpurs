@@ -2,9 +2,9 @@
 // gopurs/tools/modtest-runner.mjs layout. Each sibling script keeps its own
 // build, caches and cleanup; -c rebuilds the compiler once beforehand.
 import { accessSync, constants, readdirSync, statSync } from "node:fs";
-import { spawn } from "node:child_process";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { runProcess } from "../scripts/support/process.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const parent = resolve(root, "..");
@@ -83,40 +83,21 @@ function selectModules(options) {
   return selected.map(name => join(parent, name));
 }
 
-// Give each command its own process group so interrupting the runner also
-// stops compilers and grandchildren, without touching another test run.
-let active = null;
-let signal = null;
-for (const name of ["SIGINT", "SIGTERM"]) {
-  process.on(name, () => {
-    signal = name;
-    if (active?.pid) {
-      try {
-        process.kill(-active.pid, name);
-      } catch (error) {
-        if (error.code !== "ESRCH") throw error;
-      }
-    }
-  });
-}
+const controller = new AbortController();
+const interrupt = () => controller.abort("SIGINT");
+const terminate = () => controller.abort("SIGTERM");
+process.on("SIGINT", interrupt);
+process.on("SIGTERM", terminate);
 
-function run(label, command, args, { cwd, env = process.env }) {
-  if (signal) throw new Interrupted(signal);
+async function run(label, command, args, { cwd, env = process.env }) {
+  if (controller.signal.aborted) throw new Interrupted(controller.signal.reason);
   console.log(`   [${label}] ${command} ${args.join(" ")}`);
-  return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, args, { cwd, env, detached: true, stdio: "inherit" });
-    active = child;
-    child.once("error", error => {
-      active = null;
-      reject(new Error(`${label}: ${error.message}`));
-    });
-    child.once("close", (code, childSignal) => {
-      active = null;
-      if (signal) return reject(new Interrupted(signal));
-      if (code !== 0) return reject(new Error(`${label} failed (${childSignal ?? "exit " + code})`));
-      resolvePromise();
-    });
-  });
+  const result = await runProcess(command, args, { cwd, env, signal: controller.signal });
+  if (result.cancelled) throw new Interrupted(controller.signal.reason);
+  if (result.error) throw new Error(`${label}: ${result.error}`);
+  if (!result.ok) throw new Error(`${label} failed (${result.signal ?? "exit " + result.code})`);
+  console.log(`   [PASS] ${label}`);
+  return result;
 }
 
 // Rebuild once through the same tool selection and commands as npm/prepare.
@@ -147,4 +128,7 @@ try {
 } catch (error) {
   console.error(`[FAILED] ${error.message}`);
   process.exitCode = error instanceof Interrupted ? error.exitCode : error instanceof UsageError ? 2 : 1;
+} finally {
+  process.off("SIGINT", interrupt);
+  process.off("SIGTERM", terminate);
 }

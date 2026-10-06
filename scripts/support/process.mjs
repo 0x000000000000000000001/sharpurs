@@ -34,15 +34,18 @@ export async function artifactDirectory(requested, prefix) {
 
 export const writeJson = (path, value) => writeFile(path, JSON.stringify(value, null, 2) + '\n');
 
-// A separate process per step, with unbounded log size and explicit failure,
-// signal and timeout results. Cancellation reaches the subprocess group too.
-export async function runLogged(program, args, { cwd, env, log, timeout = 0, signal } = {}) {
-  const file = await open(log, 'w');
-  await file.write(`$ ${program} ${args.join(' ')}\n`);
+// Own one process group and return the same result for inherited and logged I/O.
+// Abort reasons SIGINT/SIGTERM preserve a caller's signal; other aborts use TERM.
+export async function runProcess(program, args, { cwd, env, stdio = 'inherit', timeout = 0, signal } = {}) {
   const started = Date.now();
+  const summary = (result, error, timedOut) => ({ command: [program, ...args], ...result, error, timedOut,
+    cancelled: !!signal?.aborted, ok: result.code === 0 && !error && !timedOut && !signal?.aborted,
+    durationMs: Date.now() - started });
+  if (signal?.aborted) return summary({ code: null, signal: null }, undefined, false);
   let error, timedOut = false, timer, killTimer;
+  let abort;
   try {
-    const child = spawn(program, args, { cwd, env, detached: process.platform !== 'win32', stdio: ['ignore', file.fd, file.fd] });
+    const child = spawn(program, args, { cwd, env, detached: process.platform !== 'win32', stdio });
     const kill = sig => {
       if (!child.pid) return;
       try {
@@ -50,28 +53,39 @@ export async function runLogged(program, args, { cwd, env, log, timeout = 0, sig
         else process.kill(-child.pid, sig);
       } catch (cause) { if (cause.code !== 'ESRCH') throw cause; }
     };
-    const stop = () => {
+    const stop = (sig = 'SIGTERM') => {
       if (killTimer) return;
-      kill('SIGTERM');
+      kill(sig);
       killTimer = setTimeout(() => kill('SIGKILL'), 2000);
     };
+    abort = () => stop(signal.reason === 'SIGINT' ? 'SIGINT' : 'SIGTERM');
     if (timeout) timer = setTimeout(() => { timedOut = true; stop(); }, timeout);
-    signal?.addEventListener('abort', stop, { once: true });
-    if (signal?.aborted) stop();
+    signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) abort();
     const result = await new Promise(resolve => {
       child.on('error', cause => { error = cause.message; });
       child.on('close', (code, childSignal) => resolve({ code, signal: childSignal }));
     });
-    signal?.removeEventListener('abort', stop);
     // The direct child may exit before its descendants. Finish cancellation
-    // before closing the log and cancelling the escalation timer.
+    // before returning to the caller and cancelling the escalation timer.
     if (timedOut || signal?.aborted) kill('SIGKILL');
-    if (error) await file.write(error + '\n');
-    return { command: [program, ...args], ...result, error, timedOut, cancelled: !!signal?.aborted,
-      ok: result.code === 0 && !error && !timedOut && !signal?.aborted, durationMs: Date.now() - started, log };
+    return summary(result, error, timedOut);
   } finally {
+    if (abort) signal?.removeEventListener('abort', abort);
     clearTimeout(timer);
     clearTimeout(killTimer);
+  }
+}
+
+// File descriptors retain complete output without a pipe/buffer size limit.
+export async function runLogged(program, args, { log, ...options } = {}) {
+  const file = await open(log, 'w');
+  try {
+    await file.write(`$ ${program} ${args.join(' ')}\n`);
+    const result = await runProcess(program, args, { ...options, stdio: ['ignore', file.fd, file.fd] });
+    if (result.error) await file.write(result.error + '\n');
+    return { ...result, log };
+  } finally {
     await file.close();
   }
 }

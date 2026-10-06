@@ -53,6 +53,9 @@ The input is the enriched typed CoreFn produced by the compiler fork. `Module An
 | Suite-owned F# fragments and exactly-once insertion slots | [`tests/support/fsharp.mjs`](../tests/support/fsharp.mjs), [`tests/fixtures/`](../tests/fixtures/) |
 | Aggregate orchestration and immutable generation comparisons | [`tests/run.mjs`](../tests/run.mjs), [`scripts/support/`](../scripts/support/) |
 | Shared compiler build steps and npm/prepare dispatch | [`scripts/build.mjs`](../scripts/build.mjs) |
+| Process-group ownership, cancellation/escalation, live I/O and complete file logs | [`scripts/support/process.mjs`](../scripts/support/process.mjs) |
+| Native-module selection, inclusive resume, one-time compiler build and result display | [`tools/modtest-runner.mjs`](../tools/modtest-runner.mjs), [`tests/modtest.mjs`](../tests/modtest.mjs) |
+| CLI fixture selection, runner ownership, checked preparation and cache finalization | [`bin/test`](../bin/test), [`tests/runner-lifecycle.mjs`](../tests/runner-lifecycle.mjs) |
 
 `Ffi.loadModule` returns wrapper text and optional C# source. `Project.writeModule` owns the writes. This keeps foreign-source selection independent of output paths. Runtime templates are pure strings, also imported by the focused tests through the compiled `Sharpurs.Runtime` module.
 

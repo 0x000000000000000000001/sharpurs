@@ -81,6 +81,21 @@ untracked entries, on success, failure and handled interruption. Compilation,
 backend generation and .NET execution each need to succeed; a stale generated
 project cannot turn a generation failure into a passing fixture.
 
+The runner's named stages acquire ownership, save the cache, prepare the workspace,
+prepare each fixture, and execute its compilation/generation/runtime phases. File
+operations and directory changes are checked explicitly before continuing. A new
+`spago.yaml` is written inside the owned lock directory and published only after
+the complete write succeeds. The source directory is prepared after acquiring the
+lock, so a competing invocation cannot modify the active runner's inputs.
+
+Finalization runs once on normal exit, failure or handled interruption. An
+incomplete cache snapshot never replaces the original cache. Failed cache removal
+stops before the restore copy, avoiding an accidental nested `.purmeta/.purmeta`.
+A restoration failure retains the snapshot and prints its path. Both restoration
+and lock release must succeed before the runner prints a successful summary;
+cleanup errors return 1 even when the fixture executions themselves passed.
+Handled SIGINT/SIGTERM exits retain 130/143 when cleanup succeeds.
+
 The whole `tests/runner/` directory is generated and ignored by Git, including
 optimizer caches, logs and build outputs. Maintained inputs live in
 `tests/passing/` and `tests/fixtures/`; the runner creates its workspace from them.
@@ -474,6 +489,26 @@ runner against these same expectations, set
 The [fixture-selection report](validation/post-h07-fixture-selection-2026-10-05.md)
 records the historical failures and bounded real-fixture replay.
 
+The same `test:tools` command includes
+[`tests/runner-lifecycle.mjs`](../tests/runner-lifecycle.mjs). Its isolated child
+processes inject targeted OS-command failures, exercise invalid filesystem shapes,
+check cache bytes/mtimes and retained backups, and verify phase ordering, lock
+ownership and interruption. `FIXTURE_RUNNER_ORACLE` also selects the runner for
+these lifecycle tests. The [C01 report](validation/c01-2026-10-05.md) records their
+before/after outcomes and real companion-source/FFI fixture replay.
+
+[`tests/modtest.mjs`](../tests/modtest.mjs), also included in `test:tools`, checks
+the public module runner in an isolated sibling layout. It records actual commands,
+arguments and working directories; covers selection/resume, help/listing without
+builds, usage errors, missing commands and stop-on-failure; and interrupts builds
+and tests with SIGINT/SIGTERM while descendants ignore those signals. Readiness is
+published before the runner alone is signalled, so the assertions exercise its
+own cancellation. Set `MODTEST_RUNNER_ORACLE=/absolute/path/to/modtest-runner.mjs`
+to characterize an older runner. `MODTEST_ARTIFACTS=/absolute/path/to/new-evidence`
+retains each invocation's JSON trace and complete output. Run this file directly
+with `node --test tests/modtest.mjs`. The [C02 report](validation/c02-2026-10-05.md)
+records the reproduced failures, command comparison and bounded native replay.
+
 ## Full integration replay
 
 ### Pin the run before building
@@ -512,6 +547,20 @@ overrides, the compiler wrapper/bundle, `scripts/build.mjs`,
 `scripts/support/process.mjs` and `tools/modtest-runner.mjs` in that copy.
 The selected module list, library source hashes and final exit code identify the
 tested scope. `--skip-before NAME` resumes inclusively after a diagnosed failure.
+
+`modtest` keeps child stdin/stdout/stderr inherited for live output and prints
+`[PASS]` after each successful module and the optional one-time compiler build.
+`--list` and help execute no build or module, including with `-c`. Selection/usage
+errors exit 2; a failed command or child signal exits 1 and stops later modules;
+handled SIGINT/SIGTERM exit 130/143.
+[`runProcess`](../scripts/support/process.mjs) owns the process group used by
+both `modtest` and the aggregate's `runLogged` file-output adapter. It forwards the
+requested interruption signal, escalates to SIGKILL after two seconds if the child
+remains active, and kills remaining group descendants when cancellation closes the
+direct child. An already-aborted step launches no command. `runLogged` retains
+complete stdout/stderr in its file alongside the structured command, exit/signal,
+error, timeout and cancellation result.
+
 After the aggregate, compare the runner's `.purmeta` existence, file inventory,
 contents and nanosecond mtimes with the pre-run snapshot. An initially absent
 cache must remain absent. Recheck the original library inputs after `modtest`.
