@@ -1,0 +1,108 @@
+{
+  "date": "2026-10-06",
+  "milestone": "C03",
+  "topic": "Shared isolated native-library test runner",
+  "success": true,
+  "cycle3Points": 45,
+  "cycle3CompletedPasses": 3,
+  "cycle3TotalPasses": 8,
+  "startingHead": "023c67dc938a7bfd2acf47be9df9c08951b8e99c",
+  "startingCompilerStatus": "",
+  "startingNativeModuleTreesClean": 19,
+  "externalPboHead": "ce24af533bf39e50a4cb20931f86488b8fa1f589",
+  "tooling": {
+    "command": ["npm", "run", "test:tools"],
+    "exitCode": 0,
+    "seconds": 72.097692166,
+    "passed": 101,
+    "failed": 0,
+    "skipped": 0,
+    "general": 23,
+    "fixtureLifecycle": 21,
+    "modtest": 15,
+    "nativeRunner": 42,
+    "directNativeInterruptions": 8,
+    "nestedNativeInterruptions": 2
+  },
+  "historicalNativeMatrix": {
+    "command": ["node", "--test", "--test-name-pattern=native profile", "tests/native-runner.mjs"],
+    "exitCode": 1,
+    "tests": 20,
+    "passed": 0,
+    "checkoutPreservationFailures": 15,
+    "dotnetExitCodeDifferences": 5,
+    "note": "Historical .NET exit 7 is normalized to 1 by the shared runner; these five assertions precede preservation assertions. Historical execution used isolated copies only."
+  },
+  "wrapperInventory": {
+    "modules": 19,
+    "beforeDistinctContents": 2,
+    "afterDistinctContents": 1,
+    "afterLinesEach": 4,
+    "allExecutable": true
+  },
+  "realNativeReplay": {
+    "command": ["./bin/modtest", "--all"],
+    "cwd": "/Users/0x1/Documents/htdocs/sharpurs/sharpurs",
+    "exitCode": 0,
+    "seconds": 332.936900792,
+    "passed": 19,
+    "exactInventoryAndOrder": true,
+    "modules": [
+      "sharpurs-aff", "sharpurs-arrays", "sharpurs-datetime", "sharpurs-exceptions",
+      "sharpurs-js-bigints", "sharpurs-js-date", "sharpurs-js-promise", "sharpurs-js-promise-aff",
+      "sharpurs-now", "sharpurs-partial", "sharpurs-quickcheck", "sharpurs-refs",
+      "sharpurs-strings", "sharpurs-strings-extra", "sharpurs-unfoldable", "sharpurs-unsafe-coerce",
+      "sharpurs-uuid", "sharpurs-variant", "sharpurs-yoga-json"
+    ],
+    "pilots": ["arrays", "aff", "js-promise-aff"],
+    "pilotsPassed": 3,
+    "privateCleanReplay": {
+      "command": ["/Users/0x1/Documents/htdocs/sharpurs/sharpurs-partial/bin/test", "-c"],
+      "exitCode": 0,
+      "seconds": 14.147454167000035,
+      "passedPhases": 5,
+      "bundleSha256": "a834f3ec0c310ff82c6c7d28bdb2238c20314f564e54760121c24670890745aa"
+    },
+    "retainedWorkspaces": 23,
+    "installedBundleSha256": "5082ef568cd2d4c0f7831af3e264074d59063c4817ee7318d25a86f33897b5f0"
+  },
+  "preservation": {
+    "startingEntries": 2313,
+    "intentionallyEditedExistingFiles": 24,
+    "unchangedEntries": 2289,
+    "unexpectedChanges": [],
+    "sha256ModeAndMtimeNsChecked": true,
+    "symlinkTargetsChecked": true,
+    "externalPboEntriesPreserved": 482,
+    "productionSourceFilesUnchanged": 43,
+    "installedBundleUnchanged": true
+  },
+  "staticChecks": {
+    "nodeSyntax": 4,
+    "bashSyntax": 19,
+    "repositoryDiffChecks": 20,
+    "allPassed": true
+  },
+  "initialHarnessCorrection": {
+    "issues": ["teardown attempted chmod through files: ENOTDIR", "evidence filenames collided for multiple fixtures in one test"],
+    "correction": "Filter teardown entries to directories; use fixture-unique evidence names.",
+    "temporaryLayoutsRemoved": 64,
+    "finalFullToolingReplayPassed": true
+  },
+  "evidence": {
+    "archive": "../../../validation/c03-2026-10-06.tar.gz",
+    "checksum": "../../../validation/c03-2026-10-06.sha256",
+    "root": "c03-2026-10-06/",
+    "files": [
+      "starting-revisions.json", "starting-manifest.json", "final-manifest.json",
+      "input-preservation.json", "pbo-starting.json", "tools.json", "native-tools.json",
+      "wrapper-inventory.json", "native-results.json", "static-checks.json",
+      "historical-native-final.log", "tools-final.log", "native-all.log", "native-clean.log",
+      "private-bundle.diff", "initial-harness-cleanup.json", "archive-members.json",
+      "replay.py", "finalize.py", "before/", "final-sources/",
+      "pilot-workspaces/", "native-workspaces/", "clean-workspaces/",
+      "native-tests-before-final/", "native-tests-final/"
+    ]
+  },
+  "nextPass": "C04"
+}

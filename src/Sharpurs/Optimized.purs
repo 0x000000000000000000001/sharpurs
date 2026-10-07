@@ -16,11 +16,11 @@ import PureScript.Backend.Optimizer.CoreFn as C
 import PureScript.Backend.Optimizer.Semantics (NeutralExpr(..))
 import PureScript.Backend.Optimizer.Syntax (Level(..))
 import PureScript.Backend.Optimizer.Syntax as S
+import Sharpurs.CodeGen.Boxed as Boxed
 import Sharpurs.FsAst (FsExpr(..))
 import Sharpurs.IntKernel (fromLocal)
 import Sharpurs.IntKernel.CodeGen (printLocalKernel)
 import Sharpurs.Names as Names
-import Sharpurs.Printer (printExpr)
 
 type Lowered = { expr :: FsExpr, hasKernel :: Boolean }
 
@@ -58,8 +58,9 @@ lower locals expected expression@(NeutralExpr syntax) =
         }
       S.Local _ level -> do
         guard (Map.member level locals)
-        pure { expr: FsIdent (localName level), hasKernel: false }
-      S.Lit (C.LitInt value) -> pure { expr: FsRawExpr ("(box (" <> show value <> "))"), hasKernel: false }
+        pure { expr: FsIdent (Names.optimizedLocal level), hasKernel: false }
+      -- FsLitInt already boxes; use native literal text to keep these parentheses.
+      S.Lit (C.LitInt value) -> pure { expr: Boxed.box (FsRawExpr (show value)), hasKernel: false }
       S.Lit (C.LitString value) -> pure { expr: FsLitString value, hasKernel: false }
       S.Lit (C.LitBoolean value) -> pure { expr: FsLitBool value, hasKernel: false }
       S.App fn args -> do
@@ -85,13 +86,9 @@ lower locals expected expression@(NeutralExpr syntax) =
           nextType = Just (if Array.null remaining then signature.result else C.Func remaining signature.result)
         result <- lower scope nextType body
         let
-          lambda = foldr (\level inner -> "(box (fun (" <> localName level <> ": obj) -> " <> inner <> "))")
-            (printExpr result.expr) levels
-        pure { expr: FsRawExpr lambda, hasKernel: result.hasKernel }
+          lambda = foldr (Boxed.lambda <<< Names.optimizedLocal) result.expr levels
+        pure { expr: lambda, hasKernel: result.hasKernel }
       _ -> Nothing
-
-localName :: Level -> String
-localName (Level level) = "sharpurs_o_" <> show level
 
 isGlobalReference :: NeutralExpr -> Boolean
 isGlobalReference (NeutralExpr syntax) = case syntax of

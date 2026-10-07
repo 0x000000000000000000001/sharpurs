@@ -72,6 +72,32 @@ records the Node version, commands, exit codes/signals, elapsed times and log
 paths. Open the failed step's log directly; the runner does not truncate output.
 Individual commands such as `npm run test:thunk-kernel` remain available after a build.
 
+### Workspace ownership
+
+| Location | Owner, lifetime and retained evidence |
+| --- | --- |
+| Compiler `output/`, `output-es/`, `.spago/`, `bin/sharpurs.js` | Compiler build/bundle outputs and downloaded dependencies; ignored by Git. `npm run build`, compiler-root `bin/test -c` and `bin/modtest -c` update this checkout. |
+| `.purmeta/` in the invoking workspace | PBO module metadata; ignored by Git. The CLI's no-skip hook still processes every module. Its test-workspace ownership follows the rows below. |
+| `tests/runner/` | One locked CLI invocation at a time. Fixture inputs are copied here; the last workspace remains for diagnosis and later runs reuse it. The pre-existing `.purmeta` inventory is restored on exit. A failed restore retains the printed cache backup. |
+| Native `sharpurs-NAME-*` temporary directory | One native wrapper invocation owns the complete copied sibling layout. Success removes it; failure/interruption retains it with `results.json`. `SHARPURS_NATIVE_ARTIFACTS` selects an external parent and retains successful children too. |
+| Focused-suite temporary directory | The suite owns its copied fixture inputs, TAST and assembled F# program. The six suites using `withFixtureDirectory` follow the [shared retention contract](#shared-focused-test-support); other suites keep their own artifact policy. |
+| Aggregate `--artifacts` and generation-comparison `--artifacts` | Caller-selected **new** directory, or a printed unique temporary directory. Complete logs, reports and comparison snapshots remain on success/failure. Existing destinations are rejected. |
+| Suite-specific `*_ARTIFACTS` | The individual suite publishes its documented files. Choose separate fresh destinations for separate suites/runs; these variables do not share the aggregate's existing-directory check. |
+| `docs/validation/` and sibling `../validation/` | Maintained reports/JSON and durable qualification archives/checksums. Retained evidence is removed only by an explicit owner decision after diagnosis. |
+
+Maintained inputs include `tests/passing/` with its companion directories,
+`tests/fixtures/`, the three top-level test `.fsx` programs, and
+`bak/spago.d/fs/p/`. That `bak` directory contains active native fallback overrides
+used by `Sharpurs.Ffi`; it is copied into native layouts and generation snapshots.
+Likewise, sibling `spago.d/`, `.fs`/`.cs` foreign sources, dependency profiles and
+lockfiles are inputs. File extensions such as `.fs`, `.cs`, `.fsx`, `.fsproj` and
+`.props` alone do not identify disposable output.
+
+The [C07 inventory](validation/c07-2026-10-06.md) records actual script/helper
+callers, maintained native/test inputs and tracked-output checks before/after.
+The compiler's [ignore rules](../.gitignore) cover the generated runner tree and
+PBO metadata while keeping these maintained inputs visible.
+
 ### Shared CLI workspace
 
 `bin/test` owns `tests/runner` for the duration of its invocation. Its lock at
@@ -131,7 +157,9 @@ order. A resumed qualification must identify both attempts and their exit codes.
 ### Shared focused-test support
 
 - [tests/support/fixtures.mjs](../tests/support/fixtures.mjs) handles fixture copying,
-  package-source lookup, checked `purs compile` and `dotnet fsi` invocations.
+  checked `purs compile` and `dotnet fsi` invocations, and re-exports the package
+  resolver from [tests/support/packages.mjs](../tests/support/packages.mjs). It also
+  owns `withCwd` and the `withFixtureDirectory` lifecycle described below.
 - [tests/support/corefn.mjs](../tests/support/corefn.mjs) loads current CoreFn values
   and runs the shared optimizer callback contract. Its builder changes cwd only
   while writing fixture-local `.purmeta`, restoring it even after an error.
@@ -142,11 +170,42 @@ order. A resumed qualification must identify both attempts and their exit codes.
 - Suites retain their assertions, native/generic/JavaScript oracles, fixtures and
   acceptance criteria. Recursion, case patterns, direct calls, integer arithmetic,
   multi-argument ADTs and thunks share the real-TAST mechanics. ADT lowering also
-  uses the copying and F# process helpers for its small typed scenarios.
+  uses the copying and F# process helpers for its small typed scenarios. The three
+  other ADT suites and the current constructor-TypeApp path use `optimizeCoreFn`;
+  `int-comparison` uses `readCoreFn`, and FFI uses the current `runAff` bridge.
 - Historical oracle adapters retain their own runtime constructors and dictionaries.
   `FFI_SUPPORT_ORACLE` accepts a self-contained older FFI JavaScript module;
   `CONSTRUCTOR_TYPEAPP_ORACLE_OUTPUT` accepts the historical output tree with
   `old.Aff.monadAff` and `old.Adt.prepareUnary`.
+
+The six suites `adt-kernel`, `adt-interop`, `adt-unary`, `int-comparison`,
+`constructor-typeapp` and `ffi-support` use `withFixtureDirectory`:
+
+- Every checked command records both output streams in the suite transcript.
+  Compilation and FSI keep their 60-second timeout and FSI optimization options;
+  the mixed F#/C# `dotnet run` keeps its 120-second timeout.
+- Cwd is restored before artifact publication or cleanup. The current Builder's
+  cwd scope ends as soon as optimization finishes; historical Builder calls use
+  `withCwd` around their own adapter. These process-global scopes run sequentially.
+- On success, the temporary workspace is removed. With an artifact variable set,
+  `validation.log` accompanies the suite's existing generated files and metadata.
+- On failure with an artifact variable, the **entire failing workspace** is copied
+  into `ARTIFACTS/workspace/`, with `validation.log` both there and at the artifact
+  root. This includes fixture sources, CoreFn, `.purmeta`, and any assembled F#
+  program/project reached before failure. Only then is the original temporary removed.
+- Without an artifact variable, a failed workspace is retained in place with its
+  `validation.log`; the suite prints its absolute path. Remove that directory
+  explicitly after diagnosis. A publication failure also retains and prints the
+  original workspace, preserving the original suite error. Publication/cleanup
+  failure after an otherwise successful suite still fails the invocation.
+
+`npm run test:fixture-support` includes eleven process/workspace checks using real
+compiler failures and Builder callbacks. It needs the built compiler and `purs`.
+The [C05 report](validation/c05-2026-10-06.md) records the failure matrix, command
+options, mutation-input hashes and generated-program comparisons. Its optional
+September 9 constructor oracle reports a **pre-existing** one-line exception-message
+difference on both the before and after suites; this historical text mismatch is
+kept visible rather than relaxed in the oracle assertion.
 
 Extra artifacts remain suite-specific. For example:
 
@@ -159,8 +218,43 @@ Other supported variables include `CLI_ARTIFACTS`, `PROJECT_ARTIFACTS`, `NAMES_A
 `ADT_INTEROP_ARTIFACTS`, `ADT_LOWERING_ARTIFACTS`, `CONSTRUCTOR_TYPEAPP_ARTIFACTS`, `DIRECT_CALL_ARTIFACTS`,
 `INT_COMPARISON_ARTIFACTS` and `INT_ARITHMETIC_ARTIFACTS`. The unary and interop ADT
 suites both use `ADT_INTEROP_ARTIFACTS`; give them separate destinations in separate
-invocations. Aggregate logs survive failures; each suite defines which additional
-generated files it retains and at what point.
+invocations. Aggregate logs survive failures. The six suites listed above also
+retain failed workspaces; other suites define their own additional artifact policy.
+
+### Deterministic fixture dependencies
+
+All nine fixture suites that use Prelude or Partial resolve their sources through
+`packageSource(backend, name)`. The current JSON `spago.lock` supplies either the
+resolved dependency from its top-level `packages` map or a package from
+`workspace.packages`:
+
+- Registry entries select exactly `.spago/p/NAME-VERSION/src` using the resolved
+  version, including when several releases or similarly named packages are cached.
+- Local dependency and workspace-package paths resolve from the backend workspace,
+  with `/src` appended. A workspace/dependency collision is diagnosed as ambiguous.
+- Missing lockfiles or resolved entries, invalid metadata and missing/non-directory
+  sources fail with the package and relevant path identified. Run `spago build`
+  to prepare the workspace. A lone cache entry or the full package-set catalog
+  does not establish a resolved dependency. Ambiguous cached versions are listed
+  in sorted order for diagnosis.
+- `PRELUDE_SRC` selects an explicit Prelude source directory. An explicit
+  `packageSource(backend, name, { source: '/path/to/package/src' })` takes priority
+  and works for any package, including source kinds such as Git that the resolver
+  does not map to a cache layout. Explicit directories are checked before use;
+  relative overrides resolve from the caller's cwd, and returned paths are absolute
+  so subsequent suite-local cwd changes preserve their meaning.
+
+```bash
+PRELUDE_SRC="$HOME/fixture sources/prelude/src" npm run test:int-comparison
+```
+
+`npm run test:fixture-support` includes 27 package-resolution regressions alongside
+the structural/slot checks. Run the dependency checks independently of a compiler
+build with `node --test tests/package-sources.mjs`. To characterize an older helper,
+set `PACKAGE_SOURCE_ORACLE=/absolute/path/to/older/fixtures.mjs` for that command.
+The [C04 report](validation/c04-2026-10-06.md) records source fingerprints from real
+compiler invocations, multi-version and spaced-override replays, and generated-file
+comparisons for all affected suites.
 
 ### Contributing a structural mutation
 
@@ -402,6 +496,21 @@ per-scenario results, source hashes and runtime log. The
 [H03 report](validation/h03-2026-10-02.md) records the historical differential and
 the independent whole-compiler generation comparison.
 
+### Optimized object envelopes and local Int entry
+
+For `Optimized`, `Boxed.lambda`/`Boxed.box`, or `Names.optimizedLocal` changes, run:
+
+```bash
+npm test -- --suite local-kernel --suite kernel --suite selection --suite printer --suite recursion
+```
+
+This includes the compiler build and PureScript assertions. The local-kernel
+suite checks lexical levels, conservative whole-binding fallback, native-entry
+unboxing, routing priority and effect envelopes. Preserve complete generated text:
+the optimized Int literal's parentheses intentionally differ from `FsLitInt`.
+The [C06 report](validation/c06-2026-10-06.md) records before/after assertion and
+assembled-program comparisons, plus complete b8x and 19 native-library generations.
+
 ## Compare complete generations before and after a change
 
 Save **self-contained compiler bundles**. Copying one module from `output/` can
@@ -509,6 +618,16 @@ retains each invocation's JSON trace and complete output. Run this file directly
 with `node --test tests/modtest.mjs`. The [C02 report](validation/c02-2026-10-05.md)
 records the reproduced failures, command comparison and bounded native replay.
 
+[`tests/native-runner.mjs`](../tests/native-runner.mjs) checks the public native
+wrapper against isolated tools. It covers file/relative-link/absolute-link/dangling/
+absent profiles, phase failures, private compiler rebuilds, preparation and cleanup
+errors, fresh F#/C# project selection, concurrent workspaces and interruptions,
+including `modtest` calling the native runner. Checkout inventories include bytes,
+nanosecond mtimes, modes and symlink targets. `NATIVE_RUNNER_ARTIFACTS=/new/path`
+retains command traces and full logs; `NATIVE_RUNNER_ORACLE=/path/to/old/bin/test`
+selects a historical wrapper. The [C03 report](validation/c03-2026-10-06.md)
+records the historical cleanup/profile failures and real native qualification.
+
 ## Full integration replay
 
 ### Pin the run before building
@@ -517,10 +636,10 @@ Create a fresh evidence directory and record the compiler/dependency revisions,
 working-tree status, source hashes, lockfiles, executable paths/versions and the
 self-contained current compiler bundle. Include uncommitted maintained inputs.
 Record application target links and the bytes/mtimes of the caches and working
-outputs being preserved. Use separate copies for library scripts with cross-sibling
-cleanup, and isolated output directories for application compilation.
+outputs being preserved. Native wrappers create their private copies automatically;
+application compilation uses isolated output directories.
 
-The cycle-2 inventory is **23 focused suites**, **49 PureScript assertions**,
+The cycle-3 inventory through C07 is **23 focused suites**, **49 PureScript assertions**,
 **359 active CLI fixtures**, **seven exclusions** and **19 native test modules**.
 The complete aggregate therefore has **27 steps**: build, bundle, PureScript
 assertions, the 23 suites, and one sequential CLI-fixture selection. Capture the
@@ -528,7 +647,11 @@ actual inventories from `package.json`, `tests/passing/`, `bin/test` and
 `bin/modtest --list`; compare the executed names and exclusions, not just totals.
 Relative to M11, the five additional suites are `fixture-support`, `cli`,
 `project`, `names` and `adt-lowering`; the vendored CLI/native inventories are the
-same. A future added or removed case should appear explicitly in the run report.
+same. C01–C05 expanded the existing `tools` suite from 22 to **101 checks** and
+`fixture-support` from eight to **46 checks** without adding aggregate suite names.
+The [C07 inventory](validation/c07-2026-10-06.md) records these inputs; C08 must
+capture their final executed inventories. A future added or removed case should
+appear explicitly in the run report.
 
 ### Compiler and native libraries
 
@@ -540,13 +663,57 @@ npm test -- --all-fixtures --artifacts /absolute/path/to/new-check-report
 ```
 
 `bin/modtest` selects sibling `sharpurs-*` directories containing an executable
-`bin/test` and runs their scripts sequentially. Use an isolated copy of the
-checkout layout for this replay: library scripts clear both their own and their
-siblings' generated outputs and dependency caches. Include all local dependency
-overrides, the compiler wrapper/bundle, `scripts/build.mjs`,
-`scripts/support/process.mjs` and `tools/modtest-runner.mjs` in that copy.
+`bin/test` and runs their scripts sequentially. The 19 native wrappers delegate to
+[`tools/native-test-runner.mjs`](../tools/native-test-runner.mjs), which owns a
+unique temporary workspace for each invocation:
+
+- `layout/` contains private copies of the available `sharpurs-*` sibling inputs,
+  retaining their names and local dependency paths. Untracked maintained sources,
+  native FFI and `spago.d` inputs are included. Symlinks are materialized as private
+  copies. Git metadata, npm dependencies, `.spago`, `.cache`, `.purmeta`, generated
+  output trees and `.sharpurs-cache.json` are excluded from the snapshot.
+- The selected module's private `spago.yaml` is copied from `spago.sharp.yaml`,
+  then `spago.fs.yaml`, then its existing `spago.yaml`, in that priority order.
+  The original profile (including a link or absence), lockfile and caches retain
+  their original bytes and mtimes on success, failure and handled interruption.
+- `layout/sharpurs` contains the current compiler wrapper/bundle and its `bak`
+  native overrides. The three phases remain `spago build`, Sharpurs generation
+  with `--main Test.Main`, and `dotnet run -c Release -v q --nologo --project …`.
+  F# projects take precedence over C# projects; each phase requires the preceding
+  phase to succeed. Output, dependency downloads, optimizer caches and .NET build
+  products local to the checkout all belong to this private layout. Installed
+  tools continue to use their normal user-level package caches.
+- A native `./bin/test -c` (or `--clean`) rebuilds a **private compiler** first,
+  using the shared build/bundle steps and copies of the compiler sources and
+  `../../purescript-backend-optimizer-sharpurs`. `./bin/modtest -c` retains its
+  one-time rebuild of the **installed compiler**, then invokes the selected
+  modules with that bundle. Native builds accept `SPAGO` and `DOTNET` executable
+  overrides and use the shared repository-local tool environment.
+
+Successful temporary workspaces are removed. On failure or interruption, the
+printed workspace retains its inputs, generated files and `results.json` with
+commands, working directories, phase results and diagnostics. Set
+`SHARPURS_NATIVE_ARTIFACTS` to an evidence parent directory outside the checkouts
+to retain successful workspaces too; every module creates a unique child there.
+Subprocess output remains live on stdout/stderr, so redirect the public command
+to a log when retaining a complete replay:
+
+```bash
+# Bounded replay from the compiler root; retain this printed evidence directory.
+EVIDENCE=$(mktemp -d "${TMPDIR:-/tmp}/sharpurs-native-replay.XXXXXX")
+printf '%s\n' "$EVIDENCE"
+SHARPURS_NATIVE_ARTIFACTS="$EVIDENCE/workspaces" \
+  ./bin/modtest partial > "$EVIDENCE/partial.log" 2>&1
+```
+
 The selected module list, library source hashes and final exit code identify the
-tested scope. `--skip-before NAME` resumes inclusively after a diagnosed failure.
+tested scope. `--skip-before NAME` resumes inclusively after a diagnosed failure;
+`./bin/modtest --skip-before=partial --list` previews the remaining names without
+building. Explicit names keep their supplied order and accept the `sharpurs-`
+prefix; no names or `--all` selects the full sorted inventory. Retain both the
+failed attempt and the successful resume when qualifying that complete inventory.
+Remove a retained workspace explicitly after investigating it. Cleanup/reporting
+errors return failure even when all compilation/runtime phases passed.
 
 `modtest` keeps child stdin/stdout/stderr inherited for live output and prints
 `[PASS]` after each successful module and the optional one-time compiler build.
@@ -557,7 +724,9 @@ handled SIGINT/SIGTERM exit 130/143.
 both `modtest` and the aggregate's `runLogged` file-output adapter. It forwards the
 requested interruption signal, escalates to SIGKILL after two seconds if the child
 remains active, and kills remaining group descendants when cancellation closes the
-direct child. An already-aborted step launches no command. `runLogged` retains
+direct child. `modtest` grants a native runner five seconds so its inner process
+owner can finish that two-second cancellation and write its report. An already-aborted
+step launches no command. `runLogged` retains
 complete stdout/stderr in its file alongside the structured command, exit/signal,
 error, timeout and cancellation result.
 
@@ -639,3 +808,19 @@ The [H07 cycle-2 report](validation/h07-2026-10-03.md) records the complete
 qualification, including the diagnosed disk-exhaustion failure, inclusive CLI
 recovery, requested cleanup and attributed external application change. The
 [M11 replay report](validation/m11-2026-10-02.md) remains the first-cycle reference.
+
+## Cycle-3 validation evidence
+
+Each report identifies its starting sources, verification scope, failures/retries
+and preserved inputs. Archive paths are relative to the documented sibling layout.
+C08 is the pending integration qualification on the final cycle-3 sources.
+
+| Pass | Qualification | Report and summary | Durable evidence |
+| --- | --- | --- | --- |
+| C01 | CLI workspace lifecycle | [Report](validation/c01-2026-10-05.md), [JSON](validation/c01-validation.json) | [Archive](../../validation/c01-2026-10-05.tar.gz), [SHA-256](../../validation/c01-2026-10-05.sha256) |
+| C02 | Shared subprocess ownership | [Report](validation/c02-2026-10-05.md), [JSON](validation/c02-validation.json) | [Archive](../../validation/c02-2026-10-05.tar.gz), [SHA-256](../../validation/c02-2026-10-05.sha256) |
+| C03 | Private native-library layouts | [Report](validation/c03-2026-10-06.md), [JSON](validation/c03-validation.json) | [Archive](../../validation/c03-2026-10-06.tar.gz), [SHA-256](../../validation/c03-2026-10-06.sha256) |
+| C04 | Deterministic fixture dependencies | [Report](validation/c04-2026-10-06.md), [JSON](validation/c04-validation.json) | [Archive](../../validation/c04-2026-10-06.tar.gz), [SHA-256](../../validation/c04-2026-10-06.sha256) |
+| C05 | Shared focused-suite mechanics | [Report](validation/c05-2026-10-06.md), [JSON](validation/c05-validation.json) | [Archive](../../validation/c05-2026-10-06.tar.gz), [SHA-256](../../validation/c05-2026-10-06.sha256) |
+| C06 | Optimized boxed templates | [Report](validation/c06-2026-10-06.md), [JSON](validation/c06-validation.json) | [Archive](../../validation/c06-2026-10-06.tar.gz), [SHA-256](../../validation/c06-2026-10-06.sha256) |
+| C07 | Residual inventory and public guides | [Report](validation/c07-2026-10-06.md), [JSON](validation/c07-validation.json) | [Archive](../../validation/c07-2026-10-06.tar.gz), [SHA-256](../../validation/c07-2026-10-06.sha256) |

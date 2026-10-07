@@ -326,17 +326,35 @@ npm test -- --fixture PartialFunction --fixture NewtypeEff
 
 # Rebuild the backend, clean the runner caches, and run one fixture.
 ./bin/test TCO -c
+
+# List native-library tests, then run one in its own private sibling layout.
+./bin/modtest --list
+./bin/modtest partial
+
+# Preview an inclusive native resume selection without building or running it.
+./bin/modtest --skip-before=partial --list
 ```
 
 `npm test` prints a per-step PASS/FAIL summary and the location of its logs and `results.json`; it returns nonzero if any requested check fails. Use `--suite NAME` to select focused suites, `--skip-build` to reuse the current build, and `--artifacts NEW_DIRECTORY` to retain the report at a chosen location. `npm test -- --all-fixtures` includes the full CLI replay. See [Replaying compiler checks](docs/testing.md) for prerequisites, options, failure locations and the before/after generation comparison command.
 
 The runner skips seven fixtures: five require newer compiler features, `4179` relies on JavaScript-specific behavior, and `TCOMutRec` expects a stack overflow that this backend's tail-call optimization avoids. The reasons live beside the blacklist in `bin/test`. The runner stops at the first failure, locks its shared workspace and restores the pre-existing `.purmeta` cache on exit. Its result applies to this vendored suite and the selected toolchain; it is not a claim that every current upstream PureScript test or library is supported. The `-c` / `--clean` option clears the runner's `.spago`, `output` and `output-es` contents.
 
+Each native-library `bin/test` delegates to the compiler's shared runner. It copies
+the sibling sources into a fresh private layout and selects `spago.sharp.yaml`,
+then `spago.fs.yaml`, then `spago.yaml`. Original profiles, caches and outputs keep
+their bytes and timestamps. A library's `bin/test -c` rebuilds the compiler inside
+that private layout; compiler-root `bin/modtest -c` rebuilds the installed compiler
+once before the selected modules. Failure workspaces are retained and printed;
+`SHARPURS_NATIVE_ARTIFACTS` also retains successful runs. See the
+[native replay and resume contract](docs/testing.md#compiler-and-native-libraries)
+and the [workspace ownership table](docs/testing.md#workspace-ownership).
+
 Focused regression commands are defined in [package.json](package.json):
 
 | Commands | Coverage |
 | --- | --- |
-| `npm run test:tools` | Check-runner failures/cancellation, CLI locking/cache restoration and before/after manifest comparisons. |
+| `npm run test:tools` | Aggregate/modtest/native-runner failures and cancellation, CLI locking/cache restoration, private profiles/workspaces and generation manifest comparisons. |
+| `npm run test:fixture-support` | Structural selectors and F# slots, deterministic package-source resolution, checked commands, cwd restoration and failed-workspace retention. |
 | `npm run test:cli` | Usage diagnostics/codes, write-free help, exact spaced FFI paths, shell-wrapper and real Spago invocation, plus optional historical comparison. |
 | `npm run test:runtime` | Generic function application, FFI wrappers and exception boundaries. |
 | `npm run test:ffi-support` | F#/C# declaration forms, values/functions, partials, effects, native-file precedence and missing implementations in a generated .NET project. |
@@ -357,9 +375,11 @@ Focused regression commands are defined in [package.json](package.json):
 
 Build the compiler first: the focused tests import its `output/` modules, including the runtime source exported by `Sharpurs.Runtime`. The runtime test additionally needs `sharpurs-exceptions`. Suites with PureScript fixtures use the TAST `purs` and run generated F# through `dotnet fsi`; `test:ffi-support` and `test:names` compile and run generated F#/C# projects. `PURS=/path/to/purs` and `DOTNET=/path/to/dotnet` select those executables in the focused scripts. The shell runner instead uses `purs` and `dotnet` through `PATH`.
 
-The [2 October 2026 integration replay report](docs/validation/m11-2026-10-02.md)
-records the compiler/tool revisions, fixture and library checks, b8x `Test.Main`
-executions, database cleanup and reference benchmark outputs. The
+The [cycle-2 integration report](docs/validation/h07-2026-10-03.md) records the
+compiler/tool revisions, fixture and library checks, b8x `Test.Main` executions,
+database cleanup and reference benchmark outputs. The
+[cycle-3 evidence index](docs/testing.md#cycle-3-validation-evidence) links the
+subsequent runner/support/template qualifications and their archives. The
 [full replay procedure](docs/testing.md#full-integration-replay) connects these
 checks to their commands and required application configuration.
 
@@ -377,7 +397,11 @@ The main parts of the compilation pipeline are:
 
 The thunk kernel separates helper recognition (`Helpers`), signature/capture evidence (`Analysis`), optimized worker lowering (`Lower`), source-call proofs (`Call`) and F# templates (`Emit`). A selected worker is callable natively only when the source site also proves its seeds; opaque callbacks retain the public boxed path.
 
-The CLI compares generated text with existing files before writing, preserving timestamps when contents are unchanged. It currently returns no cached modules from the optimizer's skip hook and does not read or write an optimization cache.
+The CLI compares generated text with existing files before writing, preserving
+timestamps when contents are unchanged. Its optimizer skip hook returns no cached
+modules: every module must still register its native constructors and emitted
+files. PBO can write `.purmeta/` metadata in the invoking workspace; the
+[test runners](docs/testing.md#workspace-ownership) own its isolation or restoration.
 
 ## Current status and limitations
 
@@ -398,7 +422,15 @@ Use non-blocking .NET I/O APIs in foreign implementations and await them through
 
 ### Generated output
 
-Generation does not remove obsolete files: after removing or renaming modules or C# FFI files, clear the application's generated `output/` and rebuild. In particular, every `.cs` file remaining in `output/Main/` is included in the generated C# project.
+Old generated `.fs` and `.cs` sources may remain on disk, but projects include
+only the current invocation's emitted files. The obsolete C# project is removed
+when the last C# FFI disappears. After removing or renaming PureScript modules,
+clear stale upstream TAST and rebuild the application's `output/` so removed
+modules cannot remain compiler inputs. Keep maintained FFI and application-owned
+projects outside that generated tree; use explicit
+[project references](#net-dependencies). The
+[output ownership contract](docs/compiler.md#project-outputs-and-filesystem-errors)
+distinguishes upstream inputs, generated files and maintained application items.
 
 Contributions to the compiler, regression coverage, FFI libraries and application examples are welcome.
 

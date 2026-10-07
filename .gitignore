@@ -3,6 +3,8 @@ output/
 output.bak/
 output-es/
 .spago/
+# PBO writes module metadata in the invoking workspace.
+.purmeta/
 .psc-ide-port
 .purs-repl
 purs_files.txt
@@ -10,4 +12,5 @@ purs_files.txt
 .sharpurs-cache.json
 # The fixture runner owns this disposable workspace, including optimizer caches.
 tests/runner/
+# Built by scripts/build.mjs; bin/sharpurs is the maintained launcher.
 bin/sharpurs.js

@@ -1,77 +1,38 @@
 // Run after npm run build. PURS must select the TAST compiler fork.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
 import { clone, sourceBinding, sourceBindings, optimizedBinding, optimizedTyped,
   dataDeclaration, expectNode } from "./support/ast.mjs";
 import { fsharpFixture } from "./support/fsharp.mjs";
+import { command, compileFixtures, packageSource, runFsharp, withFixtureDirectory } from "./support/fixtures.mjs";
+import { optimizeCoreFn } from "./support/corefn.mjs";
 import { helpers as preludeFs } from "../output/Sharpurs.Runtime/index.js";
 import * as C from "../output/PureScript.Backend.Optimizer.CoreFn/index.js";
-import * as Aff from "../output/Effect.Aff/index.js";
-import * as Applicative from "../output/Control.Applicative/index.js";
-import { Left } from "../output/Data.Either/index.js";
 import { Just, Nothing } from "../output/Data.Maybe/index.js";
 import * as Map from "../output/Data.Map.Internal/index.js";
 import * as Set from "../output/Data.Set/index.js";
 import * as Ord from "../output/Data.Ord/index.js";
-import * as App from "../output/PureScript.Backend.Optimizer.App/index.js";
-import * as Builder from "../output/PureScript.Backend.Optimizer.Builder/index.js";
-import * as Foreign from "../output/PureScript.Backend.Optimizer.Semantics.Foreign/index.js";
 import { prepareModule } from "../output/Sharpurs.AdtKernel/index.js";
 import * as S from "../output/PureScript.Backend.Optimizer.Syntax/index.js";
 import { translateModule, translateModuleWithConstructorWrappers, translateOptimizedModuleWithAdts } from "../output/Sharpurs.CodeGen/index.js";
 import { printModule } from "../output/Sharpurs.Printer/index.js";
 
 const backend = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const pure = Applicative.pure(Aff.applicativeAff);
-const runAff = (action) => new Promise((resolve, reject) => {
-  Aff.runAff((result) => () => result instanceof Left ? reject(result.value0) : resolve(result.value0))(action)();
-});
-function command(program, args, cwd) {
-  const result = spawnSync(program, args, { cwd, encoding: "utf8", timeout: 60_000 });
-  if (result.error) throw result.error;
-  return result;
-}
-function successful(result, label) {
-  if (result.status !== 0) throw new Error(`${label} failed (${result.signal || result.status}):\n${result.stdout}\n${result.stderr}`);
-}
+const artifacts = process.env.ADT_INTEROP_ARTIFACTS && resolve(process.env.ADT_INTEROP_ARTIFACTS);
+const transcript = [];
 
-const directory = await mkdtemp(join(tmpdir(), "sharpurs-adt-unary-"));
-const previousCwd = process.cwd();
-try {
-  const prelude = process.env.PRELUDE_SRC || join(backend, ".spago/p",
-    (await readdir(join(backend, ".spago/p"))).find((name) => /^prelude-/.test(name)) || "prelude-not-installed", "src");
+await withFixtureDirectory("sharpurs-adt-unary-", { artifacts, transcript }, async directory => {
+  const prelude = await packageSource(backend, "prelude");
   const fixtures = ["AdtUnary", "AdtConsumer"];
   for (const name of fixtures) await writeFile(join(directory, `${name}.purs`),
     (await readFile(join(backend, "tests/fixtures", `${name}.purs`), "utf8")).replaceAll("AdtPilot", "AdtUnary"));
   await writeFile(join(directory, "AdtConsumer.js"),
     ["trackColor", "trackTree", "trackInt"].map((name) => `export const ${name} = _ => value => value;`).join("\n"));
-  successful(command(process.env.PURS || "purs", ["compile", ...fixtures.map((name) => join(directory, `${name}.purs`)),
-    join(prelude, "**/*.purs"), "--output", join(directory, "output"), "--codegen", "corefn,js"], directory), "TAST fixture compilation");
-  process.chdir(directory);
-  const captured = new globalThis.Map();
-  await runAff(Builder.buildModules(Aff.monadEffectAff)({
-    directives: await runAff(App.loadDirectives), rewriteLimit: 10000,
-    analyzeCustom: (_) => (_) => Nothing.value,
-    foreignSemantics: Map.filterKeys(C.ordQualified(C.ordIdent))((qualified) => {
-      if (qualified.value0 instanceof Just) {
-        const name = qualified.value0.value0;
-        return !name.includes("Effect") && !name.includes("Control.Monad.ST");
-      }
-      return true;
-    })(Foreign.coreForeignSemantics),
-    traceIdents: Set.empty,
-    onPrepareModule: (_) => (module) => pure(module),
-    onSkipModule: (_) => (_) => pure(Nothing.value),
-    onCodegenModule: (_) => (core) => (module) => (_) => {
-      if (fixtures.includes(module.name)) captured.set(module.name, { core, backend: module });
-      return pure(undefined);
-    },
-  })(await runAff(App.coreFnModulesFromOutput(join(directory, "output")))));
+  compileFixtures(directory, [...fixtures.map((name) => join(directory, `${name}.purs`)), join(prelude, "**/*.purs")], { transcript });
+  const captured = await optimizeCoreFn(directory, fixtures);
   assert.equal(captured.size, 2, "real compiler and PBO produced both modules");
   const producer = captured.get("AdtUnary");
   const selected = prepareModule(producer.core)(producer.backend);
@@ -134,14 +95,15 @@ try {
   const fsx = join(directory, "adt-unary.fsx");
   const source = [preludeFs, header, producerFs, foreign, consumerFs, runtime].join("\n\n");
   await writeFile(fsx, source);
-  const result = command(process.env.DOTNET || "dotnet", ["fsi", "--nologo", "--optimize+", "--exec", fsx], directory);
-  if (process.env.ADT_INTEROP_ARTIFACTS) {
-    const destination = resolve(process.env.ADT_INTEROP_ARTIFACTS);
-    await mkdir(destination, { recursive: true });
-    await writeFile(join(destination, "AdtUnary.fs"), producerFs);
-    await writeFile(join(destination, "AdtConsumer.fs"), consumerFs);
-    await writeFile(join(destination, "adt-unary.fsx"), source);
-    await writeFile(join(destination, "fsi.log"), result.stdout + result.stderr);
+  if (artifacts) {
+    await mkdir(artifacts, { recursive: true });
+    await writeFile(join(artifacts, "AdtUnary.fs"), producerFs);
+    await writeFile(join(artifacts, "AdtConsumer.fs"), consumerFs);
+    await writeFile(join(artifacts, "adt-unary.fsx"), source);
+  }
+  const result = runFsharp(directory, fsx, { optimize: true, transcript });
+  if (artifacts) {
+    await writeFile(join(artifacts, "fsi.log"), result.stdout + result.stderr);
     const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
     const sourceFiles = ["src/Sharpurs/AdtKernel.purs", "src/Sharpurs/AdtLayout.purs", "src/Sharpurs/CodeGen.purs",
       ...["Analysis", "Lower", "Emit"].map(name => `src/Sharpurs/AdtKernel/${name}.purs`),
@@ -150,20 +112,16 @@ try {
       ...fixtures.map((name) => `tests/fixtures/${name}.purs`)];
     const hashes = {};
     for (const file of sourceFiles) hashes[file] = hash(await readFile(join(backend, file)));
-    await writeFile(join(destination, "metadata.json"), JSON.stringify({
+    await writeFile(join(artifacts, "metadata.json"), JSON.stringify({
       sourceHashes: hashes,
       generatedHashes: { producer: hash(producerFs), consumer: hash(consumerFs), full: hash(source) },
-      purs: command(process.env.PURS || "purs", ["--version"], directory).stdout.trim(),
-      dotnet: command(process.env.DOTNET || "dotnet", ["--version"], directory).stdout.trim(),
+      purs: command(process.env.PURS || "purs", ["--version"], directory, { transcript }).stdout.trim(),
+      dotnet: command(process.env.DOTNET || "dotnet", ["--version"], directory, { transcript }).stdout.trim(),
       exitCode: result.status,
     }, null, 2) + "\n");
   }
-  successful(result, "F# ADT interoperability");
   assert.doesNotMatch(result.stderr, /warning FS\d+/, "interop compiles without warnings");
   assert.match(result.stdout, /adt-unary runtime: 63 checks passed/, "all runtime assertions ran");
   console.log(result.stdout.trim());
   console.log(`adt-unary converter: ${converterChecks} checks passed`);
-} finally {
-  process.chdir(previousCwd);
-  await rm(directory, { recursive: true, force: true });
-}
+});

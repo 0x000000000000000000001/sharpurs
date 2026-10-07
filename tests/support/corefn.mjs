@@ -1,7 +1,8 @@
 // Uses the current compiler's ADT constructors. Historical compiler oracles
 // with a different runtime/dictionary keep their own explicit API adapters.
 import assert from 'node:assert/strict';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { withCwd } from './fixtures.mjs';
 import * as Aff from '../../output/Effect.Aff/index.js';
 import * as Applicative from '../../output/Control.Applicative/index.js';
 import { Left } from '../../output/Data.Either/index.js';
@@ -28,9 +29,8 @@ export async function readCoreFn(directory) {
 // Builder writes .purmeta relative to cwd. Suites run as separate processes;
 // keep this operation sequential within each process and restore cwd on error.
 export async function optimizeCoreFn(directory, names) {
-  const previous = process.cwd();
-  process.chdir(directory);
-  try {
+  directory = resolve(directory);
+  return withCwd(directory, async () => {
     const pure = Applicative.pure(Aff.applicativeAff);
     const result = new globalThis.Map();
     await runAff(Builder.buildModules(Aff.monadEffectAff)({
@@ -53,7 +53,5 @@ export async function optimizeCoreFn(directory, names) {
     })(await runAff(App.coreFnModulesFromOutput(join(directory, 'output')))));
     for (const name of names) assert.ok(result.has(name), `Builder did not reach ${name}`);
     return result;
-  } finally {
-    process.chdir(previous);
-  }
+  });
 }

@@ -29,7 +29,7 @@ The input is the enriched typed CoreFn produced by the compiler fork. `Module An
 | Candidate registration, direct-helper collisions and implementation priority | [`Sharpurs/CodeGen/Selection.purs`](../src/Sharpurs/CodeGen/Selection.purs) |
 | Translation contexts, recursive worker registration and lookup | [`Sharpurs/CodeGen/Context.purs`](../src/Sharpurs/CodeGen/Context.purs) |
 | Source TAST annotations, lambda/application spines and expression traversal | [`Sharpurs/Analysis/Source.purs`](../src/Sharpurs/Analysis/Source.purs) |
-| Public F# names, worker suffixes, generated module names and native-member quoting | [`Sharpurs/Names.purs`](../src/Sharpurs/Names.purs) |
+| Public F# names, worker suffixes, optimized lexical names, generated module names and native-member quoting | [`Sharpurs/Names.purs`](../src/Sharpurs/Names.purs) |
 | Source patterns, newtype erasure and eligible constructor chains | [`Sharpurs/CodeGen/Pattern.purs`](../src/Sharpurs/CodeGen/Pattern.purs) |
 | Case strategy selection, guards, constructor groups and fallback matches | [`Sharpurs/CodeGen/Case.purs`](../src/Sharpurs/CodeGen/Case.purs) |
 | Boxed-ABI templates: closures, records, adapters, recursive groups | [`Sharpurs/CodeGen/Boxed.purs`](../src/Sharpurs/CodeGen/Boxed.purs) |
@@ -50,14 +50,28 @@ The input is the enriched typed CoreFn produced by the compiler fork. `Module An
 | Native thunk definitions, closures, captures and boxed force results | [`Sharpurs/ThunkKernel/Emit.purs`](../src/Sharpurs/ThunkKernel/Emit.purs) |
 | Typed integer, direct-call and constructor subsets | `IntKernel`, `Optimized`, `DirectCall`, `ConstructorCall` and integer-operation modules |
 | Checked fixture selection, prototype-preserving copies and live mutation views | [`tests/support/ast.mjs`](../tests/support/ast.mjs) |
+| Focused-suite commands, cwd scopes, failed-workspace retention and temporary cleanup | [`tests/support/fixtures.mjs`](../tests/support/fixtures.mjs), [`tests/fixture-process.mjs`](../tests/fixture-process.mjs) |
+| Current-runtime Aff bridge, CoreFn loading and checked Builder callbacks | [`tests/support/corefn.mjs`](../tests/support/corefn.mjs); historical adapters stay in their suites |
+| Fixture dependency identities, resolved lockfile paths and explicit source overrides | [`tests/support/packages.mjs`](../tests/support/packages.mjs), [`tests/package-sources.mjs`](../tests/package-sources.mjs) |
 | Suite-owned F# fragments and exactly-once insertion slots | [`tests/support/fsharp.mjs`](../tests/support/fsharp.mjs), [`tests/fixtures/`](../tests/fixtures/) |
 | Aggregate orchestration and immutable generation comparisons | [`tests/run.mjs`](../tests/run.mjs), [`scripts/support/`](../scripts/support/) |
 | Shared compiler build steps and npm/prepare dispatch | [`scripts/build.mjs`](../scripts/build.mjs) |
 | Process-group ownership, cancellation/escalation, live I/O and complete file logs | [`scripts/support/process.mjs`](../scripts/support/process.mjs) |
 | Native-module selection, inclusive resume, one-time compiler build and result display | [`tools/modtest-runner.mjs`](../tools/modtest-runner.mjs), [`tests/modtest.mjs`](../tests/modtest.mjs) |
+| Private native-library layouts, profile selection, phase execution and workspace finalization | [`tools/native-test-runner.mjs`](../tools/native-test-runner.mjs), [`tests/native-runner.mjs`](../tests/native-runner.mjs) |
 | CLI fixture selection, runner ownership, checked preparation and cache finalization | [`bin/test`](../bin/test), [`tests/runner-lifecycle.mjs`](../tests/runner-lifecycle.mjs) |
+| Sibling fixture dependency inventory and thin public launchers | [`bin/pkg`](../bin/pkg), [`bin/modtest`](../bin/modtest), native libraries' `bin/test` wrappers |
+| Generated-directory ignore policy and workspace lifetimes | [`.gitignore`](../.gitignore), [workspace ownership](testing.md#workspace-ownership) |
 
 `Ffi.loadModule` returns wrapper text and optional C# source. `Project.writeModule` owns the writes. This keeps foreign-source selection independent of output paths. Runtime templates are pure strings, also imported by the focused tests through the compiled `Sharpurs.Runtime` module.
+
+`bak/spago.d/fs/p/` contains maintained fallback FFI implementations resolved by
+`Ffi.overrideDirectories`; native layouts and generation snapshots copy them as
+inputs. Test `.fs`/`.cs`/`.fsx` fragments and the explicit fixture application
+project are likewise maintained sources. The [C07 inventory](validation/c07-2026-10-06.md)
+records their consumers and the script/helper review. New runner mechanics belong
+to the owners above; suite assertions and historical runtime adapters remain with
+their respective suites.
 
 ### A small contribution, end to end
 
@@ -139,6 +153,32 @@ Expression selection has its own entry point, `forExpression`, with this priorit
 `CodeGen` explicitly exports the module and standalone-binding entry points used by the CLI, interop and tests. `translateModuleUsing env { kernels, expressions } source` accepts named candidate maps and applies the complete module policy; the convenience entry points delegate to it. Standalone binding translation does not invent a module-wide direct-call registry.
 
 `npm run test:selection` checks competing candidate sets through production registration and emission, including singleton/mutual groups, helper suppression, escaped-name/foreign/parameter collisions and qualified call-site lookup. Recognizer suites additionally execute the emitted implementations.
+
+## Optimized object envelopes around local Int kernels
+
+[`Optimized.purs`](../src/Sharpurs/Optimized.purs) admits a complete optimized
+binding only when its supported object-ABI expression contains a proven local
+Int kernel. Its lexical map and type/arity checks remain responsible for which
+outer locals can be unboxed at that boundary. Unsupported siblings, conflicting
+annotations, duplicated/captured/negative levels and unresolved `TypeApp` cases
+still reject the complete candidate.
+
+The admitted lambda body stays an `FsExpr`. A right fold of `Boxed.lambda` wraps
+the ordered binders; the shared template owns rendering and the exact boxed
+closure parentheses. Optimized integer literals use `Boxed.box (FsRawExpr (show
+value))`: the raw fragment is a native scalar, whereas `FsLitInt` already emits a
+boxed value with a different parenthesis layout. String and Boolean literals
+retain their normal AST constructors.
+
+`Names.optimizedLocal :: Level -> String` owns `sharpurs_o_` names both where
+`Optimized` binds/references object locals and where `IntKernel.CodeGen` unboxes
+entry arguments. Source binder spelling does not establish lexical identity.
+The native kernel's separate `sharpurs_i_` locals keep their own scope and owner.
+
+Check `local-kernel`, `kernel`, `selection`, `printer`, `recursion` and the
+PureScript assertions after changing this boundary. Compare assembled programs
+and complete frozen application/native generations, including incremental mtimes
+and clean/no-op replays; see the [C06 report](validation/c06-2026-10-06.md).
 
 ## Inside the ADT kernel
 
@@ -464,3 +504,7 @@ location of the detailed evidence.
 The [H07 cycle-2 report](validation/h07-2026-10-03.md) adds the complete 23-suite
 qualification, recovered CLI inventory, fresh b8x graph, ten application processes,
 three benchmark processes and the checked cleanup/archive evidence.
+
+The [cycle-3 evidence index](testing.md#cycle-3-validation-evidence) links C01–C07
+to their reports, JSON summaries and verified archives. It also identifies C08 as
+the pending full replay on the final source fingerprints.

@@ -14,6 +14,7 @@ module Sharpurs.Names
   , adtNative
   , guarded
   , thunkNative
+  , optimizedLocal
   ) where
 
 import Prelude
@@ -21,6 +22,7 @@ import Prelude
 import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap)
 import PureScript.Backend.Optimizer.CoreFn (Ident, Qualified(..), unQualified)
+import PureScript.Backend.Optimizer.Syntax (Level(..))
 import Sharpurs.FsAst (modulePrefix, sanitizeName)
 
 inModule :: String -> String -> String
@@ -74,3 +76,8 @@ guarded name = name <> "_apply"
 
 thunkNative :: String -> String
 thunkNative name = name <> "_thunk_native"
+
+-- Shared by optimized object binders and the native Int entry that unboxes them.
+-- Lexical identity comes from the optimizer level, not the source binder name.
+optimizedLocal :: Level -> String
+optimizedLocal (Level level) = "sharpurs_o_" <> show level

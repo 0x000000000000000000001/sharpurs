@@ -1,0 +1,102 @@
+{
+  "date": "2026-10-06",
+  "milestone": "C04",
+  "topic": "Deterministic fixture package source resolution",
+  "success": true,
+  "cycle3Points": 55,
+  "cycle3CompletedPasses": 4,
+  "cycle3TotalPasses": 8,
+  "startingHead": "023c67dc938a7bfd2acf47be9df9c08951b8e99c",
+  "startingLocalWork": "C03 changes retained; complete status and manifest in evidence",
+  "resolution": {
+    "owner": "tests/support/packages.mjs",
+    "publicReExport": "tests/support/fixtures.mjs",
+    "duplicateLookupsMigrated": 5,
+    "precedence": ["explicit source option", "PRELUDE_SRC for Prelude", "resolved spago.lock dependency or workspace package"],
+    "registryVersions": { "prelude": "6.0.2", "partial": "4.0.0" },
+    "cacheOnlySelection": false
+  },
+  "fixtureSupport": {
+    "command": ["npm", "run", "test:fixture-support"],
+    "exitCode": 0,
+    "passed": 35,
+    "structuralAndSlots": 8,
+    "packageResolution": 27,
+    "failed": 0,
+    "skipped": 0
+  },
+  "historicalHelper": {
+    "command": ["node", "--test", "tests/package-sources.mjs"],
+    "exitCode": 1,
+    "passed": 4,
+    "failed": 23,
+    "note": "Includes reproduced wrong-source/missing-source behavior and the new resolved-lockfile/local/explicit-source contract."
+  },
+  "realSuites": {
+    "names": ["adt-kernel", "adt-interop", "adt-unary", "adt-multi", "int-comparison", "int-arithmetic", "direct-call", "thunk-kernel", "constructor-typeapp"],
+    "baselinePassed": 9,
+    "updatedPassed": 9,
+    "adversarialPassed": 9,
+    "adversarialCachedPackages": ["prelude-0.0.0", "prelude-99.0.0", "prelude-extra-0.0.0", "partial-0.0.0"],
+    "spacedRelativeOverride": { "suite": "int-comparison", "exitCode": 0 },
+    "missingOverride": { "suite": "int-comparison", "exitCode": 1, "compilerInvocations": 0 },
+    "actualCompilationSourceAudits": 28,
+    "matchingGeneratedFilesPerNineSuiteReplay": 31,
+    "matchingOverrideGeneratedFiles": 2,
+    "checksPerSuite": {
+      "adt-kernel": { "runtime": 32, "converter": 33 },
+      "adt-interop": { "runtime": 62, "converter": 13 },
+      "adt-unary": { "runtime": 63, "converter": 11 },
+      "adt-multi": { "runtime": 301, "converter": 93 },
+      "int-comparison": { "runtime": 396, "converter": 32 },
+      "int-arithmetic": { "runtime": 1648, "converter": 317 },
+      "direct-call": { "runtime": 130, "converter": 67 },
+      "thunk-kernel": { "runtime": 258, "converterAndJavaScript": 86 },
+      "constructor-typeapp": { "runtime": 133, "converterAndJavaScript": 61 }
+    }
+  },
+  "selectedSources": {
+    "prelude-6.0.2": {
+      "compiledPureScriptFiles": 50,
+      "completeSrcFiles": 67,
+      "treeSha256": "41b786548b20b9fcd3d988cb2f90c87aaa663e9b98ba2d3bc54fc2f1e442d9c7"
+    },
+    "partial-4.0.0": {
+      "compiledPureScriptFiles": 2,
+      "completeSrcFiles": 4,
+      "treeSha256": "2d6a68e5e479f58038a0436565eca337be5748d6d93a2d8f9d7f2d4f0d6d4274"
+    }
+  },
+  "preservation": {
+    "startingEntries": 2317,
+    "intentionallyEditedExistingFiles": 9,
+    "unchangedEntries": 2308,
+    "unexpectedChanges": [],
+    "sha256LinkTargetsModeAndMtimeNsChecked": true,
+    "externalPboEntriesPreserved": 482,
+    "productionSourceFilesUnchanged": 43,
+    "installedBundleSha256": "5082ef568cd2d4c0f7831af3e264074d59063c4817ee7318d25a86f33897b5f0",
+    "privateValidationBundleSha256": "a834f3ec0c310ff82c6c7d28bdb2238c20314f564e54760121c24670890745aa"
+  },
+  "staticChecks": { "nodeSyntax": 8, "gitDiffCheck": true, "remainingDuplicatePrefixLookups": 0 },
+  "validationLayoutRecovery": {
+    "initialBuildExitCode": 1,
+    "reason": "Compilation passed; bundling could not find esbuild in the copied layout's PATH.",
+    "correction": "Selected original installed tool executables for the isolated build.",
+    "retryExitCode": 0
+  },
+  "evidence": {
+    "archive": "../../../validation/c04-2026-10-06.tar.gz",
+    "checksum": "../../../validation/c04-2026-10-06.sha256",
+    "root": "c04-2026-10-06/",
+    "files": [
+      "starting-revisions.json", "starting-manifest.json", "final-manifest.json", "input-preservation.json",
+      "pbo-starting.json", "tools.json", "static-checks.json", "selected-package-sources.json", "comparison.json",
+      "historical-package-sources.log", "after-fixture-support.log", "before-build-initial.log", "before-build.log",
+      "before-sources.jsonl", "after-sources.jsonl", "adversarial-sources.jsonl", "override-sources.jsonl",
+      "missing-int-comparison.log", "before/", "after/", "adversarial/", "override/", "layout/", "final-sources/",
+      "prepare.py", "replay.py", "purs-trace", "compare.py", "finalize.py", "archive-members.json"
+    ]
+  },
+  "nextPass": "C05"
+}

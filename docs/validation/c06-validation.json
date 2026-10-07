@@ -1,0 +1,68 @@
+{
+  "pass": "C06",
+  "date": "2026-10-06",
+  "complete": true,
+  "cyclePoints": 80,
+  "cyclePercent": 80,
+  "completedPasses": 6,
+  "totalPasses": 8,
+  "nextPass": "C07",
+  "startingRevision": "023c67dc938a7bfd2acf47be9df9c08951b8e99c",
+  "changedProductionFiles": ["src/Sharpurs/Optimized.purs", "src/Sharpurs/Names.purs", "src/Sharpurs/IntKernel/CodeGen.purs"],
+  "beforeBundleSha256": "a834f3ec0c310ff82c6c7d28bdb2238c20314f564e54760121c24670890745aa",
+  "afterBundleSha256": "99f6f31d2bc7329ea81f62a13c866d97b34cfd188892cb9b89a686452d22c0f1",
+  "focused": {
+    "beforeBuildPassed": true,
+    "afterBuildPassed": true,
+    "pureScriptWarnings": 0,
+    "pureScriptErrors": 0,
+    "pureScriptAssertionsPerPhase": 49,
+    "suitesPassedPerPhase": 5,
+    "identicalAuditedJsAssertions": 245,
+    "identicalAssembledFsharpPrograms": 4,
+    "assertionNormalization": "Random temporary source prefix in recursion's parsed CoreFn object only",
+    "generatedTextNormalization": false,
+    "suites": {
+      "local-kernel": { "auditedJsAssertions": 68, "fsharpRuntimeChecks": 43 },
+      "kernel": { "fsharpRuntimeChecks": 695 },
+      "selection": { "auditedJsAssertions": 100 },
+      "printer": { "auditedJsAssertions": 40, "fsharpRuntimeChecks": 67 },
+      "recursion": { "auditedJsAssertions": 37, "fsharpRuntimeChecks": 41 }
+    }
+  },
+  "generation": {
+    "frozenBeforeProductionEdits": true,
+    "workspacesPassed": 20,
+    "processesPassed": 80,
+    "phases": ["before", "after-incremental", "after-clean", "after-noop"],
+    "b8x": { "entrypoint": "Test.Main", "modules": 2684, "identicalFiles": 2740, "typedInput": "b8x/run/bak/sharp/output" },
+    "native": { "workspaces": 19, "moduleOccurrences": 3545, "identicalFiles": 4399, "typedInputs": "19 retained successful C03 native workspaces" },
+    "totalModuleOccurrences": 6229,
+    "identicalFilesPerPhase": 7139,
+    "addedRemovedChangedFiles": 0,
+    "rewrittenUnchangedIncrementalFiles": 0,
+    "rewrittenUnchangedNoopFiles": 0,
+    "inputsAndNativeDirectoriesPreserved": true,
+    "generatedTextNormalization": false
+  },
+  "preservation": {
+    "startingEntries": 2324,
+    "unchangedEntries": 2319,
+    "intentionallyEditedExistingFiles": 5,
+    "unexpectedChanges": 0,
+    "unchangedProductionFiles": 40,
+    "externalPboEntries": 482,
+    "frozenInputOrigins": 16897,
+    "testAndFixtureSourcesUnchanged": true,
+    "installedBundleSha256": "5082ef568cd2d4c0f7831af3e264074d59063c4817ee7318d25a86f33897b5f0",
+    "committed": false
+  },
+  "static": { "gitDiffCheck": true, "optimizedLocalNameOwners": 1 },
+  "evidence": {
+    "archive": "../../../validation/c06-2026-10-06.tar.gz",
+    "checksum": "../../../validation/c06-2026-10-06.sha256",
+    "localDirectory": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/c06-2026-10-06",
+    "records": ["starting-revisions.json", "starting-manifest.json", "pbo-starting.json", "tools.json", "before-results.json", "after-results.json", "test-comparison.json", "recursion-normalized-results.json", "frozen-inputs.json", "original-inputs.json", "generation-results.json", "generation-summary.json", "input-preservation.json", "final-manifest.json", "static-checks.json", "documentation-checks.json", "archive-members.json"],
+    "scripts": ["prepare.py", "replay.py", "capture.mjs", "freeze-inputs.mjs", "generations.mjs", "compare-tests.py", "check-docs.py", "finalize.py"]
+  }
+}

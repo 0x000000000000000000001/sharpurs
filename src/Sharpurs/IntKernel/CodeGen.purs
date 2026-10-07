@@ -8,6 +8,7 @@ import Data.String (joinWith)
 import PureScript.Backend.Optimizer.Syntax (Level(..))
 import Sharpurs.FsAst (FsDecl(..))
 import Sharpurs.IntKernel (IntKernel, LocalIntKernel, IntExpr(..), IntCondition(..), IntOperator(..))
+import Sharpurs.Names as Names
 
 -- The native function is local to its public binding, so no generated name can
 -- collide with another source declaration. Every curry stage remains obj -> obj.
@@ -31,7 +32,7 @@ printLocalKernel kernel =
     <> joinWith " " (map (printIntWith outerLocal) (NonEmptyArray.toArray kernel.entry)) <> "))"
   where
   parameters = map (\arg -> "(" <> localName arg.level <> ": int)") (NonEmptyArray.toArray kernel.args)
-  outerLocal (Level level) = "(unbox<int> sharpurs_o_" <> show level <> ")"
+  outerLocal level = "(unbox<int> " <> Names.optimizedLocal level <> ")"
 
 localName :: Level -> String
 localName (Level level) = "sharpurs_i_" <> show level

@@ -1,0 +1,98 @@
+{
+  "pass": "C05",
+  "date": "2026-10-06",
+  "complete": true,
+  "cyclePoints": 70,
+  "cyclePercent": 70,
+  "completedPasses": 5,
+  "totalPasses": 8,
+  "nextPass": "C06",
+  "startingRevision": "023c67dc938a7bfd2acf47be9df9c08951b8e99c",
+  "baseline": "Uncommitted C03/C04 sources snapshotted; qualified C04 compiled output copied into a new private layout",
+  "changedSuites": ["adt-kernel", "adt-interop", "adt-unary", "constructor-typeapp", "ffi-support", "int-comparison"],
+  "additionalSuites": ["adt-multi", "int-arithmetic", "direct-call", "thunk-kernel", "recursion", "case-patterns", "adt-lowering", "names", "project"],
+  "verification": {
+    "fixtureSupport": { "passed": 46, "failed": 0, "skipped": 0, "newProcessWorkspaceChecks": 11 },
+    "beforeSuites": { "passed": 15, "failed": 0 },
+    "afterSuites": { "passed": 15, "failed": 0 },
+    "commandsPerPhase": 15,
+    "commandArgumentsCwdEncodingTimeoutsEquivalent": true,
+    "suiteOwnedAssertionsPerPhase": 273,
+    "assertionMethodLabelOrderPreserved": true,
+    "identicalAssertionArgumentHashTuples": 272,
+    "assertionTraceDifference": "One warning-output assertion sees a different PureScript progress order; both logs contain only the same 53 compilation module names",
+    "identicalMutatedOriginalInputPairs": 57,
+    "identicalGeneratedFiles": 118,
+    "generatedTextNormalization": false,
+    "baselineFailureScenarios": 11,
+    "afterFailureScenarios": {
+      "qualified": 16,
+      "realPureScriptCompilationFailures": 5,
+      "realFsharpTypeErrors": 6,
+      "missingBuilderCallbacks": 4,
+      "defaultArtifactDestination": 1,
+      "cwdRestored": 16,
+      "diagnosticsAndWorkspaceRetained": 16,
+      "explicitDestinationsWithOriginalTemporaryRemoved": 15
+    },
+    "temporaryRootAliases": { "physicalTmpdirPassed": 46, "macosVarAliasPassed": 46, "packageSourceFixtureRootCanonicalized": true },
+    "syntaxChecksPassed": 10,
+    "gitDiffCheck": true
+  },
+  "suiteChecks": {
+    "adt-kernel": { "runtime": 32, "converter": 33 },
+    "adt-interop": { "runtime": 62, "converter": 13 },
+    "adt-unary": { "runtime": 63, "converter": 11 },
+    "constructor-typeapp": { "runtime": 133, "converterJs": 61 },
+    "ffi-support": { "runtime": 52, "converterResolver": 32 },
+    "int-comparison": { "runtime": 396, "converter": 32 }
+  },
+  "historicalAdapters": {
+    "collectorConfigurationLoaderByteIdentical": true,
+    "adapterBodySha256": "314c9522ebaeb164d99f392b82bc04b9460d8598d4490fb7e8767258f02b4bae",
+    "ffi": {
+      "revision": "561cd66693eb8897c31a2aee1d9367c73435bc87",
+      "sourceSha256": "67b0ca856005911c090bb6948a0f7b92b94976e060f7ab1d69e092fad69b9c3b",
+      "beforeExitCode": 0,
+      "afterExitCode": 0,
+      "identicalCompleteWrapperOutputsPerPhase": 105
+    },
+    "constructorTypeapp": {
+      "compilerRevision": "7ebdd3fe377763026428994caa48c190a4899610",
+      "pboRevision": "6e256c6a962c94d09ad2599c165231633bbfaa98",
+      "privateHistoricalBuildExitCode": 0,
+      "beforeExitCode": 1,
+      "afterExitCode": 1,
+      "status": "pre-existing strict-text mismatch, reproduced unchanged before and after C05",
+      "difference": "One direct-call exception wrapper now includes ConstructorTypeApp_ordinaryCall_direct and ex.Message",
+      "oldAndCurrentOracleProgramsUnchangedByC05": true,
+      "cwdRestoredInBothPhases": true,
+      "assertionRelaxed": false,
+      "countedAsPassingSuite": false
+    }
+  },
+  "preservation": {
+    "startingEntries": 2321,
+    "unchangedEntries": 2309,
+    "intentionallyEditedExistingCompilerFiles": 12,
+    "unexpectedChanges": 0,
+    "productionSourceFiles": 43,
+    "externalPboEntries": 482,
+    "c04CompiledOutputEntries": 2365,
+    "installedBundleSha256": "5082ef568cd2d4c0f7831af3e264074d59063c4817ee7318d25a86f33897b5f0",
+    "committed": false
+  },
+  "evidence": {
+    "archive": "../../../validation/c05-2026-10-06.tar.gz",
+    "checksum": "../../../validation/c05-2026-10-06.sha256",
+    "localDirectory": "/private/var/folders/w9/l8bnb22d6c75c401f71djbt00000gn/T/opencode/sharpurs-maintainability/c05-2026-10-06",
+    "records": [
+      "starting-revisions.json", "starting-manifest.json", "pbo-starting.json", "tools.json",
+      "before-results.json", "after-results.json", "final-fixture-support.json", "audit-results.json", "comparison.json",
+      "failures-results.json", "historical-results.json", "historical-replay-results.json",
+      "historical-generator.diff", "input-preservation.json", "final-manifest.json",
+      "static-checks.json", "documentation-checks.json", "archive-members.json"
+    ],
+    "scripts": ["prepare.py", "replay.py", "audit.py", "audit.mjs", "failures.py", "failure-hook.mjs", "failure-driver.mjs", "historical.py", "historical-replay.py", "historical-capture.mjs", "compare.py", "check-tmpdir.py", "finalize.py"]
+  }
+}

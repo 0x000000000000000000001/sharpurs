@@ -3,13 +3,11 @@
 // FfiSupport.js snapshot. FFI_SUPPORT_ARTIFACTS retains the project and report.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { spawnSync } from 'node:child_process';
-import * as Aff from '../output/Effect.Aff/index.js';
-import { Left } from '../output/Data.Either/index.js';
+import { command, withFixtureDirectory } from './support/fixtures.mjs';
+import { runAff } from './support/corefn.mjs';
 import { Just, Nothing } from '../output/Data.Maybe/index.js';
 import * as Map from '../output/Data.Map.Internal/index.js';
 import * as C from '../output/PureScript.Backend.Optimizer.CoreFn/index.js';
@@ -25,9 +23,6 @@ const transcript = [];
 let checks = 0, differentialChecks = 0;
 const equal = (actual, expected, label) => { assert.deepEqual(actual, expected, label); checks++; };
 const yes = (condition, label) => { assert.ok(condition, label); checks++; };
-const runAff = action => new Promise((resolve, reject) => {
-  Aff.runAff(result => () => result instanceof Left ? reject(result.value0) : resolve(result.value0))(action)();
-});
 function wrappers(language, moduleName, required, content) {
   const result = (language === 'fs' ? appendFfiWrappers : appendCsFfiWrappers)(moduleName)(required)(content);
   if (oracle) {
@@ -35,13 +30,6 @@ function wrappers(language, moduleName, required, content) {
     assert.equal(result, old(moduleName)(required)(content), `${language}: pre-change wrapper text is identical`);
     differentialChecks++;
   }
-  return result;
-}
-function command(program, args, cwd) {
-  const result = spawnSync(program, args, { cwd, encoding: 'utf8', timeout: 120_000 });
-  transcript.push(`$ ${program} ${args.join(' ')}\n${result.stdout || ''}${result.stderr || ''}`);
-  if (result.error) throw result.error;
-  assert.equal(result.status, 0, `${program}: ${result.stdout}\n${result.stderr}`);
   return result;
 }
 
@@ -88,9 +76,7 @@ if (oracle) for (const moduleName of ['Single', 'Example.Native', 'Under_score.N
   }
 }
 
-const directory = await mkdtemp(join(tmpdir(), 'sharpurs-ffi-support-'));
-const previousCwd = process.cwd();
-try {
+await withFixtureDirectory('sharpurs-ffi-support-', { artifacts, transcript }, async directory => {
   const sourceDirectory = join(directory, 'native');
   const overrideDirectory = join(directory, 'overrides/src/Fixture');
   await mkdir(sourceDirectory, { recursive: true });
@@ -146,7 +132,8 @@ try {
 
   modules.push(await runAff(Project.writeModule('Entry')({ fsharp: '', csharp: Nothing.value })(await readFile(join(backend, 'tests/ffi-support.fsx'), 'utf8'))));
   await runAff(Project.finalize({ mainModule: 'Entry', modules }));
-  const result = command(process.env.DOTNET || 'dotnet', ['run', '-c', 'Release', '--nologo', '--project', 'output/Main/Program.fsproj'], directory);
+  const result = command(process.env.DOTNET || 'dotnet', ['run', '-c', 'Release', '--nologo', '--project', 'output/Main/Program.fsproj'], directory,
+    { transcript, timeout: 120_000 });
   assert.doesNotMatch(result.stdout + result.stderr, /warning FS\d+/, 'native FFI fixtures compile without F# warnings');
   const runtime = result.stdout.match(/ffi-support runtime: (\d+) checks passed/);
   assert.ok(runtime, 'compiled F#/C# runtime checks completed');
@@ -163,14 +150,4 @@ try {
   console.log(runtime[0]);
   console.log(`ffi-support converter/resolver: ${checks} checks passed`);
   if (oracle) console.log(`ffi-support differential: ${differentialChecks} complete wrapper outputs identical`);
-} catch (error) {
-  transcript.push(error.stack || String(error));
-  throw error;
-} finally {
-  if (artifacts) {
-    await mkdir(artifacts, { recursive: true });
-    await writeFile(join(artifacts, 'validation.log'), transcript.join('\n'));
-  }
-  process.chdir(previousCwd);
-  await rm(directory, { recursive: true, force: true });
-}
+});

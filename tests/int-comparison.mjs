@@ -1,51 +1,32 @@
 // Compile a real TAST fixture, check conservative selection, then execute F#.
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { spawnSync } from "node:child_process";
 import { clone, annotation, annotatedType, sourceBinding, sourceApplication,
   sourceTypeApp, sourceVariable, findNodes } from "./support/ast.mjs";
 import { fsharpFixture } from "./support/fsharp.mjs";
+import { compileFixtures, packageSource, runFsharp, withFixtureDirectory } from "./support/fixtures.mjs";
+import { readCoreFn } from "./support/corefn.mjs";
 import { helpers as preludeFs } from "../output/Sharpurs.Runtime/index.js";
 import * as C from "../output/PureScript.Backend.Optimizer.CoreFn/index.js";
-import * as Aff from "../output/Effect.Aff/index.js";
-import { Left } from "../output/Data.Either/index.js";
-import { Cons } from "../output/Data.List.Types/index.js";
 import { Just, Nothing } from "../output/Data.Maybe/index.js";
 import * as Map from "../output/Data.Map.Internal/index.js";
-import * as App from "../output/PureScript.Backend.Optimizer.App/index.js";
 import { fromExpr } from "../output/Sharpurs.IntComparison/index.js";
 import { translateModule } from "../output/Sharpurs.CodeGen/index.js";
 import { printModule } from "../output/Sharpurs.Printer/index.js";
 
 const backend = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const runAff = action => new Promise((resolve, reject) => {
-  Aff.runAff(result => () => result instanceof Left ? reject(result.value0) : resolve(result.value0))(action)();
-});
-function command(program, args, cwd) {
-  const result = spawnSync(program, args, { cwd, encoding: "utf8", timeout: 60_000 });
-  if (result.error) throw result.error;
-  assert.equal(result.status, 0, `${program}: ${result.stdout}\n${result.stderr}`);
-  return result;
-}
+const artifacts = process.env.INT_COMPARISON_ARTIFACTS && resolve(process.env.INT_COMPARISON_ARTIFACTS);
+const transcript = [];
 const selections = value => findNodes(value, node => node instanceof C.ExprApp && fromExpr(node) instanceof Just);
-const directory = await mkdtemp(join(tmpdir(), "sharpurs-int-comparison-"));
-try {
-  const preludeRoot = join(backend, ".spago/p");
-  const prelude = process.env.PRELUDE_SRC || join(preludeRoot,
-    (await readdir(preludeRoot)).find(name => /^prelude-/.test(name)), "src");
+await withFixtureDirectory("sharpurs-int-comparison-", { artifacts, transcript }, async directory => {
+  const prelude = await packageSource(backend, "prelude");
   await writeFile(join(directory, "IntCompare.purs"), await readFile(join(backend, "tests/fixtures/IntCompare.purs")));
   await writeFile(join(directory, "IntCompare.js"), "export const track = _ => value => value;\n");
   await writeFile(join(directory, "package.json"), '{"type":"module"}\n');
-  command(process.env.PURS || "purs", ["compile", join(directory, "IntCompare.purs"),
-    join(prelude, "**/*.purs"), "--output", join(directory, "output"), "--codegen", "corefn,js"], directory);
-  const modules = await runAff(App.coreFnModulesFromOutput(join(directory, "output")));
-  let core;
-  for (let cursor = modules; cursor instanceof Cons; cursor = cursor.value1) {
-    if (cursor.value0.name === "IntCompare") core = cursor.value0;
-  }
+  compileFixtures(directory, [join(directory, "IntCompare.purs"), join(prelude, "**/*.purs")], { transcript });
+  const core = (await readCoreFn(directory)).get("IntCompare");
   assert.ok(core, "fixture parsed by PBO's TAST reader");
   const binding = name => sourceBinding(core, name).node;
   let checks = 0;
@@ -108,16 +89,13 @@ try {
   const runtime = await fsharpFixture("int-comparison/Runtime.fs", { CASES: fsCases });
   const source = [preludeFs, support, generated, runtime].join("\n\n");
   await writeFile(join(directory, "comparison.fsx"), source);
-  if (process.env.INT_COMPARISON_ARTIFACTS) {
-    const target = resolve(process.env.INT_COMPARISON_ARTIFACTS);
-    await mkdir(target, { recursive: true });
-    await writeFile(join(target, "IntCompare.fs"), generated);
-    await writeFile(join(target, "comparison.fsx"), source);
+  if (artifacts) {
+    await mkdir(artifacts, { recursive: true });
+    await writeFile(join(artifacts, "IntCompare.fs"), generated);
+    await writeFile(join(artifacts, "comparison.fsx"), source);
   }
-  const result = command(process.env.DOTNET || "dotnet", ["fsi", "--nologo", "--optimize+", "--exec", "comparison.fsx"], directory);
+  const result = runFsharp(directory, "comparison.fsx", { optimize: true, transcript });
   assert.doesNotMatch(result.stderr, /warning FS\d+/);
   console.log(result.stdout.trim());
   console.log(`int-comparison converter: ${checks} checks passed`);
-} finally {
-  await rm(directory, { recursive: true, force: true });
-}
+});

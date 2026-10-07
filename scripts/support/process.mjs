@@ -36,7 +36,7 @@ export const writeJson = (path, value) => writeFile(path, JSON.stringify(value, 
 
 // Own one process group and return the same result for inherited and logged I/O.
 // Abort reasons SIGINT/SIGTERM preserve a caller's signal; other aborts use TERM.
-export async function runProcess(program, args, { cwd, env, stdio = 'inherit', timeout = 0, signal } = {}) {
+export async function runProcess(program, args, { cwd, env, stdio = 'inherit', timeout = 0, signal, killGraceMs = 2000 } = {}) {
   const started = Date.now();
   const summary = (result, error, timedOut) => ({ command: [program, ...args], ...result, error, timedOut,
     cancelled: !!signal?.aborted, ok: result.code === 0 && !error && !timedOut && !signal?.aborted,
@@ -56,7 +56,7 @@ export async function runProcess(program, args, { cwd, env, stdio = 'inherit', t
     const stop = (sig = 'SIGTERM') => {
       if (killTimer) return;
       kill(sig);
-      killTimer = setTimeout(() => kill('SIGKILL'), 2000);
+      killTimer = setTimeout(() => kill('SIGKILL'), killGraceMs);
     };
     abort = () => stop(signal.reason === 'SIGINT' ? 'SIGINT' : 'SIGTERM');
     if (timeout) timer = setTimeout(() => { timedOut = true; stop(); }, timeout);

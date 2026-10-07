@@ -2,26 +2,20 @@
 // fallback. CONSTRUCTOR_TYPEAPP_ORACLE_OUTPUT optionally verifies that oracle
 // against a complete pre-change compiled output directory.
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { spawnSync } from 'node:child_process';
 import { clone, annotation, sourceBinding, sourceApplication, sourceTypeApp,
   sourceVariable, findNodes, expectNode } from './support/ast.mjs';
 import { fsharpFixture } from './support/fsharp.mjs';
+import { compileFixtures, packageSource, runFsharp, withCwd, withFixtureDirectory } from './support/fixtures.mjs';
+import { optimizeCoreFn } from './support/corefn.mjs';
 import { helpers as preludeFs } from '../output/Sharpurs.Runtime/index.js';
 import * as C from '../output/PureScript.Backend.Optimizer.CoreFn/index.js';
-import * as Aff from '../output/Effect.Aff/index.js';
-import * as Applicative from '../output/Control.Applicative/index.js';
-import * as Either from '../output/Data.Either/index.js';
 import * as Maybe from '../output/Data.Maybe/index.js';
 import * as Map from '../output/Data.Map.Internal/index.js';
 import * as Set from '../output/Data.Set/index.js';
 import * as Ord from '../output/Data.Ord/index.js';
-import * as App from '../output/PureScript.Backend.Optimizer.App/index.js';
-import * as Builder from '../output/PureScript.Backend.Optimizer.Builder/index.js';
-import * as Foreign from '../output/PureScript.Backend.Optimizer.Semantics.Foreign/index.js';
 import * as Adt from '../output/Sharpurs.AdtKernel/index.js';
 import * as CodeGen from '../output/Sharpurs.CodeGen/index.js';
 import * as Printer from '../output/Sharpurs.Printer/index.js';
@@ -29,18 +23,11 @@ import { fromExpr } from '../output/Sharpurs.ConstructorCall/index.js';
 const { Just, Nothing } = Maybe;
 const backend = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const artifacts = process.env.CONSTRUCTOR_TYPEAPP_ARTIFACTS && resolve(process.env.CONSTRUCTOR_TYPEAPP_ARTIFACTS);
-const api = { C, Aff, Applicative, Either, Maybe, Map, Set, Ord, App, Builder, Foreign, Adt, CodeGen, Printer };
+const api = { Maybe, Map, Set, Ord, Adt };
 const moduleNames = ['ConstructorNative', 'ConstructorImported', 'ConstructorTypeApp'];
 const transcript = [];
 let checks = 0;
 const yes = (condition, message) => { assert.ok(condition, message); checks++; };
-function command(program, args, cwd) {
-  const result = spawnSync(program, args, { cwd, encoding: 'utf8', timeout: 60_000 });
-  transcript.push(`$ ${program} ${args.join(' ')}\n${result.stdout || ''}${result.stderr || ''}`);
-  if (result.error) throw result.error;
-  assert.equal(result.status, 0, `${program}: ${result.stdout}\n${result.stderr}`);
-  return result;
-}
 // Constructor recognition deliberately crosses erased TypeApp boundaries.
 // Keep this choice here rather than making the shared application view erase them.
 function head(expr) {
@@ -108,20 +95,15 @@ async function oldCompiler(output) {
   return Object.fromEntries(await Promise.all(Object.entries(modules).map(async ([key,name]) =>
     [key, await import(pathToFileURL(join(output, name, 'index.js')))])));
 }
-const directory = await mkdtemp(join(tmpdir(), 'sharpurs-constructor-typeapp-'));
-const previousCwd = process.cwd();
-try {
-  const packages = join(backend, '.spago/p');
-  const prelude = process.env.PRELUDE_SRC || join(packages, (await readdir(packages)).find(name => /^prelude-/.test(name)), 'src');
+await withFixtureDirectory('sharpurs-constructor-typeapp-', { artifacts, transcript }, async directory => {
+  const prelude = await packageSource(backend, 'prelude');
   for (const file of ['ConstructorTypeApp.purs', 'ConstructorTypeApp.js', 'ConstructorNative.purs', 'ConstructorImported.purs']) {
     await writeFile(join(directory, file), await readFile(join(backend, 'tests/fixtures/constructor-typeapp', file)));
   }
   await writeFile(join(directory, 'package.json'), '{"type":"module"}\n');
-  const compiled = command(process.env.PURS || 'purs', ['compile', join(directory, '*.purs'), join(prelude, '**/*.purs'),
-    '--output', join(directory, 'output'), '--codegen', 'corefn,js'], directory);
+  const compiled = compileFixtures(directory, [join(directory, '*.purs'), join(prelude, '**/*.purs')], { transcript });
   assert.doesNotMatch(compiled.stdout+compiled.stderr, /Warning \d+ of/, 'fixture has no PureScript warning');
-  process.chdir(directory);
-  const captured = await collect(api, directory);
+  const captured = await optimizeCoreFn(directory, moduleNames);
   const config = configuration(api, captured);
   const core = captured.get('ConstructorTypeApp').core;
   const currentMod = new Just('ConstructorTypeApp');
@@ -206,7 +188,7 @@ try {
   if (process.env.CONSTRUCTOR_TYPEAPP_ORACLE_OUTPUT) {
     const old=await oldCompiler(resolve(process.env.CONSTRUCTOR_TYPEAPP_ORACLE_OUTPUT));
     // The historical constructor-call baseline predates Builder's MonadEffect constraint.
-    const oldState=await collect(old,directory,old.Aff.monadAff), oldConfig=configuration(old,oldState,old.Adt.prepareUnary);
+    const oldState=await withCwd(directory, () => collect(old,directory,old.Aff.monadAff)), oldConfig=configuration(old,oldState,old.Adt.prepareUnary);
     const actualOld=old.Printer.printModule(old.CodeGen.translateModuleWithConstructorWrappers(oldConfig.wrappers)(oldConfig.constructors)(oldState.get('ConstructorTypeApp').core));
     yes(actualOld===oracle, 'metadata-disabled oracle is byte-identical to actual pre-change generator');
     if (artifacts) { await mkdir(artifacts,{recursive:true}); await writeFile(join(artifacts,'actual-before.fs'),actualOld); }
@@ -229,15 +211,11 @@ try {
     for(const [name,text] of [['generated.fs',generated],['oracle.fs',oracle],['producer.fs',producerFs],['imported.fs',importedFs],['constructor-typeapp.fsx',script]]) await writeFile(join(artifacts,name),text);
     for(const name of moduleNames) await writeFile(join(artifacts,`${name}.corefn.json`),await readFile(join(directory,`output/${name}/corefn.json`)));
   }
-  const runtimeResult=command(process.env.DOTNET || 'dotnet',['fsi','--nologo','--optimize+','--exec','constructor-typeapp.fsx'],directory);
+  const runtimeResult=runFsharp(directory,'constructor-typeapp.fsx',{ optimize: true, transcript });
   assert.doesNotMatch(runtimeResult.stderr,/warning FS/,'fixture has no F# warning');
   assert.match(runtimeResult.stdout,/constructor-typeapp runtime: \d+ checks passed/);
   console.log(runtimeResult.stdout.trim());
   const summary=`constructor-typeapp converter/JS: ${checks} checks passed`;
   transcript.push(summary);
   console.log(summary);
-} finally {
-  process.chdir(previousCwd);
-  if(artifacts){await mkdir(artifacts,{recursive:true});await writeFile(join(artifacts,'validation.log'),transcript.join('\n'));}
-  await rm(directory,{recursive:true,force:true});
-}
+});
