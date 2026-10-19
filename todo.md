@@ -1,19 +1,19 @@
 # Sharpurs — passes de nettoyage, cycle 3
 
-Dernière mise à jour : **6 octobre 2026**.
+Dernière mise à jour : **19 octobre 2026**.
 
 ## Avancement
 
-**85 / 100 points validés — 85 % — 7 passes terminées sur 8.**
+**100 / 100 points validés — 100 % — 8 passes terminées sur 8.**
 
-**Prochaine passe : C08 — qualification finale et clôture du cycle.**
+**Cycle 3 terminé : aucune passe restante.**
 
 Les cycles **M01–M11** et **H01–H07** restent terminés à **100 %**.
-Leur qualification est conservée dans les [rapports M11](sharpurs/docs/validation/m11-2026-10-02.md)
-et [H07](sharpurs/docs/validation/h07-2026-10-03.md). L'ancien `todo.md`, incluant les
+Leur qualification est conservée dans les [rapports M11](docs/validation/m11-2026-10-02.md)
+et [H07](docs/validation/h07-2026-10-03.md). L'ancien `todo.md`, incluant les
 deux suivis post-H07, est conservé intégralement sous `documentation/todo.md` dans
-[l'archive du 5 octobre](validation/post-h07-fixture-selection-2026-10-05.tar.gz),
-avec son [SHA-256](validation/post-h07-fixture-selection-2026-10-05.sha256).
+[l'archive du 5 octobre](../validation/post-h07-fixture-selection-2026-10-05.tar.gz),
+avec son [SHA-256](../validation/post-h07-fixture-selection-2026-10-05.sha256).
 Son contenu a été vérifié identique octet par octet avant ce remplacement.
 
 ## Objectif et état de départ
@@ -32,14 +32,14 @@ chaque extraction doit répondre à une responsabilité ou une duplication préc
 
 | Passe | Constat observé dans le code | Points d'entrée |
 | --- | --- | --- |
-| C01 | Le runner contrôle les étapes de compilation, mais plusieurs `mkdir`, `cd`, `cp`, suppressions et écritures de configuration ne contrôlent pas explicitement leur résultat. Sélection, possession du workspace et exécution restent dans le même script. | [`bin/test`](sharpurs/bin/test) |
-| C02 | `modtest` possède son propre `spawn`, suivi du processus actif et traitement des signaux ; le support commun possède déjà annulation de groupe, escalade et résultats structurés. | [`modtest-runner.mjs`](sharpurs/tools/modtest-runner.mjs), [`process.mjs`](sharpurs/scripts/support/process.mjs) |
-| C03 | Les **19** scripts natifs n'ont que **deux contenus distincts**. Tous nettoient aussi `../sharpurs-*/output`, `.spago` et `.cache`, et remplacent le profil `spago.yaml`. | Exemple : [`sharpurs-arrays/bin/test`](sharpurs-arrays/bin/test) ; inventaire par [`bin/modtest`](sharpurs/bin/modtest) |
-| C04 | `packageSource` prend le premier préfixe trouvé par `readdir`. Plusieurs suites recodent cette recherche ; aucune de ces recherches n'établit à elle seule la version attendue lorsque plusieurs versions sont présentes. | [`support/fixtures.mjs`](sharpurs/tests/support/fixtures.mjs), [`adt-kernel.mjs`](sharpurs/tests/adt-kernel.mjs), [`int-comparison.mjs`](sharpurs/tests/int-comparison.mjs) |
-| C05 | Des suites gardent leurs copies de `command`, `runAff` et de l'appel au Builder courant, ainsi que des conventions différentes de conservation des logs en cas d'échec. Les adaptateurs historiques ont, eux, un contrat distinct. | [`support/corefn.mjs`](sharpurs/tests/support/corefn.mjs), [`adt-kernel.mjs`](sharpurs/tests/adt-kernel.mjs), [`adt-interop.mjs`](sharpurs/tests/adt-interop.mjs), [`adt-unary.mjs`](sharpurs/tests/adt-unary.mjs), [`ffi-support.mjs`](sharpurs/tests/ffi-support.mjs) |
-| C06 | `Optimized` assemble encore les lambdas boxed en texte alors que `Boxed.lambda` possède ce template. La convention locale `sharpurs_o_` est recomposée dans `Optimized` et `IntKernel.CodeGen`. | [`Optimized.purs`](sharpurs/src/Sharpurs/Optimized.purs), [`CodeGen/Boxed.purs`](sharpurs/src/Sharpurs/CodeGen/Boxed.purs), [`IntKernel/CodeGen.purs`](sharpurs/src/Sharpurs/IntKernel/CodeGen.purs) |
-| C07 | Les guides décrivent encore les nettoyages inter-dépôts et la gestion actuelle des workspaces. Les passes précédentes devront laisser des entrées, sorties et commandes de reprise clairement identifiées. | [`docs/testing.md`](sharpurs/docs/testing.md), [`docs/compiler.md`](sharpurs/docs/compiler.md), [`README.md`](sharpurs/README.md), règles `.gitignore` |
-| C08 | Les qualifications existantes identifient leurs propres sources et dépendances ; le nouvel ensemble devra être qualifié sur ses empreintes finales. | [Procédure d'intégration](sharpurs/docs/testing.md#full-integration-replay) |
+| C01 | Le runner contrôle les étapes de compilation, mais plusieurs `mkdir`, `cd`, `cp`, suppressions et écritures de configuration ne contrôlent pas explicitement leur résultat. Sélection, possession du workspace et exécution restent dans le même script. | [`bin/test`](bin/test) |
+| C02 | `modtest` possède son propre `spawn`, suivi du processus actif et traitement des signaux ; le support commun possède déjà annulation de groupe, escalade et résultats structurés. | [`modtest-runner.mjs`](tools/modtest-runner.mjs), [`process.mjs`](scripts/support/process.mjs) |
+| C03 | Les **19** scripts natifs n'ont que **deux contenus distincts**. Tous nettoient aussi `../sharpurs-*/output`, `.spago` et `.cache`, et remplacent le profil `spago.yaml`. | Exemple : [`sharpurs-arrays/bin/test`](../sharpurs-arrays/bin/test) ; inventaire par [`bin/modtest`](bin/modtest) |
+| C04 | `packageSource` prend le premier préfixe trouvé par `readdir`. Plusieurs suites recodent cette recherche ; aucune de ces recherches n'établit à elle seule la version attendue lorsque plusieurs versions sont présentes. | [`support/fixtures.mjs`](tests/support/fixtures.mjs), [`adt-kernel.mjs`](tests/adt-kernel.mjs), [`int-comparison.mjs`](tests/int-comparison.mjs) |
+| C05 | Des suites gardent leurs copies de `command`, `runAff` et de l'appel au Builder courant, ainsi que des conventions différentes de conservation des logs en cas d'échec. Les adaptateurs historiques ont, eux, un contrat distinct. | [`support/corefn.mjs`](tests/support/corefn.mjs), [`adt-kernel.mjs`](tests/adt-kernel.mjs), [`adt-interop.mjs`](tests/adt-interop.mjs), [`adt-unary.mjs`](tests/adt-unary.mjs), [`ffi-support.mjs`](tests/ffi-support.mjs) |
+| C06 | `Optimized` assemble encore les lambdas boxed en texte alors que `Boxed.lambda` possède ce template. La convention locale `sharpurs_o_` est recomposée dans `Optimized` et `IntKernel.CodeGen`. | [`Optimized.purs`](src/Sharpurs/Optimized.purs), [`CodeGen/Boxed.purs`](src/Sharpurs/CodeGen/Boxed.purs), [`IntKernel/CodeGen.purs`](src/Sharpurs/IntKernel/CodeGen.purs) |
+| C07 | Les guides décrivent encore les nettoyages inter-dépôts et la gestion actuelle des workspaces. Les passes précédentes devront laisser des entrées, sorties et commandes de reprise clairement identifiées. | [`docs/testing.md`](docs/testing.md), [`docs/compiler.md`](docs/compiler.md), [`README.md`](README.md), règles `.gitignore` |
+| C08 | Les qualifications existantes identifient leurs propres sources et dépendances ; le nouvel ensemble devra être qualifié sur ses empreintes finales. | [Procédure d'intégration](docs/testing.md#full-integration-replay) |
 
 Ces constats proviennent de la lecture du code. Les scénarios d'échec C01–C04
 seront caractérisés dans des workspaces isolés au début de leur passe.
@@ -92,9 +92,9 @@ seront caractérisés dans des workspaces isolés au début de leur passe.
     **43/43 contrôles d'outillage**, dont 21 scénarios de cycle de vie ; **3/3 fixtures
     réelles** dans deux sélections, avec JS/companion, nettoyage, bornes et cache vérifiés.
     Les 43 sources de production et le bundle conservent leurs empreintes.
-    [Rapport C01](sharpurs/docs/validation/c01-2026-10-05.md),
-    [bilan JSON](sharpurs/docs/validation/c01-validation.json) et
-    [archive](validation/c01-2026-10-05.tar.gz).
+    [Rapport C01](docs/validation/c01-2026-10-05.md),
+    [bilan JSON](docs/validation/c01-validation.json) et
+    [archive](../validation/c01-2026-10-05.tar.gz).
 
 - [x] **C02 — 10 points** — Unifier l'exécution des sous-processus de `modtest`.
   - Réutiliser le mécanisme commun de lancement/annulation, avec un adaptateur
@@ -113,9 +113,9 @@ seront caractérisés dans des workspaces isolés au début de leur passe.
     réel des 19 modules sans build et module natif `partial` réussi en copie isolée.
     Les 1 629 entrées d'origine conservent leurs octets/mtimes ; les 43 sources de
     production et le bundle conservent leurs empreintes.
-    [Rapport C02](sharpurs/docs/validation/c02-2026-10-05.md),
-    [bilan JSON](sharpurs/docs/validation/c02-validation.json) et
-    [archive](validation/c02-2026-10-05.tar.gz).
+    [Rapport C02](docs/validation/c02-2026-10-05.md),
+    [bilan JSON](docs/validation/c02-validation.json) et
+    [archive](../validation/c02-2026-10-05.tar.gz).
 
 - [x] **C03 — 20 points** — Mutualiser et isoler les tests des bibliothèques natives.
   - Remplacer les 19 copies par des wrappers minces vers un runner commun ; conserver
@@ -137,9 +137,9 @@ seront caractérisés dans des workspaces isolés au début de leur passe.
     modules réels **19/19** et reconstruction privée `partial -c` réussie.
     Les **2 289 entrées d'origine hors modifications prévues**, les **482 entrées
     PBO**, les 43 sources de production et le bundle installé sont préservés.
-    [Rapport C03](sharpurs/docs/validation/c03-2026-10-06.md),
-    [bilan JSON](sharpurs/docs/validation/c03-validation.json) et
-    [archive](validation/c03-2026-10-06.tar.gz).
+    [Rapport C03](docs/validation/c03-2026-10-06.md),
+    [bilan JSON](docs/validation/c03-validation.json) et
+    [archive](../validation/c03-2026-10-06.tar.gz).
 
 - [x] **C04 — 10 points** — Déterminer explicitement les dépendances des fixtures.
   - Centraliser les recherches de sources de packages utilisées par les suites.
@@ -160,9 +160,9 @@ seront caractérisés dans des workspaces isolés au début de leur passe.
     **28 audits de compilation**, empreintes des sources choisies et **31 fichiers
     F#/FSX identiques** dans les neuf suites. Les 2 308 entrées hors modifications
     prévues, les 482 entrées PBO, les 43 sources de production et le bundle sont préservés.
-    [Rapport C04](sharpurs/docs/validation/c04-2026-10-06.md),
-    [bilan JSON](sharpurs/docs/validation/c04-validation.json) et
-    [archive](validation/c04-2026-10-06.tar.gz).
+    [Rapport C04](docs/validation/c04-2026-10-06.md),
+    [bilan JSON](docs/validation/c04-validation.json) et
+    [archive](../validation/c04-2026-10-06.tar.gz).
 
 - [x] **C05 — 15 points** — Achever la mutualisation mécanique des suites ciblées.
   - Utiliser le support existant pour les commandes équivalentes et les appels au
@@ -186,9 +186,9 @@ seront caractérisés dans des workspaces isolés au début de leur passe.
     Oracle FFI : **105 sorties identiques**. L'oracle constructeur du 9 septembre
     reproduit avant/après un écart préexistant d'une ligne de message d'exception,
     explicitement conservé comme échec historique. Sources, bundle et PBO préservés.
-    [Rapport C05](sharpurs/docs/validation/c05-2026-10-06.md),
-    [bilan JSON](sharpurs/docs/validation/c05-validation.json) et
-    [archive](validation/c05-2026-10-06.tar.gz).
+    [Rapport C05](docs/validation/c05-2026-10-06.md),
+    [bilan JSON](docs/validation/c05-validation.json) et
+    [archive](../validation/c05-2026-10-06.tar.gz).
 
 - [x] **C06 — 10 points** — Clarifier les templates du chemin optimisé boxed.
   - Réutiliser `Boxed.lambda` pour les lambdas du chemin `Optimized`, en conservant
@@ -210,9 +210,9 @@ seront caractérisés dans des workspaces isolés au début de leur passe.
     **4 399 fichiers natifs** identiques, avec mêmes inventaires et mtimes en
     incrémental et à vide, puis génération propre identique. Les **80 processus**
     réussissent sur entrées figées ; sources externes, profils et bundle installé préservés.
-    [Rapport C06](sharpurs/docs/validation/c06-2026-10-06.md),
-    [bilan JSON](sharpurs/docs/validation/c06-validation.json) et
-    [archive](validation/c06-2026-10-06.tar.gz).
+    [Rapport C06](docs/validation/c06-2026-10-06.md),
+    [bilan JSON](docs/validation/c06-validation.json) et
+    [archive](../validation/c06-2026-10-06.tar.gz).
 
 - [x] **C07 — 5 points** — Nettoyer les résidus identifiés et actualiser les guides.
   - Inventorier les scripts/helpers devenus sans appelant après C01–C06 et les
@@ -234,11 +234,11 @@ seront caractérisés dans des workspaces isolés au début de leur passe.
     contrôles d’outillage**, **46/46 de support**, pilote natif `partial` réussi,
     suite projet : sept phases et onze cas d’I/O. Inventaires, liens locaux,
     règles d’ignore, préservation des sources et archives vérifiés.
-    [Rapport C07](sharpurs/docs/validation/c07-2026-10-06.md),
-    [bilan JSON](sharpurs/docs/validation/c07-validation.json) et
-    [archive](validation/c07-2026-10-06.tar.gz).
+    [Rapport C07](docs/validation/c07-2026-10-06.md),
+    [bilan JSON](docs/validation/c07-validation.json) et
+    [archive](../validation/c07-2026-10-06.tar.gz).
 
-- [ ] **C08 — 15 points** — Qualifier et clôturer le cycle sur les sources finales.
+- [x] **C08 — 15 points** — Qualifier et clôturer le cycle sur les sources finales.
   - Figer révisions, modifications locales, outils, dépendances, bundles et entrées.
     Rejouer l'agrégateur complet, les fixtures CLI et les modules natifs.
   - Référence de départ : **23 suites ciblées**, **49 assertions PureScript**,
@@ -253,18 +253,34 @@ seront caractérisés dans des workspaces isolés au début de leur passe.
   - **Terminé lorsque :** C01–C07 sont validées, tous les résultats demandés sont
     qualifiés, rapport/JSON/archive sont liés et les empreintes de l'archive vérifiées.
     Le score devient alors **100/100 — 100 %**.
+  - **Validé le 19 octobre 2026 :** agrégateur **27/27** en 4 634,68 s — 23 suites,
+    49 assertions, 101/101 outillage, 46/46 support, **359/359 fixtures** et sept
+    exclusions. b8x recompilé à partir du TAST courant : **2 703 modules**, puis
+    **287/287 tests dans 10/10 processus**, assembly identique et bases temporaires
+    vides. Benchmarks réels : **3/3 processus**, **14/14 résultats**, noms/ordre et
+    total validés. Natifs : **19/19 modules**. Comparaison complète
+    avant/après/propre : **7 158 fichiers et 6 248 modules identiques** (b8x + 19
+    natifs), zéro différence. Les **64 116 fichiers** initiaux conservent leurs
+    octets/mtimes ; 43 sources de production inchangées. Deux reprises attribuées
+    (Argonaut b8x supprimé en amont, modules de test hors profil benchmark) et
+    archives C01–C07 absentes avant la passe sont consignées. Le bundle final
+    déterministe est `eeec4432…`.
+    [Rapport C08](docs/validation/c08-2026-10-19.md),
+    [bilan JSON](docs/validation/c08-validation.json) et
+    [archive](../validation/c08-2026-10-19.tar.gz).
 
 ## Journal de validation
 
 | Date | Passe | Résultats et preuves | Score cumulé |
 | --- | --- | --- | --- |
-| 5 octobre 2026 | C01 | `bash -n bin/test`, `npm run test:tools` : 43/43 ; deux sélections réelles : 3/3. Sources, commandes, défauts historiques et empreintes dans le [rapport](sharpurs/docs/validation/c01-2026-10-05.md). | **15/100 — 15 %** |
-| 5 octobre 2026 | C02 | `node --check`, `npm run test:tools` : 59/59 ; 23 traces équivalentes, huit interruptions qualifiées, listing des 19 modules et natif `partial` réussi. Sources et preuves dans le [rapport](sharpurs/docs/validation/c02-2026-10-05.md). | **25/100 — 25 %** |
-| 6 octobre 2026 | C03 | 19 wrappers communs et workspaces privés ; `npm run test:tools` : 101/101, pilotes 3/3, modules 19/19 et `partial -c` réussi. Profils, caches et entrées préservés ; sources et preuves dans le [rapport](sharpurs/docs/validation/c03-2026-10-06.md). | **45/100 — 45 %** |
-| 6 octobre 2026 | C04 | Résolution des sources par lockfile/override ; support 35/35, neuf suites 9/9 sur caches normaux et piégés, override avec espaces, 28 audits de sources et 31 fichiers F#/FSX identiques. Sources et preuves dans le [rapport](sharpurs/docs/validation/c04-2026-10-06.md). | **55/100 — 55 %** |
-| 6 octobre 2026 | C05 | Six suites mutualisées ; support 46/46, suites 15/15 avant/après, 16 échecs qualifiés, 273 assertions et 57 paires de mutations conservées, 118 fichiers identiques. Oracle FFI réussi et écart constructeur historique attribué dans le [rapport](sharpurs/docs/validation/c05-2026-10-06.md). | **70/100 — 70 %** |
-| 6 octobre 2026 | C06 | Templates boxed et nom lexical partagés ; builds propres, 49 assertions PureScript, cinq suites, 245 assertions JS et quatre programmes identiques. b8x + 19 natives : 7 139 fichiers identiques, générations incrémentales/propre/à vide qualifiées dans le [rapport](sharpurs/docs/validation/c06-2026-10-06.md). | **80/100 — 80 %** |
-| 6 octobre 2026 | C07 | Inventaire sans suppression : 46 scripts/supports, 19 wrappers, 2 304 chemins suivis ; ignore et guides actualisés. Outillage 101/101, support 46/46, pilote natif et sept phases projet réussis ; inventaires, liens et preuves dans le [rapport](sharpurs/docs/validation/c07-2026-10-06.md). | **85/100 — 85 %** |
+| 5 octobre 2026 | C01 | `bash -n bin/test`, `npm run test:tools` : 43/43 ; deux sélections réelles : 3/3. Sources, commandes, défauts historiques et empreintes dans le [rapport](docs/validation/c01-2026-10-05.md). | **15/100 — 15 %** |
+| 5 octobre 2026 | C02 | `node --check`, `npm run test:tools` : 59/59 ; 23 traces équivalentes, huit interruptions qualifiées, listing des 19 modules et natif `partial` réussi. Sources et preuves dans le [rapport](docs/validation/c02-2026-10-05.md). | **25/100 — 25 %** |
+| 6 octobre 2026 | C03 | 19 wrappers communs et workspaces privés ; `npm run test:tools` : 101/101, pilotes 3/3, modules 19/19 et `partial -c` réussi. Profils, caches et entrées préservés ; sources et preuves dans le [rapport](docs/validation/c03-2026-10-06.md). | **45/100 — 45 %** |
+| 6 octobre 2026 | C04 | Résolution des sources par lockfile/override ; support 35/35, neuf suites 9/9 sur caches normaux et piégés, override avec espaces, 28 audits de sources et 31 fichiers F#/FSX identiques. Sources et preuves dans le [rapport](docs/validation/c04-2026-10-06.md). | **55/100 — 55 %** |
+| 6 octobre 2026 | C05 | Six suites mutualisées ; support 46/46, suites 15/15 avant/après, 16 échecs qualifiés, 273 assertions et 57 paires de mutations conservées, 118 fichiers identiques. Oracle FFI réussi et écart constructeur historique attribué dans le [rapport](docs/validation/c05-2026-10-06.md). | **70/100 — 70 %** |
+| 6 octobre 2026 | C06 | Templates boxed et nom lexical partagés ; builds propres, 49 assertions PureScript, cinq suites, 245 assertions JS et quatre programmes identiques. b8x + 19 natives : 7 139 fichiers identiques, générations incrémentales/propre/à vide qualifiées dans le [rapport](docs/validation/c06-2026-10-06.md). | **80/100 — 80 %** |
+| 6 octobre 2026 | C07 | Inventaire sans suppression : 46 scripts/supports, 19 wrappers, 2 304 chemins suivis ; ignore et guides actualisés. Outillage 101/101, support 46/46, pilote natif et sept phases projet réussis ; inventaires, liens et preuves dans le [rapport](docs/validation/c07-2026-10-06.md). | **85/100 — 85 %** |
+| 19 octobre 2026 | C08 | Agrégateur 27/27, 359/359 fixtures ; b8x 287/287 dans dix processus, benchmarks 14/14 dans trois processus, natifs 19/19 et générations 7 158 fichiers identiques. Reprises attribuées et 64 116 entrées préservées ; [rapport](docs/validation/c08-2026-10-19.md). | **100/100 — 100 %** |
 
 ## Recalculer le pourcentage
 

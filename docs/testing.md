@@ -813,7 +813,8 @@ recovery, requested cleanup and attributed external application change. The
 
 Each report identifies its starting sources, verification scope, failures/retries
 and preserved inputs. Archive paths are relative to the documented sibling layout.
-C08 is the pending integration qualification on the final cycle-3 sources.
+C08 completes the cycle on the final sources; the historical C01–C07 archives were
+removed from this workspace before C08, which records the missing-reference inventory.
 
 | Pass | Qualification | Report and summary | Durable evidence |
 | --- | --- | --- | --- |
@@ -824,3 +825,4 @@ C08 is the pending integration qualification on the final cycle-3 sources.
 | C05 | Shared focused-suite mechanics | [Report](validation/c05-2026-10-06.md), [JSON](validation/c05-validation.json) | [Archive](../../validation/c05-2026-10-06.tar.gz), [SHA-256](../../validation/c05-2026-10-06.sha256) |
 | C06 | Optimized boxed templates | [Report](validation/c06-2026-10-06.md), [JSON](validation/c06-validation.json) | [Archive](../../validation/c06-2026-10-06.tar.gz), [SHA-256](../../validation/c06-2026-10-06.sha256) |
 | C07 | Residual inventory and public guides | [Report](validation/c07-2026-10-06.md), [JSON](validation/c07-validation.json) | [Archive](../../validation/c07-2026-10-06.tar.gz), [SHA-256](../../validation/c07-2026-10-06.sha256) |
+| C08 | Final integration and cycle closure | [Report](validation/c08-2026-10-19.md), [JSON](validation/c08-validation.json) | [Archive](../../validation/c08-2026-10-19.tar.gz), [SHA-256](../../validation/c08-2026-10-19.sha256) |

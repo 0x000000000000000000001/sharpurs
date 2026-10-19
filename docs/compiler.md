@@ -505,6 +505,7 @@ The [H07 cycle-2 report](validation/h07-2026-10-03.md) adds the complete 23-suit
 qualification, recovered CLI inventory, fresh b8x graph, ten application processes,
 three benchmark processes and the checked cleanup/archive evidence.
 
-The [cycle-3 evidence index](testing.md#cycle-3-validation-evidence) links C01–C07
-to their reports, JSON summaries and verified archives. It also identifies C08 as
-the pending full replay on the final source fingerprints.
+The [cycle-3 evidence index](testing.md#cycle-3-validation-evidence) links all eight
+passes. [C08](validation/c08-2026-10-19.md) closes the cycle with the complete
+aggregate, fresh b8x and benchmark executions, 19 native modules and the final
+before/after/clean generation comparison on the frozen source fingerprints.
