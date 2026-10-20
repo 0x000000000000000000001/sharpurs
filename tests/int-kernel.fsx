@@ -45,4 +45,8 @@ expectInt "deep TCO loop" 1000000 (call2 KernelFixture_deepTailRec 1000000 0)
 expectInt "deep TCO loop preserves its initial accumulator" 1000009 (call2 KernelFixture_deepTailRec 1000001 7)
 expectInt "deep recursive swap reads all old arguments" 29 (call3 KernelFixture_swap 1000001 11 29)
 
+// Non-tail self calls must stay native int calls rather than re-enter the
+// boxed public ABI on every recursive step.
+expectInt "non-tail recursive fib" 6765 (call1 KernelFixture_naiveFib 20)
+
 printfn "int-kernel: %d checks passed" checks

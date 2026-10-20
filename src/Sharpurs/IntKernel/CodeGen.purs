@@ -49,6 +49,7 @@ printIntWith printLocal = case _ of
   IntBinary IntModulo left right -> "(sharpurs_int_mod " <> recur left <> " " <> recur right <> ")"
   IntIf condition yes no -> "(if " <> printConditionWith printLocal condition <> " then " <> recur yes <> " else " <> recur no <> ")"
   IntTailCall args -> "(sharpurs_int_kernel " <> joinWith " " (map recur (NonEmptyArray.toArray args)) <> ")"
+  IntCall args -> "(sharpurs_int_kernel " <> joinWith " " (map recur (NonEmptyArray.toArray args)) <> ")"
   where
   recur expr = printIntWith printLocal expr
 

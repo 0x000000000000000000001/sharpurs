@@ -20,6 +20,7 @@ const binary = (operator, left, right) => new K.IntBinary(operator, left, right)
 const equal = (left, right) => new K.IntEqual(left, right);
 const branch = (condition, yes, no) => new K.IntIf(condition, yes, no);
 const recur = (...args) => new K.IntTailCall(args);
+const call = (...args) => new K.IntCall(args);
 const add = (left, right) => binary(K.IntAdd.value, left, right);
 const sub = (left, right) => binary(K.IntSubtract.value, left, right);
 const mod = (left, right) => binary(K.IntModulo.value, left, right);
@@ -46,6 +47,10 @@ const fixtures = [
   emit("deepTailRec", [param(0, "n"), param(1, "acc")],
     branch(equal(local(0), lit(0)), local(1),
       recur(sub(local(0), lit(1)), add(local(1), mod(local(0), lit(3)))))),
+  emit("naiveFib", [param(0, "n")],
+    branch(equal(local(0), lit(0)), lit(0),
+      branch(equal(local(0), lit(1)), lit(1),
+        add(call(sub(local(0), lit(1))), call(sub(local(0), lit(2))))))),
   emit("swap", [param(4, "n"), param(8, "value"), param(13, "value")],
     branch(equal(local(4), lit(0)), local(8),
       recur(sub(local(4), lit(1)), local(13), local(8)))),

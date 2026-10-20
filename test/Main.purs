@@ -6,7 +6,7 @@ import Data.Array (length)
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NEA
 import Data.Foldable (traverse_)
-import Data.Maybe (Maybe(..), isNothing)
+import Data.Maybe (Maybe(..), isJust, isNothing)
 import Data.Map as Map
 import Data.String (joinWith)
 import Data.Tuple (Tuple(..))
@@ -94,16 +94,28 @@ main = do
       , Tuple "Number arithmetic" (fun2 (binary (B.OpNumberNum B.OpAdd) (lit 1) (lit 2)))
       , Tuple "unsupported Int arithmetic" (fun2 (binary (B.OpIntNum B.OpMultiply) (lit 1) (lit 2)))
       , Tuple "unsupported Int comparison" (fun2 (branch (binary (B.OpIntOrd B.OpLt) (lit 0) (lit 1)) (lit 1) (lit 2)))
-      , Tuple "self call in arithmetic operand" (fun2 (binary (B.OpIntNum B.OpAdd) recursive (lit 1)))
-      , Tuple "self call in condition operand" (fun2 (branch (binary (B.OpIntOrd B.OpEq) recursive (lit 0)) (lit 1) (lit 2)))
-      , Tuple "self call in another call's argument" (fun2 (call self (two recursive (lit 2))))
-      , Tuple "branch cannot restore terminal context in an operand"
-          (fun2 (binary (B.OpIntNum B.OpAdd) (branch equalZero recursive (lit 1)) (lit 2)))
       , Tuple "lambda in the function body" (fun2 (abs (one (param "extra" 2)) (lit 1)))
       , Tuple "local let outside the subset" (fun2 (node (B.Let Nothing (B.Level 2) (lit 1) (lit 2))))
       ]
   traverse_ (\(Tuple label expr) -> assert ("reject: " <> label) (isNothing (fromBinding self expr))) rejected
-  log ("IntKernel: " <> show (10 + length rejected) <> " assertions passed")
+
+  let
+    nonTailCalls =
+      [ Tuple "self call in arithmetic operand"
+          (fun2 (binary (B.OpIntNum B.OpAdd) recursive (lit 1)))
+      , Tuple "self call in condition operand"
+          (fun2 (branch (binary (B.OpIntOrd B.OpEq) recursive (lit 0)) (lit 1) (lit 2)))
+      , Tuple "self call in another call's argument"
+          (fun2 (call self (two recursive (lit 2))))
+      , Tuple "branch in an arithmetic operand"
+          (fun2 (binary (B.OpIntNum B.OpAdd) (branch equalZero recursive (lit 1)) (lit 2)))
+      ]
+  traverse_ (\(Tuple label expr) -> assert ("accept: " <> label) (isJust (fromBinding self expr))) nonTailCalls
+  assert "non-tail arithmetic self call uses IntCall"
+    (case fromBinding self (fun2 (binary (B.OpIntNum B.OpAdd) recursive (lit 1))) of
+      Just { body: IntBinary IntAdd (IntCall _) (IntLiteral 1) } -> true
+      _ -> false)
+  log ("IntKernel: " <> show (11 + length rejected + length nonTailCalls) <> " assertions passed")
   testRouting
 
 testRouting :: Effect Unit

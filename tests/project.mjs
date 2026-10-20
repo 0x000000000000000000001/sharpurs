@@ -45,6 +45,8 @@ async function generate(label, csharp, { removed = false, incremental = false } 
   assert.ok(fs.indexOf('Project.Alpha.fs') < fs.indexOf('Main.fs'), 'entry module follows its dependency');
   const project = await text('Program.fsproj');
   assert.ok(project.includes(await readFile(join(directory, 'sharp.packages.props'), 'utf8')), 'explicit application references preserved verbatim');
+  assert.match(await text('EntryPoint.fs'), /System\.Environment\.ExitCode/,
+    'entrypoint preserves an application-published exit code');
   if (csharp.length) {
     assert.deepEqual(includes(await text('FFI.CSharp.csproj')), csharp, 'only current native sources, in stable order');
     assert.match(project, /<ProjectReference Include="FFI.CSharp.csproj"/);

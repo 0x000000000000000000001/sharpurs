@@ -10,7 +10,7 @@ finish before these phases; only `Compile Config` enters the measured pipeline.
 1. **Load TAST + sort:** the optimizer reader loads `output/*/corefn.json` and sorts modules by dependency.
 2. **Prepare:** write the runtime prelude, load optimization directives, collect constructor arities, and initialize the native-constructor set and invocation-local output inventory.
 3. **Optimize + emit:** the optimizer's sequential builder calls `emitModule` for each module. It validates native ADT/thunk selections and registers constructor wrappers. `CodeGen.Selection` collects the remaining candidates and plans binding/expression routes; `CodeGen` translates the selected plans. The callback then loads foreign sources, writes the module and records its returned `ModuleFiles`.
-4. **Finalize:** write the entrypoint and .NET projects from that inventory, preserving dependency order in F# compile items and sorting the current C# filenames.
+4. **Finalize:** write the entrypoint and .NET projects from that inventory, preserving dependency order in F# compile items and sorting the current C# filenames. The entrypoint waits for pending async work and returns `System.Environment.ExitCode`, so an application or test harness can publish a nonzero process status.
 
 The input is the enriched typed CoreFn produced by the compiler fork. `Module Ann` is the source representation; `BackendModule` is the optimizer's representation. Code generation needs both: the source retains declarations and layout information, while optimized bindings can offer supported native implementations.
 
@@ -144,7 +144,7 @@ Binding routes are tried in this order:
 | 4 | Registered direct function | Eligible | Fallback | Whole-group fallback |
 | 5 | Generic source translation | Fallback | Fallback | Original group retained |
 
-A recognized member never splits a mutual source group: its generic peers can depend on the group's `_tco` entry points. An optimization map entry without a corresponding source binding emits nothing.
+A recognized member never splits a mutual source group: its generic peers can depend on the group's `_tco` entry points. An optimization map entry without a corresponding source binding emits nothing. Int kernels emit self-recursive calls as native `int` recursion in both tail and non-tail positions; only self calls with the exact arity are admitted.
 
 Direct registration considers the escaped names of **all** source bindings and foreign declarations. Either generated suffix, `_direct` or `_direct_apply`, colliding with those names or with the candidate's own parameters keeps the generic function. Keys retain the source module qualifier, so local shadows and imported homonyms cannot use the module's helper. ADT/thunk-specific collision and dependency validation remains in those recognizers.
 

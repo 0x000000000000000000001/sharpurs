@@ -47,6 +47,7 @@ data IntExpr
   | IntBinary IntOperator IntExpr IntExpr
   | IntIf IntCondition IntExpr IntExpr
   | IntTailCall (NonEmptyArray IntExpr)
+  | IntCall (NonEmptyArray IntExpr)
 
 data IntCondition = IntEqual IntExpr IntExpr
 
@@ -178,10 +179,10 @@ fromInt tailPosition context (NeutralExpr syntax) = case syntax of
     lowerBranch (Pair condition body) =
       Tuple <$> fromCondition context condition <*> fromInt tailPosition context body
   Syn.App fn args -> do
-    guard tailPosition
     guard (NonEmptyArray.length args == context.arity)
     checkSelf context fn
-    IntTailCall <$> traverse (fromInt false context) args
+    lowered <- traverse (fromInt false context) args
+    pure (if tailPosition then IntTailCall lowered else IntCall lowered)
   _ -> Nothing
 
 fromCondition :: Context -> NeutralExpr -> Maybe IntCondition

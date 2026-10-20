@@ -717,6 +717,9 @@ errors return failure even when all compilation/runtime phases passed.
 
 `modtest` keeps child stdin/stdout/stderr inherited for live output and prints
 `[PASS]` after each successful module and the optional one-time compiler build.
+The native `aff` module publishes assertion failures raised inside `runAff_`
+continuations through the process exit code, so a printed failure cannot be
+reported as `[PASS]`.
 `--list` and help execute no build or module, including with `-c`. Selection/usage
 errors exit 2; a failed command or child signal exits 1 and stops later modules;
 handled SIGINT/SIGTERM exit 130/143.
