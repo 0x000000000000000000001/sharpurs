@@ -1,12 +1,14 @@
 # Sharpurs — passes de nettoyage, cycle 3
 
-Dernière mise à jour : **19 octobre 2026**.
+Dernière mise à jour : **20 octobre 2026**.
 
 ## Avancement
 
 **100 / 100 points validés — 100 % — 8 passes terminées sur 8.**
 
 **Cycle 3 terminé : aucune passe restante.**
+
+**Post-C08 :** optimisation mesurée en cours, hors score C01–C08.
 
 Les cycles **M01–M11** et **H01–H07** restent terminés à **100 %**.
 Leur qualification est conservée dans les [rapports M11](docs/validation/m11-2026-10-02.md)
@@ -268,6 +270,50 @@ seront caractérisés dans des workspaces isolés au début de leur passe.
     [Rapport C08](docs/validation/c08-2026-10-19.md),
     [bilan JSON](docs/validation/c08-validation.json) et
     [archive](../validation/c08-2026-10-19.tar.gz).
+
+## Post-C08 — optimisation mesurée
+
+Cette section est **hors score C01–C08** ; le score historique reste **100/100**.
+Les mesures de performance utilisent des processus séparés et des builds terminés.
+
+- [x] **P01 — Scheduler `Aff` borné et fiable.**
+  Remplacer le démarrage synchrone des fibres par un scheduler à contexte borné,
+  conserver les continuations suspendues, l’annulation, les superviseurs et la
+  finalisation. Le harnais signale les échecs via le code de sortie du processus.
+  **Validé :** `sharpurs-aff` 6/6 passes, 100 000 `forkAff` et `parallel/stack`,
+  **19/19** modules natifs, b8x **287/287** dans **10/10** processus.
+  Sources : [`sharpurs-aff/src/Effect/Aff.fs`](../sharpurs-aff/src/Effect/Aff.fs),
+  [`sharpurs-aff/test/Test/Main.purs`](../sharpurs-aff/test/Test/Main.purs).
+- [x] **P02 — Kernel `Int` non terminal.**
+  Admettre les auto-appels récursifs en position non terminale et les émettre en
+  appels `int` natifs, sans modifier l’ABI publique boxée.
+  **Validé :** `fib 42` généré de **9,29 s / 69,5 Go d’allocations** à **0,56 s /
+  0 allocation** ; `Parallelism` de **64,36 s** à **0,493 s** ; total `srx` de
+  **65,16 s** à **1,249 s**. Compilateur **24/24**, natifs **19/19**, b8x
+  **287/287 × 10**. Sources : [`IntKernel.purs`](src/Sharpurs/IntKernel.purs),
+  [`IntKernel/CodeGen.purs`](src/Sharpurs/IntKernel/CodeGen.purs).
+- [x] **P03 — Rafraîchir le tableau principal F#/C#.**
+  Rejouer `sharp-pure`, `sharp-ffi` et `sharp-fficc` sur le bundle courant, avec
+  `-p:Optimize=true`, puis mettre à jour les trois colonnes Sharpurs, les totaux
+  et les ratios `/C` de [`altbak.pub/README.md`](../../altbak.pub/README.md).
+  Vérifier en priorité `Fibonacci`, dont la valeur actuelle précède P02.
+  **Validé le 20 octobre 2026 :** `sharp-pure` **52,78 ms** (`/C = 5,5x`),
+  `sharp-ffi` **70,21 ms** (`/C = 7,3x`), `sharp-fficc` **12,10 ms**
+  (`/C = 1,3x`). `Fibonacci` passe à **0,33 μs** et `Ackermann` à **7,70 μs** ;
+  les trois runs sont validés par le driver Sharpurs.
+- [ ] **P04 — Optimiser les outliers confirmés.**
+  Après P03, profiler les postes encore éloignés du F# manuel (`List Processing`,
+  `Deep Record Updates`, `Church Numerals`, `Lazy Evaluation`, `Red-Black Tree`)
+  et n’implémenter que les optimisations justifiées par les mesures. Conserver les
+  calculs, noms, ordre et résultats des benchmarks.
+  **Écarts mesurés après P03 (Sharpurs pur / F# manuel) :** List **489,57 / 3,05 μs**,
+  Deep Record **2 533,49 / 7,21 μs**, Church **2 192,89 / 25,24 μs**,
+  Prime Sieve **594,22 / 1,80 μs**, Red-Black **38 666,25 / 9 499,96 μs**.
+  `Ackermann`, `Polymorphism` et `TCO` sont déjà au niveau attendu.
+- [ ] **P05 — Qualifier l’async sur b8x réel.**
+  Mesurer PostgreSQL/RabbitMQ en processus séparés (débit, latences, allocations,
+  GC, threads, continuations), puis valider fonctionnellement `Test.Main` et les
+  résultats applicatifs avant toute conclusion de performance.
 
 ## Journal de validation
 
