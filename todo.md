@@ -1,350 +1,482 @@
-# Sharpurs — passes de nettoyage, cycle 3
+# Sharpurs — backend TAST natif, unicité et réutilisation en place
 
-Dernière mise à jour : **20 octobre 2026**.
+Dernière mise à jour : **21 octobre 2026**.
 
-## Avancement
+## Objectif
 
-**100 / 100 points validés — 100 % — 8 passes terminées sur 8.**
+Faire progresser la colonne **Sharpurs pure** du tableau F#/C# de
+[`altbak.pub/README.md`](../../altbak.pub/README.md) de **52,78 ms** vers les
+approches impératives/mutables, sans ajouter de FFI de benchmark au chemin pur.
 
-**Cycle 3 terminé : aucune passe restante.**
+La référence **FFICheatcode 12,10 ms** n’est pas un chemin sémantiquement
+équivalent au PureScript immutable : son RBTree utilise des nœuds mutables et des
+rotations en place. Elle reste un **plafond de performance** à approcher.
 
-**Post-C08 :** optimisation mesurée en cours, hors score C01–C08.
+Références de coût à distinguer :
 
-Les cycles **M01–M11** et **H01–H07** restent terminés à **100 %**.
-Leur qualification est conservée dans les [rapports M11](docs/validation/m11-2026-10-02.md)
-et [H07](docs/validation/h07-2026-10-03.md). L'ancien `todo.md`, incluant les
-deux suivis post-H07, est conservé intégralement sous `documentation/todo.md` dans
-[l'archive du 5 octobre](../validation/post-h07-fixture-selection-2026-10-05.tar.gz),
-avec son [SHA-256](../validation/post-h07-fixture-selection-2026-10-05.sha256).
-Son contenu a été vérifié identique octet par octet avant ce remplacement.
+| Chemin | RBTree | Nature |
+|---|---:|---|
+| Sharpurs pure actuel | **38,67 ms** | ADT immutable, kernel ADT |
+| FFI immutable | **36,66 ms** | même arbre immutable, code F# manuel |
+| FFICheatcode | **9,50 ms** | nœuds mutables + rotations en place |
 
-## Objectif et état de départ
+Le but du backend natif est donc :
 
-Rendre les runners, les supports de tests et les derniers templates dispersés
-plus faciles à modifier et à diagnostiquer, tout en conservant les contrats de
-compilation et les résultats applicatifs.
+1. d’abord atteindre la parité avec le F# immutable ;
+2. ensuite d’autoriser des **mutations sûres** quand l’analyse prouve qu’une
+   valeur est unique ;
+3. de conserver exactement la sémantique observable de PureScript lorsque la
+   valeur est partagée.
 
-Revue ciblée du **5 octobre 2026**, HEAD Sharpurs
-`91790f4dd59d4340c1a41857ae0ae6155b345a9d`. L'arbre de travail inclut les correctifs
-validés de sélection des fixtures et leur documentation. Ils font partie du socle
-à préserver. Les **43 fichiers / 4 472 lignes** de `src/` décrivent l'état courant ;
-chaque extraction doit répondre à une responsabilité ou une duplication précise.
+## Pourquoi un changement de backend
 
-### Constats qui motivent les passes
+Le backend actuel repose encore majoritairement sur l’ABI boxée `obj` :
 
-| Passe | Constat observé dans le code | Points d'entrée |
-| --- | --- | --- |
-| C01 | Le runner contrôle les étapes de compilation, mais plusieurs `mkdir`, `cd`, `cp`, suppressions et écritures de configuration ne contrôlent pas explicitement leur résultat. Sélection, possession du workspace et exécution restent dans le même script. | [`bin/test`](bin/test) |
-| C02 | `modtest` possède son propre `spawn`, suivi du processus actif et traitement des signaux ; le support commun possède déjà annulation de groupe, escalade et résultats structurés. | [`modtest-runner.mjs`](tools/modtest-runner.mjs), [`process.mjs`](scripts/support/process.mjs) |
-| C03 | Les **19** scripts natifs n'ont que **deux contenus distincts**. Tous nettoient aussi `../sharpurs-*/output`, `.spago` et `.cache`, et remplacent le profil `spago.yaml`. | Exemple : [`sharpurs-arrays/bin/test`](../sharpurs-arrays/bin/test) ; inventaire par [`bin/modtest`](bin/modtest) |
-| C04 | `packageSource` prend le premier préfixe trouvé par `readdir`. Plusieurs suites recodent cette recherche ; aucune de ces recherches n'établit à elle seule la version attendue lorsque plusieurs versions sont présentes. | [`support/fixtures.mjs`](tests/support/fixtures.mjs), [`adt-kernel.mjs`](tests/adt-kernel.mjs), [`int-comparison.mjs`](tests/int-comparison.mjs) |
-| C05 | Des suites gardent leurs copies de `command`, `runAff` et de l'appel au Builder courant, ainsi que des conventions différentes de conservation des logs en cas d'échec. Les adaptateurs historiques ont, eux, un contrat distinct. | [`support/corefn.mjs`](tests/support/corefn.mjs), [`adt-kernel.mjs`](tests/adt-kernel.mjs), [`adt-interop.mjs`](tests/adt-interop.mjs), [`adt-unary.mjs`](tests/adt-unary.mjs), [`ffi-support.mjs`](tests/ffi-support.mjs) |
-| C06 | `Optimized` assemble encore les lambdas boxed en texte alors que `Boxed.lambda` possède ce template. La convention locale `sharpurs_o_` est recomposée dans `Optimized` et `IntKernel.CodeGen`. | [`Optimized.purs`](src/Sharpurs/Optimized.purs), [`CodeGen/Boxed.purs`](src/Sharpurs/CodeGen/Boxed.purs), [`IntKernel/CodeGen.purs`](src/Sharpurs/IntKernel/CodeGen.purs) |
-| C07 | Les guides décrivent encore les nettoyages inter-dépôts et la gestion actuelle des workspaces. Les passes précédentes devront laisser des entrées, sorties et commandes de reprise clairement identifiées. | [`docs/testing.md`](docs/testing.md), [`docs/compiler.md`](docs/compiler.md), [`README.md`](README.md), règles `.gitignore` |
-| C08 | Les qualifications existantes identifient leurs propres sources et dépendances ; le nouvel ensemble devra être qualifié sur ses empreintes finales. | [Procédure d'intégration](docs/testing.md#full-integration-replay) |
+- les ADT génériques utilisent des champs `obj` ;
+- les records sont des `Map<string, obj>` ;
+- les patterns sont reconstruits depuis `NeutralExpr`, souvent en énormes
+  décisions répétées ;
+- les kernels `Int`, ADT et thunk rattrapent localement le boxing.
 
-Ces constats proviennent de la lecture du code. Les scénarios d'échec C01–C04
-seront caractérisés dans des workspaces isolés au début de leur passe.
+Les optimisations locales ont été mesurées et rejetées :
 
-## Règles d'exécution
+| Essai | Résultat RBTree | Baseline |
+|---|---:|---:|
+| CSE des projections ADT | ~98 ms | 38,67 ms |
+| Patterns ADT imbriqués | ~101 ms | 40,28 ms |
+| Lowerer source | 70,08 ms | 40,28 ms |
+| Lowerer source + constructeurs directs | 65,90 ms | 40,28 ms |
+| Lowerer source + `depth` compact | 70,72 ms | 40,28 ms |
+| Lowerer source + OR-patterns | 39,88 ms | 40,28 ms |
+| `inline` des fonctions ADT | 46,92 ms | 40,28 ms |
+| Chemin générique | 138 ms | 40,28 ms |
+| Overlay mixte source (10 bindings) | ~69 ms | 40,3 ms |
 
-- Chaque passe est bornée par ses fichiers, son contrat et son critère de fin.
-  Enregistrer les sources/révisions et les résultats avant/après ; préserver le
-  travail local existant et attribuer séparément les changements externes.
-- Le score correspond aux **huit cases C01–C08**, dont les poids totalisent 100.
-  Une passe rapporte ses points après implémentation, vérification et documentation.
-  La préparation de ce plan ne valide aucune passe. Publier le pourcentage à chaque clôture.
-- Conserver l'ABI boxed, l'ordre d'évaluation, les applications partielles, le
-  partage, les effets différés, les frontières d'exception et les comportements TCO.
-  Les contrats Int, ADT et thunk gardent leurs preuves source/optimisées propres,
-  leurs limites de saturation et leurs frontières `TypeApp`.
-- Les règles de compilation restent fondées sur le TAST. Les calculs, noms, ordre,
-  driver et résultats des benchmarks restent les références. **b8x `Test.Main`**
-  est le premier point d'entrée applicatif à qualifier.
-- Pour C06, figer le bundle et les entrées avant modification, puis comparer
-  inventaires, octets, projets et horodatages incrémentaux ; vérifier aussi une
-  régénération à vide. Pour l'outillage, contrôler les commandes réellement lancées,
-  les codes de sortie, les fichiers touchés et les processus restants.
-- Exécuter les sélections qui partagent un workspace séquentiellement. Les mesures
-  de performances utilisent des processus distincts, avec les builds terminés.
-  Les builds d'images Docker sont réalisés par l'utilisateur.
-- Adapter les vérifications aux chemins touchés. Tout nouveau test doit vérifier
-  un comportement observable ou un défaut reproduit ; les oracles et assertions
-  existants restent dans leurs suites. Les évolutions PBO/TAST sont possibles pour
-  un besoin démontré, avec leur validation propre.
+Le lowerer source produit un code compact et direct, mais reste **immutable**.
+Il ne peut pas approcher la référence mutable uniquement en changeant les
+patterns ou les templates.
 
-## Passes, dans l'ordre
+## Stratégie : unicité statique + copie de secours
 
-- [x] **C01 — 15 points** — Clarifier le cycle de vie du runner de fixtures.
-  - Donner des étapes nommées à la préparation du workspace, la possession du
-    verrou, la sauvegarde/restauration du cache et l'exécution d'une fixture.
-  - Vérifier les opérations de fichiers et les changements de répertoire avant
-    l'étape suivante. Conserver le diagnostic de l'opération en échec et la copie
-    de secours lorsqu'une restauration échoue.
-  - Conserver la validation préalable des sélections, les bornes inclusives,
-    l'ordre Bash/explicite, les alias, les exclusions et les chemins avec espaces.
-  - **Vérifier :** échecs de préparation/copie/nettoyage/restauration injectés dans
-    un runner isolé, absence d'appel au compilateur après un échec de préparation,
-    conservation du cache, verrou concurrent, interruption et petites sélections réelles.
-  - **Terminé lorsque :** chaque transition dépend du succès de la précédente ;
-    une erreur d'I/O ne peut produire un succès ni laisser exécuter une fixture périmée.
-  - **Validé le 5 octobre 2026 :** étapes nommées, I/O contrôlées, préparation après
-    acquisition du verrou, publication complète de la configuration et finalisation
-    unique. Le succès final dépend aussi de la restauration et de la libération du verrou.
-    **43/43 contrôles d'outillage**, dont 21 scénarios de cycle de vie ; **3/3 fixtures
-    réelles** dans deux sélections, avec JS/companion, nettoyage, bornes et cache vérifiés.
-    Les 43 sources de production et le bundle conservent leurs empreintes.
-    [Rapport C01](docs/validation/c01-2026-10-05.md),
-    [bilan JSON](docs/validation/c01-validation.json) et
-    [archive](../validation/c01-2026-10-05.tar.gz).
+Le backend doit représenter les ADT natifs de manière compatible avec la
+réutilisation en place :
 
-- [x] **C02 — 10 points** — Unifier l'exécution des sous-processus de `modtest`.
-  - Réutiliser le mécanisme commun de lancement/annulation, avec un adaptateur
-    conservant l'affichage direct de `modtest` et les logs structurés de l'agrégateur.
-  - Conserver sélection, ordre, reprise inclusive, aide, listing, build unique `-c`
-    et codes d'usage/interruption ; rendre explicite le résultat de chaque module.
-  - **Vérifier :** commande absente, premier module en échec, interruption pendant
-    le build ou un test, descendant ignorant SIGTERM, et commande `--list` sans build.
-    Comparer les commandes/arguments de succès avant et après.
-  - **Terminé lorsque :** les deux callers partagent le cycle de vie des processus,
-    les erreurs arrêtent les étapes dépendantes et l'annulation termine leurs descendants.
-  - **Validé le 5 octobre 2026 :** `runProcess` partagé, adaptateurs de sortie directe
-    et de logs complets, escalade et arrêt des descendants ; résultat explicite par
-    module. **59/59 contrôles d'outillage**, dont huit interruptions build/test ;
-    **23 traces avant/après** équivalentes, hors nouvelles lignes `[PASS]` ; listing
-    réel des 19 modules sans build et module natif `partial` réussi en copie isolée.
-    Les 1 629 entrées d'origine conservent leurs octets/mtimes ; les 43 sources de
-    production et le bundle conservent leurs empreintes.
-    [Rapport C02](docs/validation/c02-2026-10-05.md),
-    [bilan JSON](docs/validation/c02-validation.json) et
-    [archive](../validation/c02-2026-10-05.tar.gz).
+- un nœud ADT natif possède des champs **mutables au niveau de la
+  représentation** ;
+- il n’est muté que si l’analyse prouve que le nœud est **unique** à ce point ;
+- si le nœud est partagé, le backend effectue une **copie** avant modification ;
+- les frontières FFI et les valeurs non prouvées restent boxées.
 
-- [x] **C03 — 20 points** — Mutualiser et isoler les tests des bibliothèques natives.
-  - Remplacer les 19 copies par des wrappers minces vers un runner commun ; conserver
-    leurs points d'entrée, options et dépendances locales.
-  - Limiter les écritures/nettoyages à un workspace possédé par l'invocation, avec
-    une stratégie explicite pour les dépendances sœurs et les sorties de build.
-  - Préserver ou restaurer le profil `spago.yaml` antérieur, qu'il soit un fichier,
-    un lien ou absent, y compris après échec ou interruption.
-  - **Vérifier :** matrices de profils et échecs avec outils isolés, empreintes et
-    mtimes des dépôts voisins avant/après ; pilotes `arrays`, `aff`, `js-promise-aff`,
-    puis **19/19 modules** réels dans un layout identifié.
-  - **Terminé lorsque :** l'orchestration commune a un propriétaire, chaque module
-    passe et son exécution conserve les profils et caches des autres checkouts.
-  - **Validé le 6 octobre 2026 :** 19 wrappers minces vers un runner commun ; chaque
-    invocation possède sa copie des sources, dépendances sœurs, profils et sorties.
-    Le `-c` natif reconstruit aussi le compilateur dans cette copie. Échecs et
-    interruptions conservent les artefacts ; annulation imbriquée qualifiée via `modtest`.
-    **101/101 contrôles d'outillage**, dont 42 contrôles natifs ; pilotes **3/3**,
-    modules réels **19/19** et reconstruction privée `partial -c` réussie.
-    Les **2 289 entrées d'origine hors modifications prévues**, les **482 entrées
-    PBO**, les 43 sources de production et le bundle installé sont préservés.
-    [Rapport C03](docs/validation/c03-2026-10-06.md),
-    [bilan JSON](docs/validation/c03-validation.json) et
-    [archive](../validation/c03-2026-10-06.tar.gz).
+L’analyse doit être conservatrice. Un échec d’analyse ne change jamais le
+résultat : il produit seulement une copie immutable.
 
-- [x] **C04 — 10 points** — Déterminer explicitement les dépendances des fixtures.
-  - Centraliser les recherches de sources de packages utilisées par les suites.
-  - Résoudre la version depuis les informations du workspace/lockfile ou un chemin
-    explicite, avec `PRELUDE_SRC` conservé. Diagnostiquer clairement une dépendance
-    absente ou une sélection ambiguë plutôt que choisir selon l'ordre de `readdir`.
-  - **Vérifier :** package unique, plusieurs versions, préfixes proches, source
-    absente, override avec espaces ; compiler les fixtures concernées et relever
-    les empreintes des sources effectivement choisies.
-  - **Terminé lorsque :** une même configuration sélectionne les mêmes sources,
-    indépendamment de l'ordre des entrées du répertoire.
-  - **Validé le 6 octobre 2026 :** résolution commune depuis les entrées résolues de
-    `spago.lock` ou une source explicite ; `PRELUDE_SRC` conservé et chemins vérifiés.
-    Cinq recherches dupliquées migrées ; erreurs de source, version et ambiguïté
-    diagnostiquées avant compilation. **35/35 contrôles de support**, dont 27 de
-    résolution ; **9/9 suites réelles** avant/après et avec caches multiversions
-    piégés. Override relatif avec espaces réussi ; override absent : aucun compilateur lancé.
-    **28 audits de compilation**, empreintes des sources choisies et **31 fichiers
-    F#/FSX identiques** dans les neuf suites. Les 2 308 entrées hors modifications
-    prévues, les 482 entrées PBO, les 43 sources de production et le bundle sont préservés.
-    [Rapport C04](docs/validation/c04-2026-10-06.md),
-    [bilan JSON](docs/validation/c04-validation.json) et
-    [archive](../validation/c04-2026-10-06.tar.gz).
+### Ce que l’analyse doit prouver
 
-- [x] **C05 — 15 points** — Achever la mutualisation mécanique des suites ciblées.
-  - Utiliser le support existant pour les commandes équivalentes et les appels au
-    Builder courant dans les suites ADT restantes ; garder les timeouts et options
-    propres aux compilations/execs concernées.
-  - Encadrer les changements de cwd et la conservation des artefacts : logs et
-    programme assemblé disponibles sur échec, cwd restauré, nettoyage explicite du temporaire.
-  - Conserver dans les suites leurs mutations, reconnaisseurs et oracles. Les
-    adaptateurs historiques continuent à utiliser leurs constructeurs/dictionnaires.
-  - **Vérifier :** suites touchées, échec de compilation et callback absent,
-    inventaires de mutations/assertions, programmes F# assemblés et fragments générés
-    identiques sur les entrées figées ; oracles historiques toujours rejouables.
-  - **Terminé lorsque :** les doublons mécaniques identifiés sont retirés et chaque
-    suite garde des assertions indépendantes ainsi que des diagnostics exploitables.
-  - **Validé le 6 octobre 2026 :** six suites migrées vers les commandes et le cycle
-    de vie communs ; Builder courant partagé, adaptateurs historiques conservés.
-    **46/46 contrôles de support**, **15/15 suites avant/après**, **16/16 scénarios
-    d'échec** avec cwd restauré et workspace/logs conservés. Les **15 commandes**,
-    **273 assertions**, **57 paires d'entrées mutées/originales** et **118 fichiers
-    générés** sont qualifiés ; seul l'ordre des lignes de progression de `purs` varie.
-    Oracle FFI : **105 sorties identiques**. L'oracle constructeur du 9 septembre
-    reproduit avant/après un écart préexistant d'une ligne de message d'exception,
-    explicitement conservé comme échec historique. Sources, bundle et PBO préservés.
-    [Rapport C05](docs/validation/c05-2026-10-06.md),
-    [bilan JSON](docs/validation/c05-validation.json) et
-    [archive](../validation/c05-2026-10-06.tar.gz).
+Pour un paramètre ou une valeur intermédiaire `x` :
 
-- [x] **C06 — 10 points** — Clarifier les templates du chemin optimisé boxed.
-  - Réutiliser `Boxed.lambda` pour les lambdas du chemin `Optimized`, en conservant
-    la construction de l'AST et le rendu à leur frontière respective.
-  - Donner un propriétaire commun au nom local `sharpurs_o_` produit et consommé
-    de part et d'autre de la frontière des noyaux Int locaux.
-  - Examiner les quelques littéraux encore assemblés dans `Optimized` ; conserver
-    leurs parenthèses et adaptations exactes lors de leur déplacement éventuel.
-  - **Vérifier :** `local-kernel`, `kernel`, `selection`, `printer`, `recursion` et
-    les assertions PureScript ; mêmes admissions/rejets, niveaux lexicaux et appels.
-    Comparer les générations complètes b8x/natives sur entrées figées.
-  - **Terminé lorsque :** la duplication visée est retirée, avec textes générés
-    identiques et mêmes comportements de portée, récursion et exceptions.
-  - **Validé le 6 octobre 2026 :** lambdas et boxing Int partagés avec `Boxed` ;
-    `Names.optimizedLocal` possède le nom lexical des deux côtés de la frontière.
-    Builds sans avertissement/erreur, **49 assertions PureScript**, **5/5 suites
-    avant/après**, **245 assertions JS** et quatre programmes F# assemblés identiques.
-    **20/20 générations complètes**, b8x en premier : **2 740 fichiers b8x** et
-    **4 399 fichiers natifs** identiques, avec mêmes inventaires et mtimes en
-    incrémental et à vide, puis génération propre identique. Les **80 processus**
-    réussissent sur entrées figées ; sources externes, profils et bundle installé préservés.
-    [Rapport C06](docs/validation/c06-2026-10-06.md),
-    [bilan JSON](docs/validation/c06-validation.json) et
-    [archive](../validation/c06-2026-10-06.tar.gz).
+- `x` n’est pas aliasé par une autre variable vivante ;
+- `x` n’est pas stocké dans un champ partagé, une closure ou une valeur FFI ;
+- `x` n’est pas utilisé après une opération qui pourrait l’observer ;
+- toutes les lectures de `x` sont compatibles avec une mutation en place ;
+- le résultat de la mutation n’est pas observable via une ancienne référence.
 
-- [x] **C07 — 5 points** — Nettoyer les résidus identifiés et actualiser les guides.
-  - Inventorier les scripts/helpers devenus sans appelant après C01–C06 et les
-    sorties générées encore suivies ; vérifier leurs usages avant tout retrait.
-  - Mettre à jour les règles d'ignore et les propriétaires des répertoires de travail.
-    Conserver les fixtures maintenues et les archives de validation.
-  - Mettre à jour les commandes publiques, profils natifs, reprise, artefacts et
-    carte des responsabilités ; relier les rapports de ce cycle à leurs preuves.
-  - **Vérifier :** inventaires avant/après, références aux fichiers retirés, liens
-    locaux de documentation, `git diff --check` et les commandes de replay modifiées.
-  - **Terminé lorsque :** les résidus réellement identifiés sont traités et les
-    guides permettent de reproduire les nouveaux chemins. Consigner aussi un
-    inventaire sans suppression si aucun fichier supplémentaire n'est obsolète.
-  - **Validé le 6 octobre 2026 :** 46 scripts/supports, 40 définitions exportées,
-    19 wrappers et 2 304 chemins suivis inventoriés ; aucun résidu obsolète ni
-    sortie générée suivie identifié. Les fixtures et 33 overrides natifs restent
-    des entrées maintenues. Ignore `.purmeta/`, propriétaires des workspaces,
-    commandes de reprise et index des preuves C01–C07 actualisés. **101/101
-    contrôles d’outillage**, **46/46 de support**, pilote natif `partial` réussi,
-    suite projet : sept phases et onze cas d’I/O. Inventaires, liens locaux,
-    règles d’ignore, préservation des sources et archives vérifiés.
-    [Rapport C07](docs/validation/c07-2026-10-06.md),
-    [bilan JSON](docs/validation/c07-validation.json) et
-    [archive](../validation/c07-2026-10-06.tar.gz).
+L’analyse est **inter-procédurale légère** :
 
-- [x] **C08 — 15 points** — Qualifier et clôturer le cycle sur les sources finales.
-  - Figer révisions, modifications locales, outils, dépendances, bundles et entrées.
-    Rejouer l'agrégateur complet, les fixtures CLI et les modules natifs.
-  - Référence de départ : **23 suites ciblées**, **49 assertions PureScript**,
-    **22 tests d'outillage**, **359 fixtures CLI actives**, **7 exclusions** et
-    **19 modules natifs**. Relever les inventaires finaux et expliquer leurs écarts.
-  - Recompiler b8x `Test.Main`, construire en Release et réussir **286/286 tests
-    dans dix processus successifs**, avec contrôle des bases temporaires résiduelles.
-  - Ensuite, rejouer le véritable `App.main` des benchmarks dans **trois processus** :
-    **14/14 résultats**, mêmes noms/ordre et totaux cohérents avec leur arrondi.
-  - Finaliser les comparaisons de génération b8x/natives et les contrôles des caches,
-    profils et entrées préservés ; conserver les échecs et leurs reprises attribuées.
-  - **Terminé lorsque :** C01–C07 sont validées, tous les résultats demandés sont
-    qualifiés, rapport/JSON/archive sont liés et les empreintes de l'archive vérifiées.
-    Le score devient alors **100/100 — 100 %**.
-  - **Validé le 19 octobre 2026 :** agrégateur **27/27** en 4 634,68 s — 23 suites,
-    49 assertions, 101/101 outillage, 46/46 support, **359/359 fixtures** et sept
-    exclusions. b8x recompilé à partir du TAST courant : **2 703 modules**, puis
-    **287/287 tests dans 10/10 processus**, assembly identique et bases temporaires
-    vides. Benchmarks réels : **3/3 processus**, **14/14 résultats**, noms/ordre et
-    total validés. Natifs : **19/19 modules**. Comparaison complète
-    avant/après/propre : **7 158 fichiers et 6 248 modules identiques** (b8x + 19
-    natifs), zéro différence. Les **64 116 fichiers** initiaux conservent leurs
-    octets/mtimes ; 43 sources de production inchangées. Deux reprises attribuées
-    (Argonaut b8x supprimé en amont, modules de test hors profil benchmark) et
-    archives C01–C07 absentes avant la passe sont consignées. Le bundle final
-    déterministe est `eeec4432…`.
-    [Rapport C08](docs/validation/c08-2026-10-19.md),
-    [bilan JSON](docs/validation/c08-validation.json) et
-    [archive](../validation/c08-2026-10-19.tar.gz).
+- résumé par fonction : paramètres uniques, paramètres échappants, résultat
+  frais ou aliasé ;
+- propagation dans les appels directs ;
+- fallback immédiat pour les appels indirects, les fermetures et les imports
+  non analysés.
 
-## Post-C08 — optimisation mesurée
+## Architecture cible
 
-Cette section est **hors score C01–C08** ; le score historique reste **100/100**.
-Les mesures de performance utilisent des processus séparés et des builds terminés.
+```text
+TAST source (Ann, types, dataDecls, rows)
+        │
+        ├── Native.Layout      → types natifs, champs, constructeurs, records
+        ├── Native.IR          → expressions natives typées
+        ├── Native.Pattern     → patterns multi-champs / OR-patterns
+        ├── Native.Usage       → nombre d’usages, échappement, alias
+        ├── Native.Ownership   → résumés d’unicité par binding
+        ├── Native.Interprocedural → résumés inter-procéduraux
+        ├── Native.Reuse       → réécriture en place / destination-passing
+        ├── Native.Lower       → sélection et traduction
+        └── Native.Emit        → F# natif + wrappers boxés aux frontières
 
-- [x] **P01 — Scheduler `Aff` borné et fiable.**
-  Remplacer le démarrage synchrone des fibres par un scheduler à contexte borné,
-  conserver les continuations suspendues, l’annulation, les superviseurs et la
-  finalisation. Le harnais signale les échecs via le code de sortie du processus.
-  **Validé :** `sharpurs-aff` 6/6 passes, 100 000 `forkAff` et `parallel/stack`,
-  **19/19** modules natifs, b8x **287/287** dans **10/10** processus.
-  Sources : [`sharpurs-aff/src/Effect/Aff.fs`](../sharpurs-aff/src/Effect/Aff.fs),
-  [`sharpurs-aff/test/Test/Main.purs`](../sharpurs-aff/test/Test/Main.purs).
-- [x] **P02 — Kernel `Int` non terminal.**
-  Admettre les auto-appels récursifs en position non terminale et les émettre en
-  appels `int` natifs, sans modifier l’ABI publique boxée.
-  **Validé :** `fib 42` généré de **9,29 s / 69,5 Go d’allocations** à **0,56 s /
-  0 allocation** ; `Parallelism` de **64,36 s** à **0,493 s** ; total `srx` de
-  **65,16 s** à **1,249 s**. Compilateur **24/24**, natifs **19/19**, b8x
-  **287/287 × 10**. Sources : [`IntKernel.purs`](src/Sharpurs/IntKernel.purs),
-  [`IntKernel/CodeGen.purs`](src/Sharpurs/IntKernel/CodeGen.purs).
-- [x] **P03 — Rafraîchir le tableau principal F#/C#.**
-  Rejouer `sharp-pure`, `sharp-ffi` et `sharp-fficc` sur le bundle courant, avec
-  `-p:Optimize=true`, puis mettre à jour les trois colonnes Sharpurs, les totaux
-  et les ratios `/C` de [`altbak.pub/README.md`](../../altbak.pub/README.md).
-  Vérifier en priorité `Fibonacci`, dont la valeur actuelle précède P02.
-  **Validé le 20 octobre 2026 :** `sharp-pure` **52,78 ms** (`/C = 5,5x`),
-  `sharp-ffi` **70,21 ms** (`/C = 7,3x`), `sharp-fficc` **12,10 ms**
-  (`/C = 1,3x`). `Fibonacci` passe à **0,33 μs** et `Ackermann` à **7,70 μs** ;
-  les trois runs sont validés par le driver Sharpurs.
-- [ ] **P04 — Optimiser les outliers confirmés.**
-  Après P03, profiler les postes encore éloignés du F# manuel (`List Processing`,
-  `Deep Record Updates`, `Church Numerals`, `Lazy Evaluation`, `Red-Black Tree`)
-  et n’implémenter que les optimisations justifiées par les mesures. Conserver les
-  calculs, noms, ordre et résultats des benchmarks.
-  **Écarts mesurés après P03 (Sharpurs pur / F# manuel) :** List **489,57 / 3,05 μs**,
-  Deep Record **2 533,49 / 7,21 μs**, Church **2 192,89 / 25,24 μs**,
-  Prime Sieve **594,22 / 1,80 μs**, Red-Black **38 666,25 / 9 499,96 μs**.
-  `Ackermann`, `Polymorphism` et `TCO` sont déjà au niveau attendu.
-- [ ] **P05 — Qualifier l’async sur b8x réel.**
-  Mesurer PostgreSQL/RabbitMQ en processus séparés (débit, latences, allocations,
-  GC, threads, continuations), puis valider fonctionnellement `Test.Main` et les
-  résultats applicatifs avant toute conclusion de performance.
+FFI / unités non prouvées ──► adaptateurs boxés existants
+```
 
-## Journal de validation
+Principes :
 
-| Date | Passe | Résultats et preuves | Score cumulé |
-| --- | --- | --- | --- |
-| 5 octobre 2026 | C01 | `bash -n bin/test`, `npm run test:tools` : 43/43 ; deux sélections réelles : 3/3. Sources, commandes, défauts historiques et empreintes dans le [rapport](docs/validation/c01-2026-10-05.md). | **15/100 — 15 %** |
-| 5 octobre 2026 | C02 | `node --check`, `npm run test:tools` : 59/59 ; 23 traces équivalentes, huit interruptions qualifiées, listing des 19 modules et natif `partial` réussi. Sources et preuves dans le [rapport](docs/validation/c02-2026-10-05.md). | **25/100 — 25 %** |
-| 6 octobre 2026 | C03 | 19 wrappers communs et workspaces privés ; `npm run test:tools` : 101/101, pilotes 3/3, modules 19/19 et `partial -c` réussi. Profils, caches et entrées préservés ; sources et preuves dans le [rapport](docs/validation/c03-2026-10-06.md). | **45/100 — 45 %** |
-| 6 octobre 2026 | C04 | Résolution des sources par lockfile/override ; support 35/35, neuf suites 9/9 sur caches normaux et piégés, override avec espaces, 28 audits de sources et 31 fichiers F#/FSX identiques. Sources et preuves dans le [rapport](docs/validation/c04-2026-10-06.md). | **55/100 — 55 %** |
-| 6 octobre 2026 | C05 | Six suites mutualisées ; support 46/46, suites 15/15 avant/après, 16 échecs qualifiés, 273 assertions et 57 paires de mutations conservées, 118 fichiers identiques. Oracle FFI réussi et écart constructeur historique attribué dans le [rapport](docs/validation/c05-2026-10-06.md). | **70/100 — 70 %** |
-| 6 octobre 2026 | C06 | Templates boxed et nom lexical partagés ; builds propres, 49 assertions PureScript, cinq suites, 245 assertions JS et quatre programmes identiques. b8x + 19 natives : 7 139 fichiers identiques, générations incrémentales/propre/à vide qualifiées dans le [rapport](docs/validation/c06-2026-10-06.md). | **80/100 — 80 %** |
-| 6 octobre 2026 | C07 | Inventaire sans suppression : 46 scripts/supports, 19 wrappers, 2 304 chemins suivis ; ignore et guides actualisés. Outillage 101/101, support 46/46, pilote natif et sept phases projet réussis ; inventaires, liens et preuves dans le [rapport](docs/validation/c07-2026-10-06.md). | **85/100 — 85 %** |
-| 19 octobre 2026 | C08 | Agrégateur 27/27, 359/359 fixtures ; b8x 287/287 dans dix processus, benchmarks 14/14 dans trois processus, natifs 19/19 et générations 7 158 fichiers identiques. Reprises attribuées et 64 116 entrées préservées ; [rapport](docs/validation/c08-2026-10-19.md). | **100/100 — 100 %** |
+- **Source d’abord** : les patterns et les types viennent du TAST, pas de la
+  reconstruction `NeutralExpr`.
+- **Natif à l’intérieur** : les fonctions internes manipulent les types F# natifs.
+- **Boxé aux frontières** : exports de modules, FFI, valeurs inconnues et
+  callbacks non prouvés gardent l’ABI `obj`.
+- **Fallback obligatoire** : toute forme non prouvée revient au backend actuel ;
+  aucun module ne doit être perdu.
+- **Sémantique préservée** : une mutation n’est autorisée que si aucune
+  observation d’une ancienne valeur ne peut la distinguer d’une copie.
+- **Aucune règle liée au nom d’un benchmark** : le backend ne connaît que des
+  types, des layouts, des usages et des patterns.
 
-## Recalculer le pourcentage
+## Découpage en chantiers
 
-Depuis `htdocs` :
+### N00 — Figer et instrumenter la baseline
+
+- [x] Conserver le tableau actuel : pure **52,78 ms**, FFI **70,21 ms**,
+      FFICheatcode **12,10 ms**.
+- [ ] Rejouer `sharp-pure` dans un processus séparé et enregistrer les 14 lignes.
+- [ ] Ajouter un manifeste de mesures : commande, cwd, bundle, hash d’assembly,
+      temps, allocations/GC, threads.
+- [ ] Vérifier que le benchmark reste inchangé (calculs, noms, ordre, valeurs).
+- [ ] Archiver les artefacts baseline et les trois chemins de référence.
+
+**Sortie :** baseline reproductible et protégée avant toute modification.
+
+### N01 — Modèle de types natifs (premier incrément ADT)
+
+- [x] Créer `Native/Types.purs` : `NativeType` pour `Int`, `Boolean`, `String`,
+      ADT locale, fonction et `Boxed`.
+- [x] Créer `Native/Layout.purs` : lecture des `dataDecls`, champs, constructeurs
+      et groupes récursifs.
+- [ ] Ajouter les records fermés et les rows statiques.
+- [ ] Conserver les types ouverts, étrangers et ambigus en `Boxed`.
+- [ ] Définir les règles de compatibilité avec l’ABI `obj` actuelle.
+- [x] Tester les layouts sur des ADT monomorphes, récursifs et imbriqués.
+- [ ] Vérifier qu’un layout refusé ne modifie aucune sortie générée.
+
+**Sortie :** représentation de types prouvée, sans changement de comportement.
+
+### N02 — IR natif et compilateur de patterns
+
+- [x] Créer `Native/IR.purs` : variables, littéraux, applications, lambdas,
+      `let`, `case`, constructeurs, projections et primitives.
+- [x] Créer `Native/Pattern.purs` : patterns multi-champs, constructeurs
+      imbriqués, littéraux, variables et wildcards.
+- [x] Compiler depuis `Expr Ann` en conservant les annotations et les types de
+      champs.
+- [ ] Ajouter guards et OR-patterns.
+- [ ] Préserver l’ordre d’évaluation, les applications partielles, le partage et
+      la saturation.
+- [ ] Ne pas introduire de liage eager de champs : les échecs CSE/patterns l’ont
+      montré.
+- [x] Compiler les primitives `Int` reconnues (`+`, `-`, `mod`, comparaisons)
+      sans passer par les dictionnaires boxés.
+- [ ] Refuser explicitement les guards non prouvés, les records ouverts, les
+      `TypeApp` non résolus et les fonctions non couvertes.
+
+**Sortie :** un IR natif testé indépendamment du rendu F#.
+
+### N03 — Émission native, route module et frontière boxée
+
+- [x] Créer `Native/Emit.purs` : types ADT, patterns, expressions, définitions,
+      constructeurs et wrappers boxés.
+- [x] Générer les wrappers `obj -> obj` uniquement pour les exports/FFI.
+- [x] Créer `Native/Module.purs` et compiler un module ADT entièrement natif.
+- [x] Brancher la route `Native.Module` dans `Main` avant `AdtKernel`.
+- [ ] Adapter les groupes récursifs et les appels croisés sans wrapper inutile.
+- [ ] Préserver les frontières d’exception, les tail calls et les applications
+      partielles.
+- [ ] Garder `AdtKernel` et `IntKernel` comme fallback et oracle de régression.
+- [ ] Tests ciblés : arités, ordre des arguments, constructeurs nullaires,
+      récursion mutuelle, exceptions.
+
+**État :** la route `Native.Module` est active pour les modules sans FFI dont
+toutes les fonctions sont supportées ; RBTree garde le fallback ADT. Les
+**24 suites compilateur** passent. L’overlay mixte précédent a été retiré.
+
+### N04 — Unicité, réutilisation en place et RBTree
+
+C’est le chantier central pour approcher les implémentations impératives.
+
+#### N04.1 — Analyse d’usage et d’échappement (premier incrément, 21 octobre 2026)
+
+- [x] Créer `Native/Usage.purs`.
+- [x] Compter les usages de chaque variable et paramètre.
+- [x] Détecter l’échappement de base vers constructeur, argument d’appel et
+      valeur boxée.
+- [ ] Détecter l’échappement vers closure, record, FFI ou valeur globale.
+- [ ] Détecter les alias créés par `let`, patterns, appels et retours.
+- [x] Produire un résumé par fonction : paramètres uniques / partagés et
+      résultat frais.
+- [x] Tester les cas positifs et négatifs sur des lectures indépendantes,
+      champs répétés et arguments d’appel.
+
+**Premier incrément livré :** `Native.Usage` compte les lectures et marque
+l’échappement conservateur ; `Native.Ownership` produit les résumés par binding.
+Les tests couvrent deux lectures indépendantes, un champ de constructeur répété,
+un argument d’appel, un paramètre unique et un résultat frais. L’échappement
+vers closure, record et FFI restent à compléter ; l’analyse inter-procédurale
+est désormais disponible dans `Native.Interprocedural` et consommée par
+`Native.Reuse`/`Native.MutableModule`.
+
+#### N04.2 — Réécriture en place et émission mutable (21 octobre 2026)
+
+- [x] Créer `Native/Reuse.purs`.
+- [x] Repérer les reconstructions de constructeurs qui remplacent un nœud unique.
+- [x] Réécrire ces reconstructions en `NativeReuse` quand l’unicité est prouvée.
+- [x] Prototyper `Native.Mutable` avec des champs `ref`, puis remplacer ce
+      prototype par des classes F# à champs mutables, des active patterns
+      `*_match` et des fonctions `*_reuse`.
+- [ ] Utiliser un mode destination-passing pour `buildTree`/accumulateurs.
+- [x] Générer une copie immutable si l’unicité n’est pas prouvée dans
+      l’émetteur mutable.
+- [ ] Préserver les tail calls et l’ordre d’évaluation sur le chemin mutable.
+- [x] Refuser la mutation d’un paramètre, d’un scrutinee répété et d’une
+      capture de closure.
+- [x] Refuser l’alias par une ancienne référence (`let old = t`) dans l’analyse.
+- [x] Ajouter `tests/native-mutable.mjs` : F# réel, mutation fraîche, fallback copie
+      et préservation de l’ancienne feuille.
+- [x] Brancher `Native.Mutable` dans `Native.MutableModule` pour les modules
+      entièrement natifs.
+- [ ] Activer un module mixte pure natif + effets génériques : implémenté,
+      optimisé en accès directs, mais toujours plus lent que le kernel ADT.
+- [ ] Réactiver `Native.MutableModule` dans `Main` : retiré pour préserver la
+      baseline après les mesures 138–142 ms.
+
+**Incrément livré :** `Native.Reuse` détecte et réécrit les candidats en
+`NativeReuse`. `Native.Mutable` émet désormais des classes F# à champs mutables,
+des active patterns `*_match` et des fonctions `*_reuse` avec fallback copie.
+Un probe F# a compilé et exécuté le code généré (`let result = ...` → `2`).
+`Native.MutableModule` est actif pour les modules entièrement natifs.
+Les paramètres, scrutinees répétés, alias par ancienne référence et captures
+de closure sont exclus de la mutation. Le test F# `tests/native-mutable.mjs`
+vérifie la mutation fraîche, le fallback copie et la préservation de l’ancienne
+feuille.
+Le mixed RBTree a été implémenté mais désactivé : même avec la réutilisation par
+branche et des `_reuse` générés, il produit **~138–142 ms** contre **~39,9 ms**
+pour le fallback ADT. Le remplacement des active patterns par des tests directs
+`Tag`/`FieldN` ramène ce prototype à **~69 ms**, ce qui confirme le coût des
+active patterns (microbench : **26 ms vs 293 ms** sur 50 M itérations), mais
+reste au-dessus du kernel ADT. Les routes mutables sont retirées de `Main` ;
+le README n’est pas modifié.
+
+#### N04.3 — RBTree et inter-procédural
+
+**Résultat décisif (22 octobre 2026) :** un prototype F# manuel à classes spécialisées, sentinelle nullaire et rotations réellement en place mesure **14,1–17,6 ms** pour 100 000 insertions (depth 22), contre **~39,9 ms** pour le kernel ADT. La cible **≤ 20 ms** est donc atteignable ; **12 ms** reste un objectif ambitieux mais crédible. Le prototype utilise des accès directs, pas d’active patterns.
+
+### Frontière automatique, sans option
+
+La mutation ne doit pas dépendre d’un mode `closed-world` fourni par l’utilisateur. Le compilateur possède déjà toutes les frontières nécessaires :
+
+- les implémentations natives mutables et les `*_reuse` sont **privées**
+  (`let private`) ;
+- les noms publics restent des **wrappers boxés** ;
+- un appel interne au même module utilise directement l’implémentation privée ;
+- un appel inter-module ou FFI traverse le wrapper public, qui traite la valeur
+  comme partagée/copie ;
+- aucune détection d’appelants externes n’est nécessaire pour être correct.
+
+**Premier incrément :** `Native.Mutable` émet les définitions natives et les
+`*_reuse` en `private`; les wrappers publics restent la seule frontière. Tests
+natifs et `tests/native-mutable.mjs` passent.
+
+Ainsi `balance`/`ins` peuvent être mutables à l’intérieur de RBTree, tandis que les exports restent sûrs : ils ne peuvent pas exposer directement une mutation à un appelant inconnu.
+
+Conséquence : la priorité passe de « comment émettre des classes » à « comment prouver la mutation en place dans le compilateur » :
+- classe spécialisée par constructeur avec champs mutables directs ;
+- constructeur nullaire interne représenté par une sentinelle ;
+- patterns compilés en tests de type/nullité + accès champs ;
+- réutilisation en place des nœuds uniques pour `balance`/`ins` ;
+- conversion vers l’ABI boxée aux frontières uniquement.
+
+
+- [x] Créer `Native/Interprocedural.purs` : résumés par fonction, paramètres
+      mutables privés et résultat frais.
+- [x] Refuser les fonctions exportées et les arguments non prouvés.
+- [x] Consommer ces résumés dans `Native.Reuse`/`Native.MutableModule`.
+- [x] Créer `Native/Specialized.purs` : une classe par constructeur, base
+      abstraite, type tests directs, constructeurs et `_reuse` privés.
+- [x] Brancher `Native/Specialized` dans `Native.MutableModule`.
+- [ ] Brancher le module mixte dans `Main` de façon stable.
+- [ ] Implémenter les rotations en place complètes de `balance`/`ins`.
+- [ ] Écrire la réécriture rotation-aware de `balance`/`ins`, pas seulement le
+      `_reuse` du nœud racine.
+- [ ] Propager l’unicité dans `buildTree`/`insert`/`ins` sur RBTree.
+- [ ] Mesurer le chemin mutable RBTree.
+
+**Premier incrément livré :** `Native.Interprocedural` calcule un point fixe de
+résumés sur des fonctions natives. Les tests couvrent un paramètre privé
+mutable, un export refusé, un appelant partagé refusé et un résultat frais.
+L’analyse est consommée par `Native.Reuse.rewriteWith` et `Native.MutableModule` :
+un paramètre n’est muté que si le résumé inter-procédural le permet. Un prototype
+`compileMixed` reprend les bindings non supportés via `CodeGen.translateBind`.
+La réutilisation par branche génère bien des appels `T_reuse`. Le prototype
+classes/active patterns est à **~138 ms** ; l’émetteur direct `Tag`/`FieldN` le
+ramène à **~69 ms**. L’émetteur `Native.Specialized` (classes par constructeur)
+descend le mixed à **~57,8 ms**, toujours au-dessus du kernel ADT (~39,9 ms).
+Une tentative d’utiliser toutes les variables de pattern comme cibles `_reuse`
+(objets boxés) remonte à **~102 ms** et a été rejetée. Avec des cibles typées,
+la mesure reste à **~99,3 ms** : la réutilisation générique de sous-arbres ne
+suffit pas. L’artefact montre surtout des conditions de pattern énormes avec
+casts `:?>`/`:?` répétés ; le prototype manuel utilise des accès compacts.
+La prochaine optimisation doit donc compacter la compilation des patterns
+(nested matchs/field bindings) avant d’ajouter les rotations complètes.
+Une première version compacte a été écrite mais provoque un **stack overflow**
+dans `ins`/`balance` ; elle est rejetée et ne doit pas être activée. Un prototype F# manuel à
+classes spécialisées avec rotations réellement en place mesure **14,1–17,6 ms** :
+la spécialisation seule ne suffit pas, les rotations complètes restent la pièce
+manquante. Le mixed et les routes mutables sont désactivés.
+
+- [ ] Compiler `Color`, `Tree`, `balance`, `ins`, `makeBlack`, `insert`,
+      `buildTree` et `depth`.
+- [ ] Activer la mutation en place de `balance`/`ins` pour les arbres uniques.
+- [ ] Comparer trois mesures : immutable natif, unique/en place, FFICheatcode.
+- [ ] Mesurer code généré, temps, allocations, GC et taille de l’assembly.
+- [ ] Rejouer les suites ADT et le benchmark RBTree à chaque étape.
+
+**Cibles :**
+
+1. parité avec le F# immutable : **RBTree ≤ 36,66 ms** ;
+2. réutilisation en place sûre : **RBTree ≤ 20 ms** ;
+3. objectif avancé : **RBTree ≤ 10 ms** si le coût des copies restantes le
+   permet.
+
+Si l’étape 2 échoue, le backend doit conserver l’étape 1 et documenter le
+plafond immutable.
+
+### N05 — Records statiques
+
+Cible : **Deep Record ≤ 100 μs**, puis proche de 7 μs.
+
+- [ ] Étendre `Native.Layout` aux records fermés.
+- [ ] Générer des records F# avec champs natifs.
+- [ ] Traduire littéraux, accès et mises à jour de records.
+- [ ] Réutiliser `Native.Ownership` pour les mises à jour de records uniques.
+- [ ] Conserver les records ouverts et les valeurs FFI en `Map`/`Boxed`.
+- [ ] Vérifier l’ordre d’évaluation, le partage, l’identité et les mises à jour
+      imbriquées.
+- [ ] Tester un record récursif, un record imbriqué et un record mis à jour
+      plusieurs fois.
+
+**Sortie :** élimination de `Map<string,obj>` sur les records fermés prouvés.
+
+### N06 — ADT polymorphes et structures allouantes
+
+Cible : **List ≤ 20 μs**, **Prime Sieve ≤ 10 μs**.
+
+- [ ] Spécialiser les ADT polymorphes utilisés à un seul type concret
+      (`List Int`) lorsque le graphe d’appels le prouve.
+- [ ] Monomorphiser localement les constructeurs, `range`, `filter`, `foldl` et
+      les fonctions intermédiaires nécessaires.
+- [ ] Réutiliser les listes uniques pour les parcours destructifs prouvés.
+- [ ] Garder l’ABI boxée aux points d’entrée non spécialisables.
+- [ ] Vérifier les résultats exacts du crible et les propriétés de partage.
+- [ ] Mesurer le coût de la spécialisation et le budget de compilation.
+
+**Sortie :** ADT polymorphes spécialisés sans casser les modules génériques.
+
+### N07 — Church, Lazy et appels dynamiques
+
+Cible : **Church ≤ 100 μs**, **Lazy ≤ 500 μs**.
+
+- [ ] Utiliser les types de fonctions prouvés pour les applications directes.
+- [ ] Réduire les conversions `box`/`unbox` dans les boucles.
+- [ ] Supprimer les `sharpurs_apply` quand la cible est connue et complètement
+      appliquée.
+- [ ] Conserver les fermetures et les thunks lorsque la cible est inconnue.
+- [ ] Tester les fermetures partielles, la réutilisation et les exceptions.
+
+### N08 — Validation finale et tableau
+
+Cible finale : **total pur ≤ 12,5 ms** si la réutilisation en place et les
+spécialisations sont prouvées sur toutes les lignes. Sinon, publier un plafond
+immutable explicite et ne pas maquiller la colonne.
+
+- [ ] Vérifier les 14 lignes, les valeurs, les noms et l’ordre.
+- [ ] Remesurer `sharp-pure`, `sharp-ffi`, `sharp-fficc` séparément.
+- [ ] Mettre à jour le tableau `src`, les totaux et les ratios `/C`.
+- [ ] Vérifier qu’aucune ligne ne régresse sans attribution.
+- [ ] Conserver un rapport de mesures et les commandes de replay.
+- [ ] Documenter clairement la différence entre référence mutable et pur
+      immutable.
+
+## Jalons
+
+| Jalon | Contenu | Résultat mesurable |
+|---|---|---:|
+| J0 | Baseline figée | pure 52,78 ms |
+| J1 | Layout + IR + module natif | aucun changement de sortie |
+| J2 | RBTree natif immutable | RBTree ≤ 36,66 ms |
+| J3 | Usage/ownership | analyse sans régression sémantique |
+| J4 | Réutilisation en place RBTree | RBTree ≤ 20 ms |
+| J5 | RBTree avancé | RBTree ≤ 10 ms si possible |
+| J6 | Records statiques + uniques | Deep Record ≤ 100 μs |
+| J7 | ADT polymorphes | List/Prime fortement réduits |
+| J8 | Church/Lazy | total ≤ 20 ms |
+| J9 | Validation finale | **total ≤ 12,5 ms** ou plafond documenté |
+
+Le jalon 9 est un objectif conditionné à l’unicité prouvée sur les structures
+chaudes. 12,10 ms reste un oracle de coût, pas une obligation de résultat.
+
+## Validation
+
+Chaque jalon doit passer :
+
+- 25 suites compilateur ;
+- 19 modules natifs ;
+- b8x `Test.Main` **287/287** dans **10 processus** ;
+- aucune régression des calculs, noms, ordre ou résultats du benchmark ;
+- comparaison des sorties générées et des fallbacks ;
+- tests de renommage des modules/fonctions pour prouver l’absence de règle
+  benchmark-specific ;
+- contrôle des applications partielles, du TCO, des exceptions, du partage et de
+  l’ordre d’évaluation ;
+- tests d’alias :
+  - deux références au même arbre avant mise à jour ;
+  - arbre stocké dans un record/une liste ;
+  - paramètre passé à une closure puis réutilisé ;
+  - valeur traversant une frontière FFI ;
+  - ancienne valeur lue après une opération « unique » ;
+- mesures dans des processus séparés, builds terminés.
+
+## Livrables
+
+- `src/Sharpurs/Native/Types.purs`
+- `src/Sharpurs/Native/Layout.purs`
+- `src/Sharpurs/Native/IR.purs`
+- `src/Sharpurs/Native/Pattern.purs`
+- `src/Sharpurs/Native/Usage.purs`
+- `src/Sharpurs/Native/Interprocedural.purs`
+- `src/Sharpurs/Native/Ownership.purs`
+- `src/Sharpurs/Native/Reuse.purs`
+- `src/Sharpurs/Native/Lower.purs`
+- `src/Sharpurs/Native/Emit.purs`
+- `src/Sharpurs/Native/Mutable.purs`
+- `src/Sharpurs/Native/Specialized.purs`
+- `src/Sharpurs/Native/Module.purs`
+- tests dédiés `tests/native-*.mjs`
+- documentation du modèle d’unicité et des limites de copie
+- mise à jour de `docs/compiler.md`, `docs/testing.md` et du README
+
+## Risques
+
+- Complexité du graphe de types et des groupes récursifs.
+- Alias non détecté : mutation observable d’une ancienne valeur.
+- Échappement vers closure, record, ADT, FFI ou valeur globale.
+- Réentrance, exceptions et ordre d’évaluation pendant une mutation.
+- Compatibilité de l’ABI boxée avec les FFI existantes.
+- Croissance du code généré et temps de JIT.
+- Spécialisation polymorphe trop large ou non bornée.
+- Mesures instables si les builds ou processus se chevauchent.
+
+En cas d’échec d’un layout, d’un pattern ou d’une preuve d’unicité, le backend
+doit revenir au chemin immutable/copie sans changer le résultat observable.
+
+## Commandes de travail
 
 ```bash
-python3 - <<'PY'
-from pathlib import Path
-import re
+# Baseline pure, processus séparé
+./bin/sharp/run > "$EVIDENCE/sharp-pure.log" 2>&1
 
-text = Path("sharpurs/todo.md").read_text()
-passes = re.findall(r"^- \[([ xX])\] \*\*(C\d{2}) — (\d+) points\*\*", text, re.M)
-assert [key for _, key, _ in passes] == [f"C{i:02d}" for i in range(1, 9)]
-total = sum(int(weight) for _, _, weight in passes)
-assert total == 100
-done = sum(int(weight) for state, _, weight in passes if state.lower() == "x")
-count = sum(state.lower() == "x" for state, _, _ in passes)
-print(f"Avancement : {done}/{total} points = {done / total:.0%}")
-print(f"Passes terminées : {count}/{len(passes)}")
-PY
+# Tests ciblés
+./bin/modtest --all
+npm test -- --skip-build --artifacts "$EVIDENCE/compiler-suites"
+
+# b8x après stabilisation
+# rejouer le runner b8x privé utilisé pour la validation
 ```
+
+Toutes les expériences doivent être mesurées, réversibles et attribuées. Aucun
+changement de performance non prouvé ne doit rester dans le dépôt.

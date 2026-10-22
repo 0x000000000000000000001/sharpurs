@@ -29,6 +29,7 @@ import Sharpurs.CLI as CLI
 import Sharpurs.CodeGen (translateOptimizedModuleWithThunks)
 import Sharpurs.Ffi as Ffi
 import Sharpurs.Metrics as Metrics
+import Sharpurs.Native.Module as NativeModule
 import Sharpurs.Names as Names
 import Sharpurs.Printer (printModule)
 import Sharpurs.Project as Project
@@ -97,9 +98,17 @@ type EmitContext =
 
 emitModule :: EmitContext -> Module Ann -> BackendModule -> Aff Project.ModuleFiles
 emitModule context source optimized = do
+  let name = unwrap optimized.name
+  case NativeModule.compile source of
+    Just nativeModule -> do
+      _ <- liftEffect (Ref.modify (Set.union (Set.fromFoldable (NativeModule.constructorNames source))) context.nativeConstructors)
+      ffi <- Ffi.loadModule context.ffiDirectory source
+      Project.writeModule name ffi (printModule nativeModule)
+    Nothing -> emitFallback context name source optimized (AdtKernel.prepareModule source optimized)
+
+emitFallback :: EmitContext -> String -> Module Ann -> BackendModule -> Maybe AdtKernel.AdtModule -> Aff Project.ModuleFiles
+emitFallback context name source optimized native = do
   let
-    name = unwrap optimized.name
-    native = AdtKernel.prepareModule source optimized
     thunks = ThunkKernel.prepareModule source optimized
   -- The builder visits dependencies first. Register a producer only after its
   -- layout and constructor wrappers pass validation, before its mixed bindings.
