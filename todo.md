@@ -600,8 +600,10 @@ Validation finale :
 - tests natifs : copie profonde, alias, rotation réelle et préservation de
   l’ancienne racine (`tests/native-mutable.mjs`).
 
-Le README n’est pas modifié : les chiffres ci-dessus sont conservés ici tant que
-la campagne n’est pas rejouée sur une machine non chargée.
+Le README benchmark `altbak.pub` a été actualisé avec la meilleure exécution
+complète validée (total **33,79 ms**, RBTree **19,07 ms**) et une note sur la
+campagne médiane de 36,09 ms mesurée sur machine chargée. Le README de
+`sharpurs` n’est pas modifié.
 
 ### Brief pour un autre agent
 
