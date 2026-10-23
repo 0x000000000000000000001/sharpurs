@@ -1,5 +1,9 @@
 -- | Conservative source-to-native lowering. Any unsupported expression rejects
 -- | the binding; callers may then use the boxed backend.
+-- |
+-- | Pattern-bound variables are alpha-renamed with a stable lexical path. This
+-- | keeps branch-local ownership and usage facts separate: a tree consumed in
+-- | one branch is not confused with a same-named binder in another branch.
 module Sharpurs.Native.Lower
   ( Signature
   , lowerBinding
@@ -12,7 +16,8 @@ import Control.Alternative (guard)
 import Data.Array as Array
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Set as Set
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import PureScript.Backend.Optimizer.CoreFn (Ann(..), Binder(..), CaseAlternative(..), CaseGuard(..), Expr(..), Ident(..), Literal(..), ModuleName(..), Qualified(..))
@@ -22,7 +27,7 @@ import Sharpurs.Analysis.Source as Source
 import Sharpurs.FsAst (sanitizeName)
 import Sharpurs.IntArithmetic as IntArithmetic
 import Sharpurs.IntComparison as IntComparison
-import Sharpurs.Native.IR (NativeExpr(..), NativeParameter, NativePrimitive(..))
+import Sharpurs.Native.IR (NativeCase, NativeExpr(..), NativeParameter, NativePrimitive(..))
 import Sharpurs.Native.Layout as NativeLayout
 import Sharpurs.Native.Pattern as NativePattern
 import Sharpurs.Native.Types (Layout, NativeType(..))
@@ -38,6 +43,7 @@ type Env =
   { layout :: Layout
   , locals :: Map String NativeType
   , globals :: Array (Tuple (Qualified Ident) Signature)
+  , path :: Array Int
   }
 
 lowerBinding :: Layout -> Array (Tuple (Qualified Ident) Signature) -> Signature -> Expr Ann -> Maybe { parameters :: Array NativeParameter, body :: NativeExpr }
@@ -51,7 +57,7 @@ lowerBinding layout globals signature expression = do
       parameterTypes
     locals = Map.fromFoldable
       (map (\(Tuple ty parameter) -> Tuple (sanitizeParameter parameter.name) ty) parameterTypes)
-  body <- lowerExpr { layout, locals, globals } lambda.body
+  body <- lowerExpr { layout, locals, globals, path: [] } lambda.body
   pure { parameters, body }
 
 sanitizeParameter :: Ident -> String
@@ -129,16 +135,93 @@ lowerExpr env expression = case stripTypeApp expression of
 
   caseExpr targets alternatives = do
     targetExprs <- traverse (lowerExpr env) targets
-    cases <- traverse alternative alternatives
+    let
+      alternatives' = Array.mapWithIndex
+        (\index alternative' -> alternative (env { path = Array.snoc env.path index }) alternative')
+        alternatives
+    cases <- traverse identity alternatives'
     pure (NativeMatch targetExprs cases Nothing)
 
-  alternative (CaseAlternative binders guard) = case guard of
+  alternative env' (CaseAlternative binders guard) = case guard of
     Unconditional body -> do
       patterns <- traverse (NativePattern.fromBinder env.layout) binders
       locals <- binderLocals env.layout binders
-      body' <- lowerExpr (env { locals = Map.union locals env.locals }) body
-      pure { patterns, bindings: locals, body: body' }
+      body' <- lowerExpr (env' { locals = Map.union locals env'.locals }) body
+      let
+        rename = renaming env'.path patterns
+        patterns' = map (renamePattern rename) patterns
+        locals' = Map.fromFoldable
+          (map (\(Tuple name ty) -> Tuple (fromMaybe name (Map.lookup name rename)) ty)
+            (Map.toUnfoldable locals :: Array (Tuple String NativeType)))
+        body'' = renameFree rename body'
+      pure { patterns: patterns', bindings: locals', body: body'' }
     Guarded _ -> Nothing
+
+renaming :: Array Int -> Array NativePattern.NativePattern -> Map String String
+renaming path patterns =
+  let
+    names = Array.nub (Array.concatMap NativePattern.variables patterns)
+    suffix = Array.foldl (\acc index -> acc <> "_" <> show index) "" path
+  in Map.fromFoldable
+    (Array.mapWithIndex
+      (\index name -> Tuple name (sanitizeName (name <> suffix <> "_" <> show index)))
+      names)
+
+renamePattern :: Map String String -> NativePattern.NativePattern -> NativePattern.NativePattern
+renamePattern rename = case _ of
+  NativePattern.PatternWildcard -> NativePattern.PatternWildcard
+  NativePattern.PatternVariable name -> NativePattern.PatternVariable (fromMaybe name (Map.lookup name rename))
+  NativePattern.PatternNamed name inner -> NativePattern.PatternNamed
+    (fromMaybe name (Map.lookup name rename))
+    (renamePattern rename inner)
+  NativePattern.PatternInt value -> NativePattern.PatternInt value
+  NativePattern.PatternBoolean value -> NativePattern.PatternBoolean value
+  NativePattern.PatternString value -> NativePattern.PatternString value
+  NativePattern.PatternConstructor name fields -> NativePattern.PatternConstructor name (map (renamePattern rename) fields)
+
+-- | Rename free occurrences only. Nested binders keep their own (already
+-- | alpha-renamed) names, so outer substitutions cannot capture them.
+renameFree :: Map String String -> NativeExpr -> NativeExpr
+renameFree rename expression = go rename expression
+  where
+  go active = case _ of
+    NativeVar name ty -> NativeVar (fromMaybe name (Map.lookup name active)) ty
+    NativeIntLit value -> NativeIntLit value
+    NativeBooleanLit value -> NativeBooleanLit value
+    NativeStringLit value -> NativeStringLit value
+    NativeLambda parameters body ->
+      NativeLambda parameters (go (foldParameters parameters active) body)
+    NativeApply function arguments -> NativeApply (go active function) (map (go active) arguments)
+    NativeLet name ty value body ->
+      NativeLet name ty (go active value) (go (Map.delete name active) body)
+    NativeMatch targets cases fallback ->
+      NativeMatch
+        (map (go active) targets)
+        (map (renameCase active) cases)
+        (map (go active) fallback)
+    NativeConstructor name arguments -> NativeConstructor name (map (go active) arguments)
+    NativeReuse name target arguments -> NativeReuse name (go active target) (map (go active) arguments)
+    NativeSetField target index value body ->
+      NativeSetField (go active target) index (go active value) (go active body)
+    NativeProject name index value -> NativeProject name index (go active value)
+    NativePrimitive primitive arguments -> NativePrimitive primitive (map (go active) arguments)
+    NativeBox expression' -> NativeBox (go active expression')
+    NativeCopy ty value -> NativeCopy ty (go active value)
+    NativeCast constructor value -> NativeCast constructor (go active value)
+
+  renameCase active case' =
+    let
+      bound = patternNames case'.patterns
+      inner = foldlDelete bound active
+      body = go inner case'.body
+    in case' { body = body }
+
+  foldParameters parameters active =
+    Array.foldl (\acc parameter -> Map.delete parameter.name acc) active parameters
+
+  patternNames = Array.concatMap NativePattern.variables
+
+  foldlDelete names active = Array.foldl (\acc name -> Map.delete name acc) active names
 
 binderLocals :: Layout -> Array (Binder Ann) -> Maybe (Map String NativeType)
 binderLocals layout binders = do

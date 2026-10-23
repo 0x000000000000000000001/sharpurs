@@ -139,9 +139,12 @@ callsIn = case _ of
           Just body -> callsIn body
   NativeConstructor _ arguments -> Array.concatMap callsIn arguments
   NativeReuse _ target arguments -> callsIn target <> Array.concatMap callsIn arguments
+  NativeSetField target _ value body -> callsIn target <> callsIn value <> callsIn body
   NativeProject _ _ value -> callsIn value
   NativePrimitive _ arguments -> Array.concatMap callsIn arguments
   NativeBox expression -> callsIn expression
+  NativeCopy _ expression -> callsIn expression
+  NativeCast _ expression -> callsIn expression
 
 parameterMutable :: Map String Summary -> String -> NativeParameter -> Boolean
 parameterMutable summaries functionName parameter =

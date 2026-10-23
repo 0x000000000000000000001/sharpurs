@@ -30,6 +30,7 @@ import Sharpurs.CodeGen (translateOptimizedModuleWithThunks)
 import Sharpurs.Ffi as Ffi
 import Sharpurs.Metrics as Metrics
 import Sharpurs.Native.Module as NativeModule
+import Sharpurs.Native.MutableModule as NativeMutableModule
 import Sharpurs.Names as Names
 import Sharpurs.Printer (printModule)
 import Sharpurs.Project as Project
@@ -48,7 +49,9 @@ main = do
 compile :: CLI.Config -> Aff Unit
 compile config = Metrics.measure "backend total" \_ -> do
   modules <- Metrics.measure "load TAST + sort" \_ -> coreFnModulesFromOutput "output"
-  let modulesArray = Array.fromFoldable modules
+  let
+    modulesArray = Array.fromFoldable modules
+    safeMixedModules = NativeMutableModule.classSafeModules modulesArray
 
   { directives, context, moduleFiles } <- Metrics.measure "prepare" \_ -> do
     Project.prepare
@@ -62,6 +65,7 @@ compile config = Metrics.measure "backend total" \_ -> do
           { ffiDirectory: config.ffiDirectory
           , constructorArities: collectConstructorArities modulesArray
           , nativeConstructors
+          , safeMixedModules
           }
       }
 
@@ -94,6 +98,7 @@ type EmitContext =
   { ffiDirectory :: Maybe String
   , constructorArities :: Map String Int
   , nativeConstructors :: Ref.Ref (Set String)
+  , safeMixedModules :: Set String
   }
 
 emitModule :: EmitContext -> Module Ann -> BackendModule -> Aff Project.ModuleFiles
@@ -104,7 +109,12 @@ emitModule context source optimized = do
       _ <- liftEffect (Ref.modify (Set.union (Set.fromFoldable (NativeModule.constructorNames source))) context.nativeConstructors)
       ffi <- Ffi.loadModule context.ffiDirectory source
       Project.writeModule name ffi (printModule nativeModule)
-    Nothing -> emitFallback context name source optimized (AdtKernel.prepareModule source optimized)
+    Nothing -> case NativeMutableModule.compileMixedFor context.safeMixedModules source context.constructorArities of
+      Just mixedModule -> do
+        _ <- liftEffect (Ref.modify (Set.union (Set.fromFoldable (NativeMutableModule.constructorNames source))) context.nativeConstructors)
+        ffi <- Ffi.loadModule context.ffiDirectory source
+        Project.writeModule name ffi (printModule mixedModule)
+      Nothing -> emitFallback context name source optimized (AdtKernel.prepareModule source optimized)
 
 emitFallback :: EmitContext -> String -> Module Ann -> BackendModule -> Maybe AdtKernel.AdtModule -> Aff Project.ModuleFiles
 emitFallback context name source optimized native = do

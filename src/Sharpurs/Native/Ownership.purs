@@ -58,5 +58,8 @@ fresh = case _ of
   NativeVar _ _ -> false
   NativeApply _ _ -> false
   NativeReuse _ _ _ -> false
+  NativeSetField _ _ _ body -> fresh body
   NativeProject _ _ _ -> false
   NativeBox _ -> false
+  NativeCopy _ _ -> true
+  NativeCast _ _ -> true

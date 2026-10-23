@@ -87,6 +87,7 @@ renderExpr = case _ of
     argumentCodes <- traverse renderExpr arguments
     pure (name <> if Array.null argumentCodes then "" else "(" <> String.joinWith ", " argumentCodes <> ")")
   NativeReuse _ _ _ -> Nothing
+  NativeSetField _ _ _ _ -> Nothing
   NativeProject _ _ _ -> Nothing
   NativePrimitive primitive arguments -> do
     argumentCodes <- traverse renderExpr arguments
@@ -96,6 +97,10 @@ renderExpr = case _ of
   NativeBox expression -> do
     code <- renderExpr expression
     pure ("(box (" <> code <> "))")
+  NativeCopy type' expression -> do
+    code <- renderExpr expression
+    pure ("(" <> copyFunction type' <> " (" <> code <> "))")
+  NativeCast _ expression -> renderExpr expression
   where
   renderCase { patterns, body } = do
     bodyCode <- renderExpr body
@@ -133,6 +138,11 @@ renderWrapper publicName argumentTypes nativeName =
     body = "box (" <> invocation <> ")"
   in let value = foldr (\arg inner -> "box (fun (" <> arg <> ": obj) -> " <> inner <> ")") body args
      in "let " <> publicName <> " : obj = " <> value
+
+copyFunction :: NativeType -> String
+copyFunction = case _ of
+  NativeAdt name _ -> "sharpurs_copy_" <> name
+  _ -> "id"
 
 primitiveOperator :: NativePrimitive -> String
 primitiveOperator = case _ of

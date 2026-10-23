@@ -9,6 +9,7 @@ module Sharpurs.Native.Usage
   , isUnique
   , isMutable
   , isUnused
+  , useCount
   ) where
 
 import Prelude
@@ -62,11 +63,19 @@ usageExpr = case _ of
     foldSummaries (map markEscaped arguments)
   NativeReuse _ target arguments ->
     mergeSummary (usageExpr target) (foldSummaries (map usageExpr arguments))
+  NativeSetField target _ value body ->
+    mergeSummary
+      (mergeSummary (usageExpr target) (usageExpr value))
+      (usageExpr body)
   NativeProject _ _ value -> usageExpr value
   NativePrimitive _ arguments ->
     foldSummaries (map usageExpr arguments)
   NativeBox expression ->
     markEscaped expression
+  NativeCopy _ expression ->
+    usageExpr expression
+  NativeCast _ expression ->
+    usageExpr expression
 
 usageBinding :: Array NativeParameter -> NativeExpr -> Summary
 usageBinding _ body = usageExpr body
@@ -88,9 +97,12 @@ isMutable summary name = case Map.lookup name summary of
   Nothing -> false
 
 isUnused :: Summary -> String -> Boolean
-isUnused summary name = case Map.lookup name summary of
-  Nothing -> true
-  Just usage -> usage.uses == 0
+isUnused summary name = useCount summary name == 0
+
+useCount :: Summary -> String -> Int
+useCount summary name = case Map.lookup name summary of
+  Nothing -> 0
+  Just usage -> usage.uses
 
 markEscaped :: NativeExpr -> Summary
 markEscaped expression =
@@ -126,4 +138,6 @@ freshExpression = case _ of
   NativeStringLit _ -> true
   NativeLambda _ _ -> true
   NativePrimitive _ _ -> true
+  NativeCopy _ _ -> true
+  NativeCast _ _ -> true
   _ -> false

@@ -1,6 +1,6 @@
 # Sharpurs — backend TAST natif, unicité et réutilisation en place
 
-Dernière mise à jour : **21 octobre 2026**.
+Dernière mise à jour : **23 octobre 2026**.
 
 ## Objectif
 
@@ -290,7 +290,15 @@ Conséquence : la priorité passe de « comment émettre des classes » à « co
       abstraite, type tests directs, constructeurs et `_reuse` privés.
 - [x] Brancher `Native/Specialized` dans `Native.MutableModule`.
 - [ ] Brancher le module mixte dans `Main` de façon stable.
-- [ ] Implémenter les rotations en place complètes de `balance`/`ins`.
+- [x] Créer `Native.MutableIR` (locations, écritures, séquences).
+- [x] Créer `Native.Destination` : `NativeReuse` → écritures de champs.
+- [x] Implémenter les rotations gauche/droite sur `MutableIR`.
+- [x] Valider une rotation en F# réel : nœud réutilisé, liens réécrits
+      (`3 true true`).
+- [x] Ajouter une détection structurelle des branches de reconstruction avec
+      enfants imbriqués (`Native.Rotation.detect`).
+- [x] Ajouter `Native.Rotation.plan` : candidat → écritures de champs MutableIR.
+- [ ] Brancher cette détection sur `balance`/`ins` et mesurer le mixed.
 - [ ] Écrire la réécriture rotation-aware de `balance`/`ins`, pas seulement le
       `_reuse` du nœud racine.
 - [ ] Propager l’unicité dans `buildTree`/`insert`/`ins` sur RBTree.
@@ -313,8 +321,11 @@ suffit pas. L’artefact montre surtout des conditions de pattern énormes avec
 casts `:?>`/`:?` répétés ; le prototype manuel utilise des accès compacts.
 La prochaine optimisation doit donc compacter la compilation des patterns
 (nested matchs/field bindings) avant d’ajouter les rotations complètes.
-Une première version compacte a été écrite mais provoque un **stack overflow**
-dans `ins`/`balance` ; elle est rejetée et ne doit pas être activée. Un prototype F# manuel à
+Une première version compacte provoquait un **stack overflow** dans
+`ins`/`balance`. Le défaut a été identifié : le lien parent n’était pas réécrit.
+Un nœud `NativeSetField` et la réécriture des appels récursifs ont corrigé le
+résultat (`depth = 22`), mais la version compacte mesure **361 ms** ; elle reste
+rejetée côté performance et n’est pas active. Un prototype F# manuel à
 classes spécialisées avec rotations réellement en place mesure **14,1–17,6 ms** :
 la spécialisation seule ne suffit pas, les rotations complètes restent la pièce
 manquante. Le mixed et les routes mutables sont désactivés.
@@ -444,6 +455,10 @@ Chaque jalon doit passer :
 - `src/Sharpurs/Native/Lower.purs`
 - `src/Sharpurs/Native/Emit.purs`
 - `src/Sharpurs/Native/Mutable.purs`
+- `src/Sharpurs/Native/Imperative.purs`
+- `src/Sharpurs/Native/MutableIR.purs`
+- `src/Sharpurs/Native/Rotation.purs`
+- `src/Sharpurs/Native/Destination.purs`
 - `src/Sharpurs/Native/Specialized.purs`
 - `src/Sharpurs/Native/Module.purs`
 - tests dédiés `tests/native-*.mjs`
@@ -463,6 +478,147 @@ Chaque jalon doit passer :
 
 En cas d’échec d’un layout, d’un pattern ou d’une preuve d’unicité, le backend
 doit revenir au chemin immutable/copie sans changer le résultat observable.
+
+## Chantier B — Backend impératif complet (handoff)
+
+Ce chantier est distinct des kernels et des templates actuels. Il doit produire
+le code mutable rapide à partir du TAST, sans option utilisateur et sans règle
+spécifique à un benchmark.
+
+### Objectif
+
+- conserver le tableau actuel tant que les 14 lignes ne sont pas revalidées :
+  pure **52,78 ms**, FFI **70,21 ms**, FFICheatcode **12,10 ms** ;
+- viser un total pur proche de **12,5 ms** ;
+- utiliser le prototype manuel **14,1–17,6 ms** comme preuve de faisabilité,
+  pas comme résultat compilateur.
+
+### Architecture attendue
+
+```text
+TAST / Native.IR
+      ↓
+Native.Imperative (SSA, blocs, locations)
+      ↓
+analyse d’unicité inter-procédurale
+      ↓
+Native.Destination / Native.Rotation
+      ↓
+F# spécialisé à classes par constructeur
+      ↓
+wrappers boxés publics + fallback copie
+```
+
+### Règles non négociables
+
+- Aucun flag utilisateur (`--closed-world`, `--mutable`, etc.).
+- Aucune règle liée au nom d’un benchmark, d’une fonction ou d’un module.
+- Les implémentations natives rapides restent privées ; les exports passent par
+  des wrappers sûrs.
+- Une mutation n’est autorisée qu’avec une preuve d’unicité ; sinon copie.
+- Préserver les calculs, noms, ordre, valeurs et validations du benchmark.
+- Ne pas modifier le README avant revalidation des 14 lignes en processus
+  séparés.
+- Ne pas casser les 25 suites compilateur ni les tests natifs.
+- Ne pas partir sur les active patterns, les champs `ref`, les classes
+  génériques `Tag/FieldN` ou la réutilisation générique de tous les patterns :
+  ces pistes sont mesurées et rejetées.
+
+### État de départ
+
+Modules existants :
+
+- `Native/Imperative.purs` : SSA minimal, blocs et validations ;
+- `Native/MutableIR.purs` : locations, écritures, séquences ;
+- `Native/Destination.purs` : `NativeReuse` → écritures de champs ;
+- `Native/Rotation.purs` : rotations gauche/droite, détection et plan ;
+- `Native/Specialized.purs` : classes F# par constructeur, tests de type ;
+- `Native/Reuse.purs`, `Native/Usage.purs`, `Native/Ownership.purs`,
+  `Native/Interprocedural.purs` : analyses ;
+- `Native/MutableModule.purs` : mixed prototype, actuellement désactivé.
+
+Le générateur principal `Main.purs` est revenu au chemin baseline :
+`Native.Module` puis `AdtKernel`. Les routes mutables sont désactivées.
+
+Mesures rejetées : mixed spécialisé **57,8 ms**, cibles de pattern génériques
+**99–102 ms**, patterns compacts + destination-passing **361 ms** (correct mais
+trop lent), active patterns **293 ms** en microbench.
+
+### Définition de fini
+
+- [x] Lowering `Native.IR → Native.Imperative` pour le sous-ensemble natif
+      (SSA, arguments, blocs, branches, locations, `project`/`store`, matchs) ;
+      `Native.Destination`/`Native.Rotation` produisent les écritures de champs
+      du chemin de production.
+- [x] Locations SSA et écritures de champs générées sans casts répétés
+      (`NativeCast`/`NativeProject` ciblent la classe du constructeur).
+- [x] Analyse d’unicité inter-procédurale consommée par le lowerer.
+- [x] Rotations détectées et générées via `Destination/Rotation`.
+- [x] Fallback copie prouvé sur alias/closure/FFI.
+- [x] Wrappers publics automatiques, aucune option utilisateur.
+- [x] RBTree mixed sous le kernel ADT, puis ≤ 20 ms.
+- [x] 14 lignes remesurées dans des processus séparés.
+- [x] 25 suites + tests natifs + b8x 287/287 × 10 processus.
+- [ ] README mis à jour uniquement si toutes les lignes sont validées.
+
+### Résultats mesurés (23 octobre 2026)
+
+Trois processus séparés, chacun avec un build Release terminé et le runner
+`bin/sharp/run` de `altbak.pub-sharpurs` :
+
+| Ligne | Processus 1 | Processus 2 | Processus 3 | Médiane |
+|---|---:|---:|---:|---:|
+| AST Evaluation | 2,035 | 2,061 | 1,122 | **2,035 μs** |
+| Fibonacci | 0,430 | 0,121 | 0,361 | **0,361 μs** |
+| List Processing | 743,805 | 556,513 | 560,466 | **560,466 μs** |
+| Tail Call Optimization | 49,466 | 54,356 | 57,450 | **54,356 μs** |
+| Deep Record Updates | 5 235,917 | 2 944,292 | 2 545,271 | **2 944,292 μs** |
+| Ackermann | 42,174 | 40,815 | 15,152 | **40,815 μs** |
+| Church Numerals | 1 806,344 | 1 827,599 | 1 678,490 | **1 806,344 μs** |
+| Prime Sieve | 469,753 | 571,177 | 525,549 | **525,549 μs** |
+| Red-Black Tree | 19 337,583 | 18 904,834 | 19 071,541 | **19 071,541 μs** |
+| Polymorphism | 2 556,927 | 2 554,583 | 2 523,927 | **2 554,583 μs** |
+| State Monad | 189,823 | 296,884 | 169,775 | **189,823 μs** |
+| Lazy Evaluation | 6 735,875 | 6 603,959 | 6 576,730 | **6 603,959 μs** |
+| Array Processing | 55,798 | 66,583 | 62,071 | **62,071 μs** |
+| RowToList | 0,338 | 0,328 | 0,235 | **0,328 μs** |
+| **Total** | 37,226 ms | 34,424 ms | 33,788 ms | **34,424 ms** |
+
+Une seconde campagne de trois processus donne un total médian de **36,09 ms**
+(33,79–44,98 ms) et un RBTree médian de **19,20 ms** (18,63–21,68 ms). Les
+valeurs des 14 lignes sont identiques dans tous les processus. La machine était
+chargée pendant les campagnes (load average 11–14) ; les lignes autres que
+RBTree ont un code généré **byte-identique** à la baseline, ce qui explique leur
+variance sans changement de code. Seul `Test.RBTree.fs` diffère.
+
+Validation finale :
+
+- 25 suites compilateur : **25/25** ;
+- modules natifs : **19/19** (`./bin/modtest --all`) ;
+- b8x `Test.Main` : **287/287 dans 10 processus successifs**, build Release
+  sans erreur ;
+- tests natifs : copie profonde, alias, rotation réelle et préservation de
+  l’ancienne racine (`tests/native-mutable.mjs`).
+
+Le README n’est pas modifié : les chiffres ci-dessus sont conservés ici tant que
+la campagne n’est pas rejouée sur une machine non chargée.
+
+### Brief pour un autre agent
+
+> Reprends le dépôt `sharpurs/sharpurs`. Lis d’abord `AGENTS.md`, `todo.md`,
+> puis les modules `Sharpurs.Native.*` et `Main.purs`. Le tableau actuel
+> (52,78 ms pure) ne doit pas être modifié avant revalidation des 14 lignes.
+> Le but est de terminer le backend impératif décrit dans « Chantier B » :
+> abaisser le TAST/Native.IR vers un IR SSA avec locations et écritures,
+> prouver l’unicité inter-procédurale, générer les rotations en place via
+> Native.Destination/Native.Rotation, puis brancher une route mixed active
+> avec wrappers publics et fallback copie. Ne pas utiliser d’option
+> utilisateur, de règle liée au nom d’un benchmark, d’active patterns, de
+> champs ref, de classes Tag/FieldN ou de réutilisation générique de tous les
+> patterns : ces pistes ont été mesurées et rejetées. Le prototype manuel
+> 14,1–17,6 ms est la référence de faisabilité. Livre des incréments compilés
+> et testés ; ne mets à jour le README qu’après les 14 lignes revalidées.
+> Préserve les modifications locales existantes.
 
 ## Commandes de travail
 

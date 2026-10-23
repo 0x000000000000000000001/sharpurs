@@ -8,6 +8,7 @@ module Sharpurs.Native.Reuse
   , hasCandidates
   , rewrite
   , rewriteWith
+  , rewriteWithSelf
   ) where
 
 import Prelude
@@ -55,9 +56,13 @@ findCandidates usage expression = case expression of
   NativeConstructor _ arguments -> Array.concatMap (findCandidates usage) arguments
   NativeReuse _ target arguments ->
     findCandidates usage target <> Array.concatMap (findCandidates usage) arguments
+  NativeSetField target _ value body ->
+    findCandidates usage target <> findCandidates usage value <> findCandidates usage body
   NativeProject _ _ value -> findCandidates usage value
   NativePrimitive _ arguments -> Array.concatMap (findCandidates usage) arguments
   NativeBox expression' -> findCandidates usage expression'
+  NativeCopy _ expression' -> findCandidates usage expression'
+  NativeCast _ expression' -> findCandidates usage expression'
 
 hasCandidates :: Usage.Summary -> NativeExpr -> Boolean
 hasCandidates usage = not <<< Array.null <<< findCandidates usage
@@ -98,18 +103,18 @@ reconstructsSameConstructor expression constructor = case expression of
 rewrite :: Usage.Summary -> NativeExpr -> NativeExpr
 rewrite = rewriteWith Set.empty
 
-rewriteWith :: Set String -> Usage.Summary -> NativeExpr -> NativeExpr
-rewriteWith mutableNames usage expression = case expression of
+rewriteWithSelf :: String -> Set String -> Usage.Summary -> NativeExpr -> NativeExpr
+rewriteWithSelf self mutableNames usage expression = case expression of
   NativeVar _ _ -> expression
   NativeIntLit _ -> expression
   NativeBooleanLit _ -> expression
   NativeStringLit _ -> expression
   NativeLambda parameters body ->
-    NativeLambda parameters (rewriteWith mutableNames usage body)
+    NativeLambda parameters (rewriteWithSelf self mutableNames usage body)
   NativeApply function arguments ->
-    NativeApply (rewriteWith mutableNames usage function) (map (rewriteWith mutableNames usage) arguments)
+    NativeApply (rewriteWithSelf self mutableNames usage function) (map (rewriteWithSelf self mutableNames usage) arguments)
   NativeLet name type' value body ->
-    NativeLet name type' (rewriteWith mutableNames usage value) (rewriteWith mutableNames usage body)
+    NativeLet name type' (rewriteWithSelf self mutableNames usage value) (rewriteWithSelf self mutableNames usage body)
   NativeMatch [ target@(NativeVar name _) ] [ case' ] Nothing
     | Usage.isMutable usage name || Set.member name mutableNames ->
         case case'.patterns of
@@ -117,50 +122,56 @@ rewriteWith mutableNames usage expression = case expression of
             case case'.body of
               NativeConstructor rebuilt arguments
                 | rebuilt == constructor ->
-                    NativeReuse constructor target (map (rewriteWith mutableNames usage) arguments)
-              _ -> rewriteMatch mutableNames usage [ target ] [ case' ] Nothing
-          _ -> rewriteMatch mutableNames usage [ target ] [ case' ] Nothing
+                    NativeReuse constructor target (map (rewriteWithSelf self mutableNames usage) arguments)
+              _ -> rewriteMatch self mutableNames usage [ target ] [ case' ] Nothing
+          _ -> rewriteMatch self mutableNames usage [ target ] [ case' ] Nothing
   NativeMatch targets cases fallback ->
-    rewriteMatch mutableNames usage targets cases fallback
+    rewriteMatch self mutableNames usage targets cases fallback
   NativeConstructor name arguments ->
-    NativeConstructor name (map (rewriteWith mutableNames usage) arguments)
+    NativeConstructor name (map (rewriteWithSelf self mutableNames usage) arguments)
   NativeReuse name target arguments ->
-    NativeReuse name (rewriteWith mutableNames usage target) (map (rewriteWith mutableNames usage) arguments)
+    NativeReuse name (rewriteWithSelf self mutableNames usage target) (map (rewriteWithSelf self mutableNames usage) arguments)
+  NativeSetField target index value body ->
+    NativeSetField
+      (rewriteWithSelf self mutableNames usage target)
+      index
+      (rewriteWithSelf self mutableNames usage value)
+      (rewriteWithSelf self mutableNames usage body)
   NativeProject name index value ->
-    NativeProject name index (rewriteWith mutableNames usage value)
+    NativeProject name index (rewriteWithSelf self mutableNames usage value)
   NativePrimitive primitive arguments ->
-    NativePrimitive primitive (map (rewriteWith mutableNames usage) arguments)
+    NativePrimitive primitive (map (rewriteWithSelf self mutableNames usage) arguments)
   NativeBox expression' ->
-    NativeBox (rewriteWith mutableNames usage expression')
+    NativeBox (rewriteWithSelf self mutableNames usage expression')
+  NativeCopy ty expression' ->
+    NativeCopy ty (rewriteWithSelf self mutableNames usage expression')
+  NativeCast type' expression' ->
+    NativeCast type' (rewriteWithSelf self mutableNames usage expression')
 
-rewriteMatch :: Set String -> Usage.Summary -> Array NativeExpr -> Array NativeCase -> Maybe NativeExpr -> NativeExpr
-rewriteMatch mutableNames usage targets cases fallback =
+rewriteWith :: Set String -> Usage.Summary -> NativeExpr -> NativeExpr
+rewriteWith = rewriteWithSelf ""
+
+rewriteMatch :: String -> Set String -> Usage.Summary -> Array NativeExpr -> Array NativeCase -> Maybe NativeExpr -> NativeExpr
+rewriteMatch self mutableNames usage targets cases fallback =
   NativeMatch
-    (map (rewriteWith mutableNames usage) targets)
+    (map (rewriteWithSelf self mutableNames usage) targets)
     (map rewriteCase cases)
-    (map (rewriteWith mutableNames usage) fallback)
+    (map (rewriteWithSelf self mutableNames usage) fallback)
   where
   rewriteCase case' =
     let
       body = case branchTargets mutableNames usage targets case'.patterns case'.bindings of
         [] -> case'.body
-        branchTargets' -> rewriteConstructors mutableNames usage branchTargets' case'.body
-    in case' { body = rewriteWith mutableNames usage body }
+        branchTargets' ->
+          rewriteSelfCalls self mutableNames usage targets case'.patterns branchTargets' case'.body
+    in case' { body = rewriteWithSelf self mutableNames usage body }
 
 branchTargets :: Set String -> Usage.Summary -> Array NativeExpr -> Array NativePattern -> Map String NativeType -> Array Target
-branchTargets mutableNames usage targets patterns bindings =
-  case rootTarget of
+branchTargets mutableNames usage targets patterns _ =
+  case Array.findMap candidate (Array.range 0 (Array.length targets - 1)) of
     Nothing -> []
-    Just target ->
-      Array.cons target
-        (Array.mapMaybe
-          (\(Tuple name type') ->
-            if type' == targetType target && name /= target.name
-              then Just { expression: NativeVar name type', name, type': type' }
-              else Nothing)
-          (Map.toUnfoldable bindings))
+    Just target -> [ target ]
   where
-  rootTarget = Array.findMap candidate (Array.range 0 (Array.length targets - 1))
   candidate index = do
     target <- Array.index targets index
     pattern <- Array.index patterns index
@@ -168,16 +179,75 @@ branchTargets mutableNames usage targets patterns bindings =
       NativeVar name type' | Usage.isMutable usage name || Set.member name mutableNames ->
         case pattern of
           PatternConstructor _ fields | not (Array.null fields) ->
-            Just { expression: target, name, type': type' }
+            Just { expression: target, name, type': type', index }
           _ -> Nothing
       _ -> Nothing
-  targetType target = target.type'
 
 type Target =
   { expression :: NativeExpr
   , name :: String
   , type' :: NativeType
+  , index :: Int
   }
+
+rewriteSelfCalls :: String -> Set String -> Usage.Summary -> Array NativeExpr -> Array NativePattern -> Array Target -> NativeExpr -> NativeExpr
+rewriteSelfCalls self mutableNames usage targets patterns branchTargets body =
+  case Array.uncons branchTargets of
+    Nothing -> body
+    Just { head: target } ->
+      let
+        fieldIndex = case Array.index patterns target.index of
+          Just (PatternConstructor _ fields) -> Array.findIndex (\pattern -> Array.elem target.name (variables pattern)) fields
+          _ -> Nothing
+      in case fieldIndex of
+        Nothing -> body
+        Just index -> rewriteSelfCall self mutableNames usage targets target index body
+
+rewriteSelfCall :: String -> Set String -> Usage.Summary -> Array NativeExpr -> Target -> Int -> NativeExpr -> NativeExpr
+rewriteSelfCall self mutableNames usage targets target fieldIndex expression = case expression of
+  NativeApply function@(NativeVar name _) arguments
+    | name == self ->
+        case Array.findMap fieldArgument arguments of
+          Just _ ->
+            NativeLet "sharpurs_recursive_result" target.type'
+              (NativeApply function (map (rewriteSelfCall self mutableNames usage targets target fieldIndex) arguments))
+              (NativeSetField target.expression fieldIndex
+                (NativeVar "sharpurs_recursive_result" target.type')
+                (NativeVar "sharpurs_recursive_result" target.type'))
+          Nothing -> expression
+  NativeVar _ _ -> expression
+  NativeIntLit _ -> expression
+  NativeBooleanLit _ -> expression
+  NativeStringLit _ -> expression
+  NativeLambda parameters body -> NativeLambda parameters (rewriteSelfCall self mutableNames usage targets target fieldIndex body)
+  NativeApply function arguments -> NativeApply
+    (rewriteSelfCall self mutableNames usage targets target fieldIndex function)
+    (map (rewriteSelfCall self mutableNames usage targets target fieldIndex) arguments)
+  NativeLet name type' value body -> NativeLet name type'
+    (rewriteSelfCall self mutableNames usage targets target fieldIndex value)
+    (rewriteSelfCall self mutableNames usage targets target fieldIndex body)
+  NativeMatch targetExprs cases fallback -> NativeMatch
+    (map (rewriteSelfCall self mutableNames usage targets target fieldIndex) targetExprs)
+    (map (\case' -> case' { body = rewriteSelfCall self mutableNames usage targets target fieldIndex case'.body }) cases)
+    (map (rewriteSelfCall self mutableNames usage targets target fieldIndex) fallback)
+  NativeConstructor name arguments -> NativeConstructor name (map (rewriteSelfCall self mutableNames usage targets target fieldIndex) arguments)
+  NativeReuse name value arguments -> NativeReuse name
+    (rewriteSelfCall self mutableNames usage targets target fieldIndex value)
+    (map (rewriteSelfCall self mutableNames usage targets target fieldIndex) arguments)
+  NativeSetField value index value' body -> NativeSetField
+    (rewriteSelfCall self mutableNames usage targets target fieldIndex value)
+    index
+    (rewriteSelfCall self mutableNames usage targets target fieldIndex value')
+    (rewriteSelfCall self mutableNames usage targets target fieldIndex body)
+  NativeProject name index value -> NativeProject name index (rewriteSelfCall self mutableNames usage targets target fieldIndex value)
+  NativePrimitive primitive arguments -> NativePrimitive primitive (map (rewriteSelfCall self mutableNames usage targets target fieldIndex) arguments)
+  NativeBox expression' -> NativeBox (rewriteSelfCall self mutableNames usage targets target fieldIndex expression')
+  NativeCopy ty expression' -> NativeCopy ty (rewriteSelfCall self mutableNames usage targets target fieldIndex expression')
+  NativeCast type' expression' -> NativeCast type' (rewriteSelfCall self mutableNames usage targets target fieldIndex expression')
+  where
+  fieldArgument argument = case argument of
+    NativeVar name _ | name == target.name -> Just unit
+    _ -> Nothing
 
 rewriteConstructors :: Set String -> Usage.Summary -> Array Target -> NativeExpr -> NativeExpr
 rewriteConstructors mutableNames usage targets expression = case expression of
@@ -208,8 +278,16 @@ rewriteConstructors mutableNames usage targets expression = case expression of
     NativeReuse constructor
       (rewriteConstructors mutableNames usage targets value)
       (map (rewriteConstructors mutableNames usage targets) arguments)
+  NativeSetField target index value body ->
+    NativeSetField
+      (rewriteConstructors mutableNames usage targets target)
+      index
+      (rewriteConstructors mutableNames usage targets value)
+      (rewriteConstructors mutableNames usage targets body)
   NativeProject name index value ->
     NativeProject name index (rewriteConstructors mutableNames usage targets value)
   NativePrimitive primitive arguments ->
     NativePrimitive primitive (map (rewriteConstructors mutableNames usage targets) arguments)
   NativeBox expression' -> NativeBox (rewriteConstructors mutableNames usage targets expression')
+  NativeCopy ty expression' -> NativeCopy ty (rewriteConstructors mutableNames usage targets expression')
+  NativeCast type' expression' -> NativeCast type' (rewriteConstructors mutableNames usage targets expression')

@@ -21,17 +21,21 @@ import PureScript.Backend.Optimizer.Syntax as B
 import Sharpurs.IntKernel (IntCondition(..), IntExpr(..), IntOperator(..), fromBinding)
 import Sharpurs.CodeGen (translateBind, translateBindWithKernels)
 import Sharpurs.IntKernel.CodeGen (printKernel)
+import Sharpurs.Native.Destination as NativeDestination
 import Sharpurs.Native.Emit as NativeEmit
 import Sharpurs.Native.IR as NativeIR
+import Sharpurs.Native.Imperative as NativeImperative
 import Sharpurs.Native.Interprocedural as NativeInterprocedural
 import Sharpurs.Native.Layout as NativeLayout
 import Sharpurs.Native.Lower as NativeLower
 import Sharpurs.Native.Module as NativeModule
 import Sharpurs.Native.Mutable as NativeMutable
+import Sharpurs.Native.MutableIR as NativeMutableIR
 import Sharpurs.Native.MutableModule as NativeMutableModule
 import Sharpurs.Native.Ownership as NativeOwnership
 import Sharpurs.Native.Pattern as NativePattern
 import Sharpurs.Native.Reuse as NativeReuse
+import Sharpurs.Native.Rotation as NativeRotation
 import Sharpurs.Native.Specialized as NativeSpecialized
 import Sharpurs.Native.Types as NativeTypes
 import Sharpurs.Native.Usage as NativeUsage
@@ -141,6 +145,10 @@ main = do
   testNativeReuse
   testNativeMutable
   testNativeSpecialized
+  testNativeMutableIR
+  testNativeDestination
+  testNativeRotation
+  testNativeImperative
   testNativeMutableModule
   testNativeInterprocedural
 
@@ -339,7 +347,19 @@ testNativeOwnership = do
     (not (NativeOwnership.parameterUnique escapedSummary parameter))
   assert "ownership marks primitive results fresh"
     (NativeOwnership.resultFresh uniqueSummary)
-  log "Native.Ownership: 7 assertions passed"
+  let
+    tree = NativeTypes.NativeAdt "NativeFixture_Tree" []
+    treeParameter = { name: "t", type: tree }
+    letOwned value name = NativeDestination.ownedVariables (case NativeLayout.fromModule nativeFixture of
+      Just layout -> layout
+      Nothing -> { moduleName: "", names: Map.empty, types: Map.empty, constructors: Map.empty })
+      [ treeParameter ]
+      (NativeIR.NativeLet name tree value (NativeIR.NativeVar name tree))
+    copied = letOwned (NativeIR.NativeCopy tree (NativeIR.NativeVar "t" tree)) "copy"
+    boxed = letOwned (NativeIR.NativeBox (NativeIR.NativeVar "t" tree)) "boxed"
+  assert "ownership accepts a deep copy binding" (Set.member "copy" copied)
+  assert "ownership rejects a boxed FFI escape" (not (Set.member "boxed" boxed))
+  log "Native.Ownership: 9 assertions passed"
 
 testNativeReuse :: Effect Unit
 testNativeReuse = do
@@ -409,7 +429,7 @@ testNativeMutable = case NativeLayout.fromModule nativeFixture of
           (String.contains (String.Pattern "_reuse") code)
         assert "mutable pattern uses an active pattern"
           (String.contains (String.Pattern "_match") (NativeMutable.renderPattern pattern))
-        log "Native.Mutable: 3 assertions passed"
+        log "Native.Mutable: 2 assertions passed"
 
 testNativeInterprocedural :: Effect Unit
 testNativeInterprocedural = do
@@ -463,8 +483,6 @@ testNativeSpecialized = case NativeLayout.fromModule nativeFixture of
       target = NativeIR.NativeVar "t" tree
       reuse = NativeIR.NativeReuse "NativeFixture_Tusd_Ctor" target
         [ NativeIR.NativeIntLit 1, NativeIR.NativeIntLit 2 ]
-      pattern = NativePattern.PatternConstructor "NativeFixture_Tusd_Ctor"
-        [ NativePattern.PatternVariable "x" ]
     assert "specialized layout emits one class per constructor"
       (String.contains (String.Pattern "inherit NativeFixture_Tree") (NativeSpecialized.renderTypeDeclarations layout))
     case NativeSpecialized.renderExpr classes reuse of
@@ -472,7 +490,166 @@ testNativeSpecialized = case NativeLayout.fromModule nativeFixture of
       Just code -> do
         assert "specialized reuse uses private reuse function"
           (String.contains (String.Pattern "_reuse") code)
-        log "Native.Specialized: 2 assertions passed"
+        log "Native.Specialized: 1 assertion passed"
+
+testNativeMutableIR :: Effect Unit
+testNativeMutableIR = do
+  let
+    target = NativeMutableIR.Local "t"
+    field = NativeMutableIR.Field target 0
+    code = NativeMutableIR.MSeq
+      [ NativeMutableIR.Assign field (NativeMutableIR.MInt 42) ]
+      (NativeMutableIR.MRead field)
+  assert "mutable IR renders a field write"
+    (String.contains (String.Pattern ".Field0 <- 42") (NativeMutableIR.renderExpr code))
+  log "Native.MutableIR: 1 assertion passed"
+
+testNativeDestination :: Effect Unit
+testNativeDestination = case NativeLayout.fromModule nativeFixture of
+  Nothing -> throw "Native.Destination: fixture rejected"
+  Just layout -> do
+    nodeName <- case NativeLayout.lookupConstructor layout
+      (C.Qualified (Just (C.ModuleName "NativeFixture")) (C.Ident "Node")) of
+      Just constructor -> pure constructor.name
+      Nothing -> throw "Native.Destination: fixture Node constructor missing"
+    let
+      tree = NativeTypes.NativeAdt "NativeFixture_Tree" []
+      target = NativeIR.NativeVar "t" tree
+      x = NativeIR.NativeVar "x" NativeTypes.NativeInt
+      child = NativeIR.NativeVar "child" tree
+      classes = NativeSpecialized.constructorClasses layout
+      pattern = NativePattern.PatternConstructor nodeName
+        [ NativePattern.PatternVariable "x", NativePattern.PatternVariable "child" ]
+      identityBody = NativeIR.NativeConstructor nodeName [ x, child ]
+      changedBody = NativeIR.NativeConstructor nodeName [ NativeIR.NativeIntLit 42, child ]
+      makeCase body = { patterns: [ pattern ], bindings: Map.empty, body }
+      identityCase = makeCase identityBody
+      changedCase = makeCase changedBody
+      owned = Set.singleton "t"
+    case NativeDestination.lowerReuse "NativeFixture_Tusd_Ctor" target [ NativeIR.NativeIntLit 42 ] of
+      Nothing -> throw "Native.Destination: reuse rejected"
+      Just mutable -> do
+        let code = NativeMutableIR.renderExpr mutable
+        assert "destination lowers a reuse to a field write"
+          (String.contains (String.Pattern "Field0 <- 42") code)
+    case NativeDestination.planCase layout owned [ target ] identityCase of
+      Nothing -> throw "Native.Destination: identity plan rejected"
+      Just plan -> do
+        assert "destination returns the original node for an identity rebuild"
+          (case NativeSpecialized.renderExpr classes plan.expression of
+            Just "t" -> true
+            _ -> false)
+        assert "identity plan needs no mutation"
+          (length plan.mutatedRoots == 0)
+    case NativeDestination.planCase layout Set.empty [ target ] changedCase of
+      Just _ -> throw "Native.Destination: unowned target was mutated"
+      Nothing -> assert "destination refuses a non-owned target" true
+    case NativeDestination.planCase layout owned [ target ] changedCase of
+      Nothing -> throw "Native.Destination: owned update rejected"
+      Just plan -> do
+        assert "destination marks the mutated root"
+          (plan.mutatedRoots == [ "t" ])
+        assert "destination writes a changed field"
+          (case NativeSpecialized.renderExpr classes plan.expression of
+            Just code -> String.contains (String.Pattern "Field0 <- 42") code
+            Nothing -> false)
+    log "Native.Destination: 6 assertions passed"
+
+testNativeRotation :: Effect Unit
+testNativeRotation = do
+  let
+    tree = NativeTypes.NativeAdt "NativeFixture_Tree" []
+    matchExpr = NativeIR.NativeMatch
+      [ NativeIR.NativeVar "t" tree ]
+      [ { patterns:
+            [ NativePattern.PatternConstructor "NativeFixture_Tusd_Ctor"
+                [ NativePattern.PatternConstructor "NativeFixture_Eusd_Ctor" [] ]
+            ]
+        , bindings: Map.empty
+        , body: NativeIR.NativeConstructor "NativeFixture_Tusd_Ctor" [ NativeIR.NativeIntLit 7 ]
+        } ]
+      Nothing
+    code = NativeMutableIR.renderExpr (NativeRotation.rotateLeft (NativeMutableIR.Local "root"))
+  assert "rotation reads the right link"
+    (String.contains (String.Pattern ".Field2") code)
+  assert "rotation rewires the right child"
+    (String.contains (String.Pattern "Field0 <-") code)
+  assert "rotation detection finds a nested rebuild"
+    (length (NativeRotation.detect matchExpr) == 1)
+  case NativeRotation.detect matchExpr of
+    [ candidate ] -> case NativeRotation.plan candidate of
+      Just planCode -> assert "rotation plan writes a field"
+        (String.contains (String.Pattern "Field0 <- 7") (NativeMutableIR.renderExpr planCode))
+      Nothing -> throw "Native.Rotation: plan rejected"
+    _ -> throw "Native.Rotation: candidate missing"
+  log "Native.Rotation: 4 assertions passed"
+
+testNativeImperative :: Effect Unit
+testNativeImperative = do
+  let
+    program =
+      { blocks:
+          [ { name: "entry"
+            , instructions:
+                [ NativeImperative.Alloc "NativeFixture_Tusd_Ctor" [] (NativeImperative.Value 0)
+                , NativeImperative.Store (NativeImperative.Value 0) 0 (NativeImperative.Value 1)
+                ]
+            , terminator: NativeImperative.Return (NativeImperative.Value 0)
+            }
+          ]
+      , entry: "entry"
+      }
+    duplicate =
+      { blocks:
+          [ { name: "entry", instructions: [], terminator: NativeImperative.Return (NativeImperative.Value 0) }
+          , { name: "entry", instructions: [], terminator: NativeImperative.Return (NativeImperative.Value 0) }
+          ]
+      , entry: "entry"
+      }
+  assert "imperative IR validates a single entry block"
+    (case NativeImperative.validate program of
+      Just _ -> true
+      Nothing -> false)
+  assert "imperative IR rejects duplicate blocks"
+    (case NativeImperative.validate duplicate of
+      Nothing -> true
+      Just _ -> false)
+  let
+    constructed = NativeIR.NativeConstructor "NativeFixture_Tusd_Ctor"
+      [ NativeIR.NativeIntLit 1 ]
+    matchExpr = NativeIR.NativeMatch
+      [ constructed ]
+      [ { patterns:
+            [ NativePattern.PatternConstructor "NativeFixture_Tusd_Ctor"
+                [ NativePattern.PatternVariable "field" ]
+            ]
+        , bindings: Map.empty
+        , body: NativeIR.NativeVar "field" NativeTypes.NativeInt
+        } ]
+      Nothing
+    stored = NativeIR.NativeSetField constructed 0 (NativeIR.NativeIntLit 2)
+      (NativeIR.NativeIntLit 3)
+    parameter = { name: "tree", type: NativeTypes.NativeAdt "NativeFixture_Tree" [] }
+  assert "imperative lowering produces a valid constructor program"
+    (case NativeImperative.lowerExpr constructed of
+      Just program -> case NativeImperative.validate program of
+        Just _ -> true
+        Nothing -> false
+      Nothing -> false)
+  assert "imperative lowering generates match blocks"
+    (case NativeImperative.lowerExpr matchExpr of
+      Just program -> length program.blocks > 1
+      Nothing -> false)
+  assert "imperative lowering keeps a field store"
+    (case NativeImperative.lowerExpr stored of
+      Just program -> length program.blocks == 1
+      Nothing -> false)
+  assert "imperative lowering seeds function arguments"
+    (case NativeImperative.lowerBinding [ parameter ]
+        (NativeIR.NativeVar "tree" parameter.type) of
+      Just program -> length program.blocks == 1
+      Nothing -> false)
+  log "Native.Imperative: 6 assertions passed"
 
 testNativeMutableModule :: Effect Unit
 testNativeMutableModule = case NativeMutableModule.compile nativeFixture of
@@ -503,7 +680,7 @@ testNativeLower = case NativeLayout.fromModule nativeFixture of
   Just layout ->
     let
       ann = C.Ann { span: C.emptySpan, meta: Nothing, type: Nothing, sourceUsage: Nothing }
-      env = { layout, locals: Map.empty, globals: [] }
+      env = { layout, locals: Map.empty, globals: [], path: [] }
     in case NativeLower.lowerExpr env (C.ExprLit ann (C.LitInt 42)) of
       Just (NativeIR.NativeIntLit 42) -> log "Native.Lower: 1 assertion passed"
       _ -> throw "Native.Lower: integer literal was not lowered"

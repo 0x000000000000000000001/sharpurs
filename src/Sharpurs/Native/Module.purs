@@ -26,7 +26,7 @@ compile :: Module Ann -> Maybe FsModule
 compile source@(Module module') = do
   guardEmptyForeign module'
   layout <- NativeLayout.fromModule source
-  let bindings = Array.concatMap Source.bindings module'.decls
+  let bindings = Array.filter (not <<< isConstructor layout) (Array.concatMap Source.bindings module'.decls)
   signatures <- traverse (signatureFor layout) bindings
   definitions <- traverse (definition layout signatures) bindings
   let
@@ -67,6 +67,12 @@ definition layout signatures binding = do
   native <- Emit.renderDefinition binding.recursive signature.name lowered.parameters lowered.body
   let public = Names.inModule layout.moduleName (case binding.name of Ident name -> name)
   pure (native <> "\n" <> Emit.renderWrapper public signature.args signature.name)
+
+isConstructor :: Layout -> Source.SourceBinding Ann -> Boolean
+isConstructor layout binding =
+  case NativeLayout.lookupConstructor layout (Qualified (Just (moduleName layout)) binding.name) of
+    Just _ -> true
+    Nothing -> false
 
 guardEmptyForeign :: forall f c. { foreign :: Map Ident f, classDecls :: Array c | _ } -> Maybe Unit
 guardEmptyForeign source =

@@ -4,17 +4,23 @@
 module Sharpurs.Native.Specialized
   ( constructorClasses
   , renderTypeDeclarations
+  , renderCopyFunctions
   , renderConstructor
+  , renderConstructorWithLayout
   , renderExpr
   , renderDefinition
+  , renderWrapperWithCopies
   ) where
 
 import Prelude
 
 import Data.Array as Array
 import Data.Map (Map)
+import Data.Foldable (foldr)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Set (Set)
+import Data.Set as Set
 import Data.String as String
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
@@ -28,8 +34,25 @@ import Sharpurs.Names as Names
 constructorClasses :: Layout -> Map String String
 constructorClasses layout = Map.fromFoldable
   (Array.concatMap
-    (\(Tuple _ constructors) -> map (\ctor -> Tuple ctor.name (classOf ctor)) constructors)
+    (\(Tuple _ constructors) ->
+      let kind = typeKind constructors
+      in map (\ctor -> Tuple ctor.name (constructorRepresentation kind ctor)) constructors)
     (Map.toUnfoldable layout.types))
+
+data TypeKind = AllNullary | SentinelNullary | ClassConstructors
+
+typeKind :: Array Constructor -> TypeKind
+typeKind constructors
+  | Array.all (Array.null <<< _.fields) constructors = AllNullary
+  | Array.length (Array.filter (Array.null <<< _.fields) constructors) == 1 = SentinelNullary
+  | otherwise = ClassConstructors
+
+constructorRepresentation :: TypeKind -> Constructor -> String
+constructorRepresentation kind constructor = case kind, Array.null constructor.fields of
+  AllNullary, _ -> "#du"
+  SentinelNullary, true -> "#null"
+  SentinelNullary, false -> "#node:" <> classOf constructor
+  _, _ -> classOf constructor
 
 classOf :: Constructor -> String
 classOf constructor = constructor.name <> "_Node"
@@ -38,15 +61,26 @@ renderTypeDeclarations :: Layout -> String
 renderTypeDeclarations layout =
   let
     entries = Map.toUnfoldable layout.types
-    bases = Array.concatMap (\(Tuple typeName _) -> baseDeclaration typeName) entries
-    derived = Array.concatMap (\(Tuple typeName constructors) -> map (derivedDeclaration typeName) constructors) entries
-    constructors = Array.concatMap (\(Tuple typeName constructors) -> map (constructorFunctions typeName) constructors) entries
-  in String.joinWith "\n" (bases <> derived <> constructors)
+  in String.joinWith "\n" (Array.concatMap renderType entries)
   where
+  renderType (Tuple typeName constructors) = case typeKind constructors of
+    AllNullary -> [ duDeclaration typeName constructors ]
+    SentinelNullary ->
+      [ baseDeclaration typeName ]
+        <> map (derivedDeclaration typeName) (Array.filter (not <<< Array.null <<< _.fields) constructors)
+        <> map (constructorFunctions typeName) constructors
+    ClassConstructors ->
+      [ baseDeclaration typeName ]
+        <> map (derivedDeclaration typeName) constructors
+        <> map (constructorFunctions typeName) constructors
+
   baseDeclaration typeName =
-    [ "[<AbstractClass; AllowNullLiteral>]\n"
-        <> "type " <> typeName <> "() = class end"
-    ]
+    "[<AbstractClass; AllowNullLiteral>]\n"
+      <> "type " <> typeName <> "() = class end"
+
+  duDeclaration typeName constructors =
+    "type " <> typeName <> " =\n"
+      <> String.joinWith "\n" (map (\constructor -> "    | " <> constructor.name) constructors)
 
   derivedDeclaration typeName constructor =
     if Array.null constructor.fields then
@@ -67,14 +101,17 @@ renderTypeDeclarations layout =
 
   constructorFunctions typeName constructor =
     let
+      kind = typeKindForName typeName
       params = Array.mapWithIndex
         (\index field -> "(arg" <> show index <> ": " <> nativeTypeName field <> ")")
         constructor.fields
       args = Array.mapWithIndex (\index _ -> "arg" <> show index) constructor.fields
       invocation = classOf constructor <> if Array.null args then "()" else "(" <> String.joinWith ", " args <> ")"
-      definition = if Array.null constructor.fields
-        then "let " <> constructor.name <> " : " <> typeName <> " = " <> invocation
-        else "let " <> constructor.name <> " " <> String.joinWith " " params <> " : " <> typeName <> " = " <> invocation
+      definition = case kind, Array.null constructor.fields of
+        AllNullary, _ -> ""
+        SentinelNullary, true -> "let " <> constructor.name <> " : " <> typeName <> " = null"
+        _, true -> "let " <> constructor.name <> " : " <> typeName <> " = " <> invocation
+        _, false -> "let " <> constructor.name <> " " <> String.joinWith " " params <> " : " <> typeName <> " = " <> invocation
       reuse =
         if Array.null constructor.fields then
           "let private " <> constructor.name <> "_reuse (value: " <> typeName <> ") : " <> typeName <> " = value"
@@ -86,7 +123,84 @@ renderTypeDeclarations layout =
             <> String.joinWith "\n" (Array.mapWithIndex (\index _ -> "        node.Field" <> show index <> " <- arg" <> show index) constructor.fields) <> "\n"
             <> "        node\n"
             <> "    | _ -> " <> constructor.name <> (if Array.null args then "" else " " <> String.joinWith " " args)
-    in definition <> "\n" <> reuse
+    in if String.null definition then reuse else definition <> "\n" <> reuse
+
+  typeKindForName typeName = case Map.lookup typeName layout.types of
+    Just constructors -> typeKind constructors
+    Nothing -> ClassConstructors
+
+renderCopyFunctions :: Layout -> String
+renderCopyFunctions layout =
+  let entries = Map.toUnfoldable layout.types
+  in if Array.null entries then ""
+     else String.joinWith "\n"
+       (Array.mapWithIndex
+         (\index (Tuple typeName constructors) ->
+           (if index == 0 then "let rec private " else "and private ")
+             <> copyFunctionName typeName <> " (value: " <> typeName <> ") : " <> typeName <> " =\n"
+             <> "    match value with\n"
+             <> String.joinWith "\n" (Array.mapMaybe (copyCase typeName) constructors)
+             <> "\n    | _ -> value")
+         entries)
+
+copyFunctionName :: String -> String
+copyFunctionName typeName = "sharpurs_copy_" <> typeName
+
+copyCase :: String -> Constructor -> Maybe String
+copyCase _typeName constructor =
+  if Array.null constructor.fields then Nothing
+  else
+    let
+      className = classOf constructor
+      copiedFields = Array.mapWithIndex
+        (\index field -> copyField field ("node.Field" <> show index))
+        constructor.fields
+      rebuilt = constructor.name
+        <> if Array.null copiedFields then "" else " " <> String.joinWith " " (map (\field -> "(" <> field <> ")") copiedFields)
+    in Just ("    | :? " <> className <> " as node -> " <> rebuilt)
+
+copyField :: NativeType -> String -> String
+copyField typeName value = case typeName of
+  NativeAdt name _ -> copyFunctionName name <> " (" <> value <> ")"
+  _ -> value
+
+renderConstructorWithLayout :: Layout -> Constructor -> String
+renderConstructorWithLayout layout constructor =
+  let
+    public = Names.inModule layout.moduleName (case constructor.sourceName of Qualified _ (Ident name) -> name)
+    kind = case Map.lookup constructor.typeName layout.types of
+      Just constructors -> typeKind constructors
+      Nothing -> ClassConstructors
+  in case kind, Array.null constructor.fields of
+      AllNullary, _ ->
+        "let private " <> Names.adtNative public <> " : " <> constructor.typeName <> " = " <> constructor.name
+          <> "\nlet " <> public <> " : obj = box " <> Names.adtNative public
+      SentinelNullary, true ->
+        "let private " <> Names.adtNative public <> " : " <> constructor.typeName <> " = null"
+          <> "\nlet " <> public <> " : obj = box " <> Names.adtNative public
+      _, true -> renderConstructor layout.moduleName constructor
+      _, false -> renderConstructor layout.moduleName constructor
+
+renderWrapperWithCopies :: String -> Array NativeType -> String -> Set Int -> String
+renderWrapperWithCopies publicName argumentTypes nativeName copied =
+  let
+    args = Array.mapWithIndex (\index _ -> "sharpurs_native_arg_" <> show index) argumentTypes
+    argument index =
+      let value = "(unbox<" <> nativeTypeName (fromMaybeType (Array.index argumentTypes index)) <> "> " <> (fromMaybe "" (Array.index args index)) <> ")"
+      in if Set.member index copied
+           then "(" <> copyFunctionName (copyTypeName (fromMaybeType (Array.index argumentTypes index))) <> " " <> value <> ")"
+           else value
+    invocation = nativeName <> String.joinWith "" (Array.mapWithIndex (\index _ -> " " <> argument index) argumentTypes)
+    body = "box (" <> invocation <> ")"
+  in case Array.uncons args of
+       Nothing -> "let " <> publicName <> " : obj = " <> body
+       Just _ -> "let " <> publicName <> " : obj = "
+         <> foldr (\arg inner -> "box (fun (" <> arg <> ": obj) -> " <> inner <> ")") body args
+
+fromMaybeType :: Maybe NativeType -> NativeType
+fromMaybeType = case _ of
+  Just value -> value
+  Nothing -> NativeBoxed
 
 renderConstructor :: String -> Constructor -> String
 renderConstructor moduleName constructor =
@@ -151,7 +265,20 @@ renderExpr classes = case _ of
     targetCode <- renderExpr classes target
     argumentCodes <- traverse (renderExpr classes) arguments
     pure (constructor <> "_reuse " <> String.joinWith " " (map (\argument -> "(" <> argument <> ")") (Array.cons targetCode argumentCodes)))
-  NativeProject _ _ _ -> Nothing
+  NativeSetField target index value body -> do
+    targetCode <- renderExpr classes target
+    valueCode <- renderExpr classes value
+    bodyCode <- renderExpr classes body
+    pure ("(let sharpurs_field_target = (" <> targetCode <> ") in sharpurs_field_target.Field" <> show index <> " <- " <> valueCode <> "; " <> bodyCode <> ")")
+  NativeProject constructor index value -> do
+    code <- renderExpr classes value
+    pure ("((" <> code <> " :?> " <> classFor constructor <> ").Field" <> show index <> ")")
+  NativeCopy type' expression -> do
+    code <- renderExpr classes expression
+    pure ("(sharpurs_copy_" <> copyTypeName type' <> " (" <> code <> "))")
+  NativeCast constructor expression -> do
+    code <- renderExpr classes expression
+    pure ("((" <> code <> " :?> " <> classFor constructor <> "))")
   NativePrimitive primitive arguments -> do
     argumentCodes <- traverse (renderExpr classes) arguments
     case argumentCodes of
@@ -162,51 +289,148 @@ renderExpr classes = case _ of
     pure ("(box (" <> code <> "))")
 
 compileCases :: Map String String -> Array String -> Array NativeCase -> String -> Maybe String
-compileCases classes targets cases fallback = case Array.uncons cases of
-  Nothing -> Just fallback
-  Just { head, tail } -> do
-    next <- compileCases classes targets tail fallback
-    body <- renderExpr classes head.body
-    pure (compilePatterns classes targets head.patterns body next)
+compileCases classes targets cases fallback = do
+  compiled <- traverse compileCase (Array.mapWithIndex Tuple cases)
+  pure (compileTree compiled fallback)
+  where
+  compileCase (Tuple index case') = do
+    body <- renderExpr classes case'.body
+    let
+      prefix = "sharpurs_case_" <> show index
+      bindings = Array.concatMap
+        (\(Tuple name pattern) -> bindingPattern classes prefix name pattern)
+        (Array.zip targets case'.patterns)
+      bound = Array.foldr
+        (\(Tuple name value) rest -> "(let " <> name <> " = " <> value <> " in " <> rest <> ")")
+        body
+        bindings
+    pure
+      { conditions: conditionLists classes targets case'.patterns
+      , body: bound
+      }
 
-compilePatterns :: Map String String -> Array String -> Array NativePattern -> String -> String -> String
-compilePatterns classes targets patterns body fallback = case Array.uncons targets of
-  Nothing -> body
-  Just { head: target, tail: restTargets } -> case Array.uncons patterns of
-    Nothing -> body
-    Just { head: pattern, tail: restPatterns } ->
-      compilePattern classes target pattern
-        (compilePatterns classes restTargets restPatterns body fallback)
-        fallback
+type CompiledCase =
+  { conditions :: Array Condition
+  , body :: String
+  }
 
-compilePattern :: Map String String -> String -> NativePattern -> String -> String -> String
-compilePattern classes target pattern rest fallback = case pattern of
-  PatternWildcard -> rest
-  PatternVariable name -> "(let " <> name <> " = " <> target <> " in " <> rest <> ")"
-  PatternNamed name inner ->
-    "(let " <> name <> " = " <> target <> " in " <> compilePattern classes target inner rest fallback <> ")"
-  PatternInt value -> "(if " <> target <> " = " <> show value <> " then " <> rest <> " else " <> fallback <> ")"
-  PatternBoolean value -> "(if " <> target <> " = " <> (if value then "true" else "false") <> " then " <> rest <> " else " <> fallback <> ")"
-  PatternString value -> "(if " <> target <> " = " <> show value <> " then " <> rest <> " else " <> fallback <> ")"
+type Condition =
+  { key :: String
+  , condition :: String
+  }
+
+compileTree :: Array CompiledCase -> String -> String
+compileTree cases fallback = case Array.uncons cases of
+  Nothing -> fallback
+  Just { head: first, tail: rest } ->
+    case Array.head first.conditions of
+      Nothing -> first.body
+      Just condition ->
+        let
+          allCases = Array.cons first rest
+          hasKey item = Array.any (\candidate -> candidate.key == condition.key) item.conditions
+          requires item = Array.any (\candidate -> candidate.condition == condition.condition) item.conditions
+          trueCases = Array.mapMaybe
+            (\item ->
+              if requires item
+                then Just item { conditions = Array.filter (\candidate -> candidate.condition /= condition.condition) item.conditions }
+                else if hasKey item then Nothing
+                else Just item)
+            allCases
+          falseCases = Array.filter (not <<< requires) allCases
+          falseBranch = compileTree falseCases fallback
+          trueBranch = if Array.null falseCases
+            then compileTree trueCases fallback
+            else compileTree trueCases falseBranch
+        in "(if " <> condition.condition <> " then " <> trueBranch <> " else " <> falseBranch <> ")"
+
+conditionLists :: Map String String -> Array String -> Array NativePattern -> Array Condition
+conditionLists classes targets patterns =
+  Array.concatMap identity (Array.zipWith (conditionList classes) targets patterns)
+
+conditionList :: Map String String -> String -> NativePattern -> Array Condition
+conditionList classes target pattern = case pattern of
+  PatternWildcard -> []
+  PatternVariable _ -> []
+  PatternNamed _ inner -> conditionList classes target inner
+  PatternInt value -> [ { key: target, condition: "(" <> target <> " = " <> show value <> ")" } ]
+  PatternBoolean value -> [ { key: target, condition: "(" <> target <> " = " <> (if value then "true" else "false") <> ")" } ]
+  PatternString value -> [ { key: target, condition: "(" <> target <> " = " <> show value <> ")" } ]
   PatternConstructor name fields ->
     case Map.lookup name classes of
-      Nothing -> fallback
-      Just className ->
-        if Array.null fields then
-          "(if (" <> target <> " :? " <> className <> ") then " <> rest <> " else " <> fallback <> ")"
-        else
+      Nothing -> [ { key: target, condition: "false" } ]
+      Just representation -> case representation, Array.null fields of
+        "#du", _ -> [ { key: target, condition: "(" <> target <> " = " <> name <> ")" } ]
+        "#null", _ -> [ { key: target, condition: "(isNull " <> target <> ")" } ]
+        _, true -> [ { key: target, condition: "(" <> target <> " :? " <> representation <> ")" } ]
+        _, false ->
           let
-            node = "sharpurs_pattern_node"
-            fieldBody = compileFieldPatterns classes node (Array.mapWithIndex (\index field -> Tuple (node <> ".Field" <> show index) field) fields) rest fallback
-          in "(if (" <> target <> " :? " <> className <> ") then (let " <> node <> " = (" <> target <> " :?> " <> className <> ") in " <> fieldBody <> ") else " <> fallback <> ")"
+            className = classOfRepresentation representation
+            parent = if isNodeRepresentation representation
+              then { key: target, condition: "(not (isNull " <> target <> "))" }
+              else { key: target, condition: "(" <> target <> " :? " <> className <> ")" }
+            node = "(" <> target <> " :?> " <> className <> ")"
+            children = Array.concatMap identity
+              (Array.mapWithIndex
+                (\index field -> conditionList classes (node <> ".Field" <> show index) field)
+                fields)
+          in Array.cons parent children
 
-compileFieldPatterns :: Map String String -> String -> Array (Tuple String NativePattern) -> String -> String -> String
-compileFieldPatterns classes _ fields body fallback = case Array.uncons fields of
-  Nothing -> body
-  Just { head: Tuple target pattern, tail: rest } ->
-    compilePattern classes target pattern
-      (compileFieldPatterns classes "" rest body fallback)
-      fallback
+bindingPattern :: Map String String -> String -> String -> NativePattern -> Array (Tuple String String)
+bindingPattern classes prefix target pattern = case pattern of
+  PatternWildcard -> []
+  PatternVariable name -> [ Tuple name target ]
+  PatternNamed name inner -> Array.cons (Tuple name target) (go prefix target inner)
+  PatternInt _ -> []
+  PatternBoolean _ -> []
+  PatternString _ -> []
+  PatternConstructor name fields ->
+    if Array.null fields then []
+    else case Map.lookup name classes of
+      Nothing -> []
+      Just representation ->
+        let
+          node = "(" <> target <> " :?> " <> classOfRepresentation representation <> ")"
+          nodeName = prefix <> "_node"
+          children = Array.concatMap
+            (\(Tuple index field) -> go (prefix <> "_" <> show index) ("(" <> nodeName <> ").Field" <> show index) field)
+            (Array.mapWithIndex Tuple fields)
+        in Array.cons (Tuple nodeName node) children
+  where
+  go localPrefix localTarget = case _ of
+    PatternWildcard -> []
+    PatternVariable name -> [ Tuple name localTarget ]
+    PatternNamed name inner -> Array.cons (Tuple name localTarget) (go localPrefix localTarget inner)
+    PatternInt _ -> []
+    PatternBoolean _ -> []
+    PatternString _ -> []
+    PatternConstructor name fields ->
+      if Array.null fields then []
+      else case Map.lookup name classes of
+        Nothing -> []
+        Just representation ->
+          let
+            node = "(" <> localTarget <> " :?> " <> classOfRepresentation representation <> ")"
+            nodeName = localPrefix <> "_node"
+            children = Array.concatMap
+              (\(Tuple index field) -> go (localPrefix <> "_" <> show index) ("(" <> nodeName <> ").Field" <> show index) field)
+              (Array.mapWithIndex Tuple fields)
+          in Array.cons (Tuple nodeName node) children
+
+classFor :: String -> String
+classFor constructor = constructor <> "_Node"
+
+isNodeRepresentation :: String -> Boolean
+isNodeRepresentation representation = String.take 6 representation == "#node:"
+
+classOfRepresentation :: String -> String
+classOfRepresentation representation =
+  if isNodeRepresentation representation then String.drop 6 representation else representation
+
+copyTypeName :: NativeType -> String
+copyTypeName = case _ of
+  NativeAdt name _ -> name
+  _ -> "sharpurs_boxed"
 
 primitiveOperator :: NativePrimitive -> String
 primitiveOperator = case _ of

@@ -142,7 +142,18 @@ renderExpr = case _ of
     targetCode <- renderExpr target
     argumentCodes <- traverse renderExpr arguments
     pure (constructor <> "_reuse " <> String.joinWith " " (map (\argument -> "(" <> argument <> ")") (Array.cons targetCode argumentCodes)))
-  NativeProject _ _ _ -> Nothing
+  NativeSetField target index value body -> do
+    targetCode <- renderExpr target
+    valueCode <- renderExpr value
+    bodyCode <- renderExpr body
+    pure ("(let sharpurs_field_target = " <> targetCode <> " in sharpurs_field_target.Field" <> show index <> " <- " <> valueCode <> "; " <> bodyCode <> ")")
+  NativeProject _ index value -> do
+    code <- renderExpr value
+    pure ("(" <> code <> ").Field" <> show index)
+  NativeCopy type' expression -> do
+    code <- renderExpr expression
+    pure ("(sharpurs_copy_" <> nativeTypeName type' <> " (" <> code <> "))")
+  NativeCast _ expression -> renderExpr expression
   NativePrimitive primitive arguments -> do
     argumentCodes <- traverse renderExpr arguments
     case argumentCodes of
@@ -232,7 +243,18 @@ renderExprWithTags tags = case _ of
     targetCode <- renderExprWithTags tags target
     argumentCodes <- traverse (renderExprWithTags tags) arguments
     pure (constructor <> "_reuse " <> String.joinWith " " (map (\argument -> "(" <> argument <> ")") (Array.cons targetCode argumentCodes)))
-  NativeProject _ _ _ -> Nothing
+  NativeSetField target index value body -> do
+    targetCode <- renderExprWithTags tags target
+    valueCode <- renderExprWithTags tags value
+    bodyCode <- renderExprWithTags tags body
+    pure ("(let sharpurs_field_target = (" <> targetCode <> ") in sharpurs_field_target.Field" <> show index <> " <- " <> valueCode <> "; " <> bodyCode <> ")")
+  NativeProject _ index value -> do
+    code <- renderExpr value
+    pure ("(" <> code <> ").Field" <> show index)
+  NativeCopy type' expression -> do
+    code <- renderExpr expression
+    pure ("(sharpurs_copy_" <> nativeTypeName type' <> " (" <> code <> "))")
+  NativeCast _ expression -> renderExpr expression
   NativePrimitive primitive arguments -> do
     argumentCodes <- traverse (renderExprWithTags tags) arguments
     case argumentCodes of

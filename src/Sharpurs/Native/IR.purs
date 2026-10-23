@@ -40,6 +40,9 @@ data NativeExpr
   | NativeMatch (Array NativeExpr) (Array NativeCase) (Maybe NativeExpr)
   | NativeConstructor String (Array NativeExpr)
   | NativeReuse String NativeExpr (Array NativeExpr)
+  | NativeSetField NativeExpr Int NativeExpr NativeExpr
   | NativeProject String Int NativeExpr
   | NativePrimitive NativePrimitive (Array NativeExpr)
   | NativeBox NativeExpr
+  | NativeCopy NativeType NativeExpr
+  | NativeCast String NativeExpr
